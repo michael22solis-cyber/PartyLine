@@ -209,7 +209,9 @@ What these tests cannot tell you is how well 2.1-mini *acts*: personality, emoti
 - Memory selection scans all lines per prompt. Fine for one game; index it once memory reaches thousands of lines.
 - With the default ephemeral-key transport, the 4-minute limit is enforced by the browser. A tampered client could hold a session open. `REALTIME_TRANSPORT=sideband` closes that gap once validated live.
 - No real provider-capacity test was run: the concurrency tests are synthetic. Realtime session and rate limits for this org are unknown; `MAX_CONCURRENT_CALLS` defaults to 25.
-- Twilio request-signature validation is still missing (this predates the branch; README "Next up").
+- ~~Twilio request-signature validation is missing~~ Fixed in a follow-up commit. `/voice` checks Twilio's signature, and
+  `/media-stream` refuses streams without a signed, single-use ticket. Before this, anyone who found the URL could open
+  paid Realtime sessions.
 
 ## 9. Deploying and rollback
 

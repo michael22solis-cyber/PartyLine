@@ -3,8 +3,9 @@
 // Barge-in: we track what Twilio has actually played (marks + media timestamps) and truncate the character's audio
 // item at that point, so the model's memory and ours only contain what the caller heard.
 import WebSocket from 'ws';
+import twilio from 'twilio';
 import { CHARACTERS } from '../characters/index.js';
-import { streamTwiml, DEAD_LINE_TWIML } from '../twiml.js';
+import { streamTwiml, DEAD_LINE_TWIML, verifyStream } from '../twiml.js';
 import { playerByPhone, playerByPid } from '../store.js';
 import { createCallController } from '../shared/call-controller.js';
 import { realtimeSession, callTiming, openingItem } from './session.js';
@@ -13,8 +14,20 @@ import { openCall, closeCall, callTranscript, callDisclose, callUsage } from './
 import { ledger } from '../ai/ledger.js';
 import { BusyError } from '../ai/limiter.js';
 
+// Only Twilio may fetch TwiML (which carries a signed stream ticket). Checked whenever TWILIO_AUTH_TOKEN is set;
+// TWILIO_WEBHOOK_VALIDATION=off skips it (e.g. a webhook URL that differs from https://PUBLIC_HOST/voice).
+function fromTwilio(req) {
+  const token = process.env.TWILIO_AUTH_TOKEN;
+  if (!token || process.env.TWILIO_WEBHOOK_VALIDATION === 'off') return true;
+  const url = `https://${process.env.PUBLIC_HOST}${req.url}`;
+  const ok = twilio.validateRequest(token, String(req.headers['x-twilio-signature'] || ''), url, req.body || {});
+  if (!ok) console.warn(`[voice] rejected a webhook without a valid Twilio signature for ${url}. If your Twilio number's webhook is a different URL, fix PUBLIC_HOST or set TWILIO_WEBHOOK_VALIDATION=off.`);
+  return ok;
+}
+
 export function registerTwilio(app) {
-  const { PUBLIC_HOST, RUTH_NUMBER, CARETAKER_NUMBER } = process.env;
+  const { RUTH_NUMBER, CARETAKER_NUMBER } = process.env;
+  if (!process.env.TWILIO_AUTH_TOKEN) console.warn('[voice] TWILIO_AUTH_TOKEN is not set: the /voice webhook is not signature-checked.');
   // Which character answers depends on the number dialed. One number is fine: it goes to Ruth.
   const SUSPECT_LINES = Object.fromEntries(
     [['ruth', RUTH_NUMBER], ['marcus', process.env.MARCUS_NUMBER], ['lily', process.env.LILY_NUMBER], ['teddy', process.env.TEDDY_NUMBER]]
@@ -24,13 +37,14 @@ export function registerTwilio(app) {
 
   // Inbound calls: set this as the Voice webhook (HTTP POST) on your Twilio number.
   app.post('/voice', async (req, reply) => {
+    if (!fromTwilio(req)) return reply.code(403).send('Forbidden');
     const to = req.body?.To;
     const from = req.body?.From;
     // The Caretaker never answers: calling his number back gets a dead line.
     if (to === CARETAKER_NUMBER && CARETAKER_NUMBER !== RUTH_NUMBER) return reply.type('text/xml').send(DEAD_LINE_TWIML);
     const character = SUSPECT_LINES[to] || 'ruth';
     const p = playerByPhone(from);
-    reply.type('text/xml').send(streamTwiml(PUBLIC_HOST, character, p?.name || 'detective', 'inbound', p?.pid));
+    reply.type('text/xml').send(streamTwiml(process.env.PUBLIC_HOST, character, p?.name || 'detective', 'inbound', p?.pid));
   });
 
   app.register(async (instance) => {
@@ -164,8 +178,18 @@ function bridge(twilioWs) {
     try { msg = JSON.parse(raw); } catch { return; }
     switch (msg.event) {
       case 'start': {
+        if (streamSid) break; // one stream per socket
+        const p = msg.start?.customParameters || {};
+        const ticket = verifyStream(p);
+        if (!ticket.ok) {
+          // Not a stream we handed to Twilio: never open a (paid) voice session for it.
+          console.warn(`[voice] refused a media stream (${ticket.why}).`);
+          ledger.event('stream_rejected', { reason: ticket.why });
+          closed = true;
+          try { twilioWs.close(); } catch { /* closed */ }
+          break;
+        }
         streamSid = msg.start.streamSid;
-        const p = msg.start.customParameters || {};
         npc = CHARACTERS[p.character] ? p.character : 'caretaker';
         const known = (p.pid && playerByPid(p.pid)) || null;
         player = known || { name: p.player || 'detective', pid: null, token: null };

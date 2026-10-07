@@ -103,9 +103,10 @@ Reset everything: `npm run admin -- reset`.
 - Calls are capped at 4 minutes (characters wrap up and hang up, idle calls end, one live call per player, a server-wide cap); texts are capped per player (`MAX_TEXTS_PER_PLAYER`).
 - Background noise doesn't cut characters off: a player has to keep talking for half a second to interrupt (`REALTIME_BARGE_IN_MS`), and coughs or clatters are ignored instead of answered.
 - Only call phones whose owners agreed to it. Start with your own.
+- Only Twilio can start a phone call's voice session: `/voice` checks Twilio's request signature (when `TWILIO_AUTH_TOKEN` is set) and `/media-stream` refuses streams without a signed, single-use ticket from our own TwiML.
 
 ## Next up
 
 - Signup + payment page so hosts can buy a case themselves
-- Supabase storage and Twilio request-signature checks before going public
+- Supabase storage before going public (Twilio webhooks are now signature-checked and media streams need a signed ticket)
 - Validate `REALTIME_TRANSPORT=sideband` live, then make it the default (server-enforced call limits)

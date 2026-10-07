@@ -18,6 +18,8 @@ const { addPlayer, playerByToken, messagesFor } = await import('../src/store.js'
 const { allLines } = await import('../src/memory.js');
 const { ledger } = await import('../src/ai/ledger.js');
 const { ringInApp } = await import('../src/progress.js');
+const { streamParams } = await import('../src/twiml.js');
+const twilioLib = (await import('twilio')).default;
 
 const app = buildApp();
 await app.listen({ port: 0, host: '127.0.0.1' });
@@ -209,6 +211,9 @@ test('sideband transport: the server runs the call (tool approvals, usage, heard
   delete process.env.REALTIME_TRANSPORT;
 });
 
+// What Twilio sends us is the <Parameter>s from our own TwiML, including the signed ticket.
+const signed = ({ character, player, pid, direction }) => streamParams(character, player, direction, pid);
+
 function twilioCall(params) {
   const ws = new WebSocket(`ws://127.0.0.1:${port}/media-stream`);
   const got = [];
@@ -228,7 +233,7 @@ function twilioCall(params) {
 
 test('phone call (Twilio): barge-in truncates the character at what was actually played', async () => {
   const p = addPlayer({ name: 'Pia', phone: '+15555550199' });
-  const t = twilioCall({ character: 'ruth', player: 'Pia', pid: p.pid, direction: 'inbound' });
+  const t = twilioCall(signed({ character: 'ruth', player: 'Pia', pid: p.pid, direction: 'inbound' }));
   await t.start();
   t.media(1000); // Twilio streams caller audio from the start: the clock is at 1.0 s when the character starts talking
   const s = await mock.waitForSession((x) => x.model && x.responses.length >= 1);
@@ -261,7 +266,7 @@ test('phone call (Twilio): inbound calls now have a hard time limit; config fall
   process.env.MAX_CALL_SECONDS = '2';
   mock.setReject(['noise_reduction']);
   const p = addPlayer({ name: 'Lim', phone: '+15555550198' });
-  const t = twilioCall({ character: 'teddy', player: 'Lim', pid: p.pid, direction: 'inbound' });
+  const t = twilioCall(signed({ character: 'teddy', player: 'Lim', pid: p.pid, direction: 'inbound' }));
   await t.start();
   await mock.waitForSession((x) => x.model && x.responses.length >= 1);
   mock.setReject([]);
@@ -271,4 +276,45 @@ test('phone call (Twilio): inbound calls now have a hard time limit; config fall
   await until(() => events('call_ended').some((e) => e.session === p.pid));
   assert.equal(events('call_ended').find((e) => e.session === p.pid).reason, 'max_duration');
   delete process.env.MAX_CALL_SECONDS;
+});
+
+test('phone entry points: forged, replayed or unsigned media streams never open a voice session', async () => {
+  const p = addPlayer({ name: 'Eve2' });
+  const n0 = mock.sessions.length;
+  const forged = { ...signed({ character: 'ruth', player: 'Eve2', pid: p.pid, direction: 'inbound' }), character: 'caretaker_reveal' };
+  for (const params of [{ character: 'ruth', player: 'x', direction: 'inbound' }, forged, { ...forged, exp: '1', sig: 'abc' }]) {
+    const t = twilioCall(params);
+    await t.start();
+    await t.closed;
+  }
+  // A genuine ticket works once; the same ticket again is refused.
+  const ticket = signed({ character: 'ruth', player: 'Eve2', pid: p.pid, direction: 'inbound' });
+  const first = twilioCall(ticket);
+  await first.start();
+  await mock.waitForSession((x) => x.model && mock.sessions.indexOf(x) >= n0);
+  const replay = twilioCall(ticket);
+  await replay.start();
+  await replay.closed;
+  first.ws.close();
+  await first.closed;
+  assert.equal(mock.sessions.length - n0, 1, 'only the genuine ticket opened a session');
+  assert.equal(events('stream_rejected').length, 4);
+});
+
+test('the /voice webhook only answers requests signed by Twilio (when TWILIO_AUTH_TOKEN is set)', async () => {
+  process.env.TWILIO_AUTH_TOKEN = 'test-auth-token';
+  process.env.PUBLIC_HOST = 'blackwood.example';
+  try {
+    const body = { To: '+15555550100', From: '+15555550111', CallSid: 'CA123' };
+    const bad = await app.inject({ method: 'POST', url: '/voice', payload: new URLSearchParams(body).toString(), headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-twilio-signature': 'nope' } });
+    assert.equal(bad.statusCode, 403);
+    const sig = twilioLib.getExpectedTwilioSignature('test-auth-token', 'https://blackwood.example/voice', body);
+    const good = await app.inject({ method: 'POST', url: '/voice', payload: new URLSearchParams(body).toString(), headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-twilio-signature': sig } });
+    assert.equal(good.statusCode, 200);
+    assert.match(good.body, /wss:\/\/blackwood\.example\/media-stream/);
+    assert.match(good.body, /name="sig"/);
+  } finally {
+    delete process.env.TWILIO_AUTH_TOKEN;
+    delete process.env.PUBLIC_HOST;
+  }
 });
