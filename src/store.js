@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
-const FILE = path.resolve('data/game.json');
+import { dataFile } from './env.js';
+const FILE = dataFile('game.json');
 const EMPTY = { players: [], messages: [], votes: {}, pushSubs: {}, schedule: [], revealed: false, groups: [] };
 
 let db = load();
@@ -128,6 +129,8 @@ export function addGroup({ name, players: pids, ai, createdBy }) {
 }
 export const groupById = (id) => db.groups.find((g) => g.id === id) || null;
 export const groupsFor = (pid) => db.groups.filter((g) => g.players.includes(pid));
+
+export function clearPendingSchedule() { db.schedule = db.schedule.filter((x) => x.done); save(); }
 
 export function setRevealed() { db.revealed = true; save(); }
 

@@ -2,9 +2,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import fastifyStatic from '@fastify/static';
+import { dataFile } from './env.js';
+import { scheduleNight } from './schedule.js';
 import {
   addPlayer, players, playerByToken, updatePlayer, messagesFor, castVote, votes,
-  savePushSub, addScheduled, scheduled, markScheduledDone, getDb, resetGame,
+  savePushSub, addScheduled, scheduled, markScheduledDone, getDb, resetGame, clearPendingSchedule,
 } from './store.js';
 import { TEXTABLE, CHARACTERS, buildInstructions } from './characters/index.js';
 import { remember, summary } from './memory.js';
@@ -245,7 +247,11 @@ export function registerWeb(app) {
   app.get('/admin/status', (req, reply) => {
     if (!requireAdmin(req, reply)) return;
     reply.send({
-      players: players().map((p) => ({ name: p.name, role: p.role, phone: Boolean(p.phone), callsOff: p.callsOff, link: linkFor(p.token) })),
+      players: players().map((p) => ({
+        name: p.name, role: p.role, phone: Boolean(p.phone), callsOff: p.callsOff, link: linkFor(p.token),
+        voted: Boolean(votes()[p.token]), found: (p.found || []).length, contacts: (p.unlocked || []).length,
+      })),
+      revealed: getDb().revealed,
       tally: tallyVotes(),
       schedule: scheduled(),
       beats: Object.keys(BEATS),
@@ -272,10 +278,27 @@ export function registerWeb(app) {
     reply.send(addScheduled(beat, new Date(at).toISOString()));
   });
 
+  app.post('/admin/night/:n', (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    try { reply.send({ scheduled: scheduleNight(Number(req.params.n), req.body?.date) }); }
+    catch (err) { reply.code(err.status || 500).send({ error: err.message }); }
+  });
+
+  app.post('/admin/schedule/clear', (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    clearPendingSchedule();
+    reply.send({ ok: true });
+  });
+
+  // The host's control panel (the admin key is entered on the page, never in the URL).
+  app.get('/host', (_req, reply) => {
+    reply.type('text/html').header('Cache-Control', 'no-store').send(fs.readFileSync(path.join(PUBLIC_DIR, 'host.html'), 'utf8'));
+  });
+
   app.post('/admin/reset', (req, reply) => {
     if (!requireAdmin(req, reply)) return;
     resetGame();
-    fs.rmSync(path.resolve('data/memory.json'), { force: true });
+    fs.rmSync(dataFile('memory.json'), { force: true });
     reply.send({ ok: true });
   });
 

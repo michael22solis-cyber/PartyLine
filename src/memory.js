@@ -3,7 +3,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const FILE = path.resolve('data/memory.json');
+import { dataFile } from './env.js';
+const FILE = dataFile('memory.json');
 
 function load() {
   try {

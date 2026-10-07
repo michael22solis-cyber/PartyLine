@@ -3,6 +3,7 @@ import { messagesFor, votes, players } from './store.js';
 import { tallyVotes } from './beats.js';
 import { CHARACTERS } from './characters/index.js';
 import fs from 'node:fs';
+import { dataFile } from './env.js';
 import path from 'node:path';
 
 const TRUTH = { killer: 'Ruth Calloway' };
@@ -11,7 +12,7 @@ import { SECRETS } from './secrets.js';
 const FOUND = SECRETS.map((x) => ({ ...x, test: { test: x.test } }));
 
 function memoryLines() {
-  try { return JSON.parse(fs.readFileSync(path.resolve('data/memory.json'), 'utf8')).lines || []; } catch { return []; }
+  try { return JSON.parse(fs.readFileSync(dataFile('memory.json'), 'utf8')).lines || []; } catch { return []; }
 }
 
 export function recapFor(player) {

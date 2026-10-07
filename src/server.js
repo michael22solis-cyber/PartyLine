@@ -1,6 +1,7 @@
 // Bridges Twilio phone calls to an OpenAI Realtime voice model playing a character.
 // Flow: phone <-> Twilio Media Stream (μ-law 8 kHz) <-> this server <-> OpenAI Realtime (μ-law in/out).
 import 'dotenv/config';
+import './env.js';
 import Fastify from 'fastify';
 import fastifyWs from '@fastify/websocket';
 import fastifyFormBody from '@fastify/formbody';
