@@ -1,37 +1,54 @@
 // Character text replies in the burner-phone app. Same brain and shared memory as the phone calls.
-import { CHARACTERS, buildInstructions } from './characters/index.js';
-import { remember, summary } from './memory.js';
+import { CHARACTERS } from './characters/index.js';
+import { remember, tagLine } from './memory.js';
 import { threadHistory, countPlayerMessages } from './store.js';
 import { deliver, emit } from './live.js';
 import { isUnlocked, onCharacterSaid, unlockMentions } from './progress.js';
+import { buildTextPrompt, buildNudgePrompt } from './context.js';
+import { approveFromPlayerText } from './disclosure.js';
+import { chatComplete } from './ai/openai.js';
+import { ledger } from './ai/ledger.js';
 
-const {
-  OPENAI_API_KEY,
-  OPENAI_TEXT_MODEL = 'gpt-4.1-mini',
-  OPENAI_BASE_URL = 'https://api.openai.com/v1',
-  MAX_TEXTS_PER_PLAYER = 150,
-} = process.env;
+const { MAX_TEXTS_PER_PLAYER = 150 } = process.env;
+const env = process.env;
 
-const pending = new Set(); // `${token}:${thread}` while a reply is being written
+// One reply cycle per player+thread at a time. Messages that arrive while a reply is being written are answered
+// together in one follow-up reply instead of being rejected (people double-text).
+const pending = new Map(); // `${token}:${thread}` -> { approved: Set, followUp: boolean }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Human-like pauses. TEXT_DELAY_SCALE=0 removes them (tests, load tests); TEXT_FAST=1 is the same.
+const delay = (ms) => sleep(env.TEXT_FAST === '1' ? 0 : ms * Number(env.TEXT_DELAY_SCALE ?? 1));
 
 // Crude but important: if someone sounds like they're in real distress, step out of the game.
 const CRISIS = /\b(kill myself|suicid|self[- ]?harm|hurt myself|end my life|want to die)\b/i;
 
-export async function handlePlayerText(player, thread, text) {
-  const c = CHARACTERS[thread];
-  if (!c?.textable) throw Object.assign(new Error('That number can’t receive texts.'), { status: 400 });
-  if (!isUnlocked(player, thread)) throw Object.assign(new Error('You don’t have that number yet.'), { status: 403 });
-  const clean = String(text || '').trim().slice(0, 500);
-  if (!clean) throw Object.assign(new Error('Empty message'), { status: 400 });
-  if (countPlayerMessages(player.token) >= Number(MAX_TEXTS_PER_PLAYER)) {
-    throw Object.assign(new Error('The line has gone quiet for tonight.'), { status: 429 });
-  }
-  const key = `${player.token}:${thread}`;
-  if (pending.has(key)) throw Object.assign(new Error('Wait for a reply first.'), { status: 429 });
+// Pure acknowledgements after a character's (non-question) text get no reply, like real texting. No model call.
+const ACK_WORD = '(ok(ay)?|k+|kk|cool|thanks?|thank you|thx|ty|tysm|lol+|lmao|haha+|hah|nice|got it|gotcha|sure|alright|aight|np|bye|night|good ?night|see ya|ttyl|[\\p{Extended_Pictographic}\\u200d\\ufe0f]+)';
+const ACK = new RegExp(`^${ACK_WORD}([\\s,.!]+${ACK_WORD})*[\\s.!]*$`, 'iu');
+export const isAck = (text) => ACK.test(String(text || '').trim());
+// `recent`: the thread before this message. Skip only if the character spoke last (not with a question) and the
+// player has only acknowledged since.
+export function isAckOnly(text, recent = []) {
+  if (env.TEXT_SKIP_ACKS === 'off' || !isAck(text)) return false;
+  const i = recent.map((m) => m.from).lastIndexOf('character');
+  if (i < 0 || /\?\s*$/.test(recent[i].text || '')) return false;
+  return recent.slice(i + 1).every((m) => m.from !== 'player' || isAck(m.text));
+}
 
-  const mine = await deliver({ token: player.token, thread, from: 'player', text: clean });
-  remember({ player: player.name, character: c.name, speaker: 'player', text: `(text) ${clean}` });
+const fail = (message, status) => Object.assign(new Error(message), { status });
+
+export async function handlePlayerText(player, thread, text, { clientId = null } = {}) {
+  const c = CHARACTERS[thread];
+  if (!c?.textable) throw fail('That number can’t receive texts.', 400);
+  if (!isUnlocked(player, thread)) throw fail('You don’t have that number yet.', 403);
+  const clean = String(text || '').trim().slice(0, 500);
+  if (!clean) throw fail('Empty message', 400);
+  if (countPlayerMessages(player.token) >= Number(MAX_TEXTS_PER_PLAYER)) throw fail('The line has gone quiet for tonight.', 429);
+
+  const before = threadHistory(player.token, thread, 6).filter((m) => m.from !== 'system');
+  const mine = await deliver({ token: player.token, thread, from: 'player', text: clean, clientId });
+  if (mine.duplicate) return mine; // a retried send: already handled
+  remember({ player: player.name, pid: player.pid, npc: thread, character: c.name, speaker: 'player', text: `(text) ${clean}`, channel: 'text' });
   unlockMentions(player, clean).catch(() => {});
 
   if (CRISIS.test(clean)) {
@@ -44,74 +61,86 @@ export async function handlePlayerText(player, thread, text) {
     return mine;
   }
 
-  pending.add(key);
+  // The engine, not the model, decides whether this message earns a disclosure.
+  const approved = approveFromPlayerText(player, thread, clean, 'text');
+  const key = `${player.token}:${thread}`;
+  const state = pending.get(key);
+  if (state) {
+    approved.forEach((t) => state.approved.add(t.id));
+    state.followUp = true;
+    return mine;
+  }
+  if (!approved.length && isAckOnly(clean, before)) {
+    ledger.event('text_skipped', { session: player.pid, npc: thread, reason: 'acknowledgement' });
+    return mine;
+  }
+  const s = { approved: new Set(approved.map((t) => t.id)), followUp: false };
+  pending.set(key, s);
   // Reply in the background so the app feels like real texting.
-  replyLater(player, thread).finally(() => pending.delete(key));
+  (async () => {
+    try {
+      do {
+        await replyOnce(player, thread, s);
+      } while (s.followUp);
+    } finally {
+      pending.delete(key);
+    }
+  })();
   return mine;
 }
 
-async function replyLater(player, thread) {
+// Optional escalation of key moments (accusations, contradictions, evidence) to another model. Off unless configured.
+function route(text) {
+  const tags = tagLine({ speaker: 'player', text });
+  const key = tags.some((t) => ['accusation', 'contradiction', 'evidence'].includes(t));
+  return { model: key && env.OPENAI_TEXT_ESCALATION_MODEL ? env.OPENAI_TEXT_ESCALATION_MODEL : undefined, purpose: key ? 'reply_key_moment' : 'reply' };
+}
+
+async function replyOnce(player, thread, s) {
   const c = CHARACTERS[thread];
+  let approvedIds = [];
   try {
-    await sleep(1200 + Math.random() * 1800); // "read" delay
+    await delay(1200 + Math.random() * 1800); // "read" delay; texts that arrive meanwhile are answered together
     emit(player.token, 'typing', { thread, on: true });
+    // Everything up to here is answered by this reply; only texts arriving from now on need a follow-up.
+    s.followUp = false;
+    approvedIds = [...s.approved];
+    s.approved.clear();
+    const history = threadHistory(player.token, thread, 30);
+    const lastPlayer = [...history].reverse().find((m) => m.from === 'player');
+    const approvedNow = approvedIds.map((id) => ({ id }));
+    const { messages } = buildTextPrompt({ npc: thread, player, thread: history, approvedNow });
+    const { model, purpose } = route(lastPlayer?.text || '');
+    const { text: reply } = await chatComplete(messages, {
+      model, meta: { session: player.pid, npc: thread, capability: 'text', purpose, turn: countPlayerMessages(player.token) },
+    });
 
-    const history = threadHistory(player.token, thread, 20).filter((m) => m.from !== 'system').map((m) => ({
-      role: m.from === 'player' ? 'user' : 'assistant',
-      content: m.text,
-    }));
-
-    const messages = [{ role: 'system', content: buildInstructions(thread, player.name, summary(), 'text') }, ...history];
-    const reply = await complete(messages);
-    if (!reply) throw new Error('Empty reply');
-
-    await sleep(Math.min(4000, 600 + reply.length * 25)); // "typing" time scales with length
+    await delay(Math.min(4000, 600 + reply.length * 25)); // "typing" time scales with length
     emit(player.token, 'typing', { thread, on: false });
     await deliver({ token: player.token, thread, from: 'character', text: reply });
-    remember({ player: player.name, character: c.name, speaker: 'character', text: `(text) ${reply}` });
-    await onCharacterSaid(player, thread, reply);
+    remember({ player: player.name, pid: player.pid, npc: thread, character: c.name, speaker: 'character', text: `(text) ${reply}`, channel: 'text' });
+    await onCharacterSaid(player, thread, reply, { approved: approvedIds });
   } catch (err) {
     console.error(`[${thread}] text reply failed:`, err.message);
     emit(player.token, 'typing', { thread, on: false });
-    await deliver({ token: player.token, thread, from: 'system', text: 'Message failed to deliver. Try again. (Host: the server window says why.)', kind: 'text' });
+    const busy = err.code === 'busy';
+    await deliver({ token: player.token, thread, from: 'system', kind: 'text',
+      text: busy ? 'Their phone is busy. Try again in a minute.' : 'Message failed to deliver. Try again. (Host: the server window says why.)' });
   }
 }
 
-// Try the configured model first, then fall back if this account can't use it.
-const MODELS = [...new Set([OPENAI_TEXT_MODEL, 'gpt-4.1-mini', 'gpt-4o-mini'])];
-let workingModel = null;
-export async function complete(messages) {
-  let lastErr;
-  for (const model of workingModel ? [workingModel] : MODELS) {
-    const res = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, messages, max_completion_tokens: 200 }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      const reply = data.choices?.[0]?.message?.content?.trim();
-      if (!reply) throw new Error('Empty reply');
-      workingModel = model;
-      return reply;
-    }
-    const body = await res.text();
-    lastErr = new Error(`OpenAI ${res.status} (${model}): ${body.slice(0, 300)}`);
-    if (res.status === 401) throw new Error(`OpenAI 401: the OPENAI_API_KEY in .env is wrong or revoked.`);
-    if (res.status === 429 && /quota|billing/i.test(body)) throw new Error('OpenAI 429: no credit on this account. Add billing at platform.openai.com.');
-    if (![400, 403, 404].includes(res.status)) throw lastErr; // only model problems are worth retrying with another model
-  }
-  throw lastErr;
+// Kept for older callers: one completion, text only.
+export async function complete(messages, meta = {}) {
+  return (await chatComplete(messages, { meta })).text;
 }
 
 // "The house is listening": a suspect reacts to something said in the players' group chat.
 export async function overheard(characterKey, target, speaker, said) {
   const c = CHARACTERS[characterKey];
-  const messages = [
-    { role: 'system', content: buildInstructions(characterKey, target.name, summary(), 'text') },
-    { role: 'user', content: `(Stage direction, not from the player: somehow you know that ${speaker} just told the whole group: "${said.slice(0, 300)}". Text ${target.name} out of nowhere about it. One or two short sentences, unsettling, in character. Make it clear you know what ${speaker} said, but never explain how you know.)` },
-  ];
-  const reply = await complete(messages);
+  const direction = `(Stage direction, not from the player: somehow you know that ${speaker} just told the whole group: "${said.slice(0, 300)}". Text ${target.name} out of nowhere about it. One or two short sentences, unsettling, in character. Make it clear you know what ${speaker} said, but never explain how you know.)`;
+  const { text: reply } = await chatComplete(buildNudgePrompt({ npc: characterKey, player: target, direction }), {
+    meta: { session: target.pid, npc: characterKey, capability: 'overheard', purpose: 'overheard' },
+  });
   await deliver({ token: target.token, thread: characterKey, from: 'character', text: reply });
-  remember({ player: target.name, character: c.name, speaker: 'character', text: `(text, after overhearing ${speaker}) ${reply}` });
+  remember({ player: target.name, pid: target.pid, npc: characterKey, character: c.name, speaker: 'character', text: `(text, after overhearing ${speaker}) ${reply}`, channel: 'overheard' });
 }

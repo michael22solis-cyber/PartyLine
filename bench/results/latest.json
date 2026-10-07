@@ -1,0 +1,482 @@
+{
+  "scenario": "B",
+  "fits": {
+    "A": {
+      "meanAbsBucketError": 0.4,
+      "costError": -0.058
+    },
+    "B": {
+      "meanAbsBucketError": 0.098,
+      "costError": 0.035
+    }
+  },
+  "results": {
+    "baseline": {
+      "voice": {
+        "textIn": 17498,
+        "textInCached": 53069,
+        "audioIn": 5017,
+        "audioInCached": 3123,
+        "textOut": 658,
+        "audioOut": 3778
+      },
+      "text": {
+        "textIn": 16061,
+        "textInCached": 0,
+        "textOut": 495
+      },
+      "usd": {
+        "voice": 0.5053327999999999,
+        "text": 0.0072164,
+        "transcription": 0.002652,
+        "total": 0.5152011999999999
+      },
+      "responses": 44,
+      "userTurns": 34,
+      "perResponseTextIn": 1604,
+      "instrTokens": {
+        "caretaker#0": 857,
+        "caretaker#1": 983,
+        "caretaker#2": 1078,
+        "ruth#3": 1663,
+        "ruth#4": 1790,
+        "lily#5": 1839,
+        "lily#6": 1789,
+        "teddy#7": 1666,
+        "teddy#8": 1646,
+        "marcus#9": 1659
+      },
+      "textPrompt": {
+        "avg": 1460,
+        "max": 1678
+      }
+    },
+    "modelSwapOnly": {
+      "voice": {
+        "textIn": 17498,
+        "textInCached": 53069,
+        "audioIn": 5017,
+        "audioInCached": 3123,
+        "textOut": 658,
+        "audioOut": 3778
+      },
+      "text": {
+        "textIn": 16061,
+        "textInCached": 0,
+        "textOut": 495
+      },
+      "usd": {
+        "voice": 0.14192904,
+        "text": 0.0072164,
+        "transcription": 0.002652,
+        "total": 0.15179744
+      },
+      "responses": 44,
+      "userTurns": 34,
+      "perResponseTextIn": 1604,
+      "instrTokens": {
+        "caretaker#0": 857,
+        "caretaker#1": 983,
+        "caretaker#2": 1078,
+        "ruth#3": 1663,
+        "ruth#4": 1790,
+        "lily#5": 1839,
+        "lily#6": 1789,
+        "teddy#7": 1666,
+        "teddy#8": 1646,
+        "marcus#9": 1659
+      },
+      "textPrompt": {
+        "avg": 1460,
+        "max": 1678
+      }
+    },
+    "implemented": {
+      "voice": {
+        "textIn": 12197,
+        "textInCached": 31912,
+        "audioIn": 4980,
+        "audioInCached": 3160,
+        "textOut": 658,
+        "audioOut": 3778
+      },
+      "text": {
+        "textIn": 5780,
+        "textInCached": 0,
+        "textOut": 495
+      },
+      "usd": {
+        "voice": 0.13712012,
+        "text": 0.003104,
+        "transcription": 0.002652,
+        "total": 0.14287612
+      },
+      "responses": 44,
+      "userTurns": 34,
+      "perResponseTextIn": 1002,
+      "instrTokens": {
+        "caretaker#0": 683,
+        "caretaker#1": 723,
+        "caretaker#2": 753,
+        "ruth#3": 1001,
+        "ruth#4": 1036,
+        "lily#5": 1008,
+        "lily#6": 1039,
+        "teddy#7": 1047,
+        "teddy#8": 1029,
+        "marcus#9": 1081
+      },
+      "textPrompt": {
+        "avg": 525,
+        "max": 644
+      }
+    },
+    "implementedCrossCache": {
+      "voice": {
+        "textIn": 12197,
+        "textInCached": 31912,
+        "audioIn": 4980,
+        "audioInCached": 3160,
+        "textOut": 658,
+        "audioOut": 3778
+      },
+      "text": {
+        "textIn": 5780,
+        "textInCached": 0,
+        "textOut": 495
+      },
+      "usd": {
+        "voice": 0.13712012,
+        "text": 0.003104,
+        "transcription": 0.002652,
+        "total": 0.14287612
+      },
+      "responses": 44,
+      "userTurns": 34,
+      "perResponseTextIn": 1002,
+      "instrTokens": {
+        "caretaker#0": 683,
+        "caretaker#1": 723,
+        "caretaker#2": 753,
+        "ruth#3": 1001,
+        "ruth#4": 1036,
+        "lily#5": 1008,
+        "lily#6": 1039,
+        "teddy#7": 1047,
+        "teddy#8": 1029,
+        "marcus#9": 1081
+      },
+      "textPrompt": {
+        "avg": 525,
+        "max": 644
+      }
+    },
+    "paddedTo1100": {
+      "voice": {
+        "textIn": 13749,
+        "textInCached": 44387,
+        "audioIn": 5039,
+        "audioInCached": 3101,
+        "textOut": 658,
+        "audioOut": 3778
+      },
+      "text": {
+        "textIn": 5780,
+        "textInCached": 0,
+        "textOut": 495
+      },
+      "usd": {
+        "voice": 0.13937212,
+        "text": 0.003104,
+        "transcription": 0.002652,
+        "total": 0.14512811999999997
+      },
+      "responses": 44,
+      "userTurns": 34,
+      "perResponseTextIn": 1321,
+      "instrTokens": {
+        "caretaker#0": 1136,
+        "caretaker#1": 1176,
+        "caretaker#2": 1206,
+        "ruth#3": 1313,
+        "ruth#4": 1348,
+        "lily#5": 1290,
+        "lily#6": 1321,
+        "teddy#7": 1342,
+        "teddy#8": 1324,
+        "marcus#9": 1335
+      },
+      "textPrompt": {
+        "avg": 525,
+        "max": 644
+      }
+    },
+    "paddedTo1100CrossCache": {
+      "voice": {
+        "textIn": 8629,
+        "textInCached": 49507,
+        "audioIn": 5039,
+        "audioInCached": 3101,
+        "textOut": 658,
+        "audioOut": 3778
+      },
+      "text": {
+        "textIn": 5780,
+        "textInCached": 0,
+        "textOut": 495
+      },
+      "usd": {
+        "voice": 0.13660732,
+        "text": 0.003104,
+        "transcription": 0.002652,
+        "total": 0.14236332
+      },
+      "responses": 44,
+      "userTurns": 34,
+      "perResponseTextIn": 1321,
+      "instrTokens": {
+        "caretaker#0": 1136,
+        "caretaker#1": 1176,
+        "caretaker#2": 1206,
+        "ruth#3": 1313,
+        "ruth#4": 1348,
+        "lily#5": 1290,
+        "lily#6": 1321,
+        "teddy#7": 1342,
+        "teddy#8": 1324,
+        "marcus#9": 1335
+      },
+      "textPrompt": {
+        "avg": 525,
+        "max": 644
+      }
+    },
+    "reasoning100": {
+      "voice": {
+        "textIn": 12197,
+        "textInCached": 31912,
+        "audioIn": 4980,
+        "audioInCached": 3160,
+        "textOut": 5058,
+        "audioOut": 3778
+      },
+      "text": {
+        "textIn": 5780,
+        "textInCached": 0,
+        "textOut": 495
+      },
+      "usd": {
+        "voice": 0.14768012,
+        "text": 0.003104,
+        "transcription": 0.002652,
+        "total": 0.15343611999999998
+      },
+      "responses": 44,
+      "userTurns": 34,
+      "perResponseTextIn": 1002,
+      "instrTokens": {
+        "caretaker#0": 683,
+        "caretaker#1": 723,
+        "caretaker#2": 753,
+        "ruth#3": 1001,
+        "ruth#4": 1036,
+        "lily#5": 1008,
+        "lily#6": 1039,
+        "teddy#7": 1047,
+        "teddy#8": 1029,
+        "marcus#9": 1081
+      },
+      "textPrompt": {
+        "avg": 525,
+        "max": 644
+      }
+    },
+    "brevity20": {
+      "voice": {
+        "textIn": 12197,
+        "textInCached": 31912,
+        "audioIn": 4430,
+        "audioInCached": 3032,
+        "textOut": 576,
+        "audioOut": 3298
+      },
+      "text": {
+        "textIn": 5780,
+        "textInCached": 0,
+        "textOut": 495
+      },
+      "usd": {
+        "voice": 0.12178491999999999,
+        "text": 0.003104,
+        "transcription": 0.002652,
+        "total": 0.12754091999999997
+      },
+      "responses": 44,
+      "userTurns": 34,
+      "perResponseTextIn": 1002,
+      "instrTokens": {
+        "caretaker#0": 683,
+        "caretaker#1": 723,
+        "caretaker#2": 753,
+        "ruth#3": 1001,
+        "ruth#4": 1036,
+        "lily#5": 1008,
+        "lily#6": 1039,
+        "teddy#7": 1047,
+        "teddy#8": 1029,
+        "marcus#9": 1081
+      },
+      "textPrompt": {
+        "avg": 525,
+        "max": 644
+      }
+    },
+    "textLegacyOnMini": {
+      "voice": {
+        "textIn": 12197,
+        "textInCached": 31912,
+        "audioIn": 4980,
+        "audioInCached": 3160,
+        "textOut": 658,
+        "audioOut": 3778
+      },
+      "text": {
+        "textIn": 16061,
+        "textInCached": 0,
+        "textOut": 495
+      },
+      "usd": {
+        "voice": 0.13712012,
+        "text": 0.0072164,
+        "transcription": 0.002652,
+        "total": 0.14698852
+      },
+      "responses": 44,
+      "userTurns": 34,
+      "perResponseTextIn": 1002,
+      "instrTokens": {
+        "caretaker#0": 683,
+        "caretaker#1": 723,
+        "caretaker#2": 753,
+        "ruth#3": 1001,
+        "ruth#4": 1036,
+        "lily#5": 1008,
+        "lily#6": 1039,
+        "teddy#7": 1047,
+        "teddy#8": 1029,
+        "marcus#9": 1081
+      },
+      "textPrompt": {
+        "avg": 1460,
+        "max": 1678
+      }
+    }
+  },
+  "tail": {
+    "before: in-app call, 240 s cap (gpt-realtime)": {
+      "usd": 0.4463744,
+      "responses": 33,
+      "voice": {
+        "textIn": 1640,
+        "textInCached": 48652,
+        "audioIn": 5644,
+        "audioInCached": 54644,
+        "textOut": 538,
+        "audioOut": 3270
+      }
+    },
+    "before: phone call in, no cap, 8 min (gpt-realtime)": {
+      "usd": 0.9494271999999999,
+      "responses": 66,
+      "voice": {
+        "textIn": 1640,
+        "textInCached": 98944,
+        "audioIn": 11606,
+        "audioInCached": 235264,
+        "textOut": 1082,
+        "audioOut": 6570
+      }
+    },
+    "after: 240 s cap, no wrap-up (2.1-mini)": {
+      "usd": 0.14297100000000001,
+      "responses": 33,
+      "voice": {
+        "textIn": 2565,
+        "textInCached": 25650,
+        "audioIn": 5682,
+        "audioInCached": 54606,
+        "textOut": 538,
+        "audioOut": 3270
+      }
+    },
+    "after: wrap-up at 200 s, goodbye, hang-up (implemented)": {
+      "usd": 0.1225358,
+      "responses": 29,
+      "voice": {
+        "textIn": 2589,
+        "textInCached": 22230,
+        "audioIn": 4870,
+        "audioInCached": 41386,
+        "textOut": 472,
+        "audioOut": 2870
+      }
+    },
+    "experiment: + retention-ratio truncation (2,000 tokens, 0.6)": {
+      "usd": 0.13817676,
+      "responses": 29,
+      "voice": {
+        "textIn": 4237,
+        "textInCached": 20241,
+        "audioIn": 6779,
+        "audioInCached": 26991,
+        "textOut": 472,
+        "audioOut": 2870
+      }
+    }
+  },
+  "revealLive": 0.0181616,
+  "chained": {
+    "usd": 0.068828,
+    "stt": 0.00408,
+    "llm": 0.016016,
+    "tts": 0.048732000000000004
+  },
+  "calib": [
+    {
+      "bucket": "textIn",
+      "export": 16827,
+      "simulated": 17498,
+      "diffPct": 4
+    },
+    {
+      "bucket": "textInCached",
+      "export": 53312,
+      "simulated": 53069,
+      "diffPct": 0
+    },
+    {
+      "bucket": "textOut",
+      "export": 1057,
+      "simulated": 658,
+      "diffPct": -38
+    },
+    {
+      "bucket": "audioIn",
+      "export": 4335,
+      "simulated": 5017,
+      "diffPct": 16
+    },
+    {
+      "bucket": "audioInCached",
+      "export": 3136,
+      "simulated": 3123,
+      "diffPct": 0
+    },
+    {
+      "bucket": "audioOut",
+      "export": 3791,
+      "simulated": 3778,
+      "diffPct": 0
+    }
+  ]
+}

@@ -1,4 +1,6 @@
 // Blackwood Line: a haunted old phone. Vanilla JS, no build step.
+import { TUTORIAL_TITLES, readTutorialProgress, tutorialStep } from './tutorial.js';
+
 const token = location.pathname.split('/').filter(Boolean)[1];
 const api = (path, opts = {}) =>
   fetch(`/api/p/${token}${path}`, { ...opts, headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) } })
@@ -25,6 +27,10 @@ const state = {
   vapidPublicKey: null, view: 'home', open: null, typing: {}, pick: { killer: null, accomplice: null },
   drafts: {}, recap: null, arrived: {},
 };
+
+const tutorialKey = `bw-tutorial-v1-${token}`;
+let tutorial = readTutorialProgress(store.get(tutorialKey));
+const saveTutorial = () => store.set(tutorialKey, JSON.stringify(tutorial));
 
 const READONLY = { line: 'The Line', unknown: 'UNKNOWN' };
 const EVIDENCE_KINDS = new Set(['clue', 'memo', 'evidence', 'reveal']);
@@ -162,8 +168,13 @@ const MANOR = `<svg class="manor" viewBox="0 0 400 180" preserveAspectRatio="xMi
 
 // ============ navigation ============
 function go(view, open = null) {
+  const leavingGuide = state.view === 'tutorial';
   state.view = open ? 'convo' : view; state.open = open;
   sfx.click(); render();
+  if (leavingGuide || view === 'tutorial') {
+    $('#screen').scrollTop = 0;
+    $('#screen h1, #screen .app-title, #screen .convo-head .title, #screen .home-guide')?.focus();
+  }
 }
 function goBack() {
   if (state.view === 'convo') return go('messages');
@@ -180,6 +191,7 @@ function render() {
   const hadFocus = active?.tagName === 'TEXTAREA' && screen.contains(active);
   const phone = $('#phone');
   phone.dataset.view = state.view;
+  $('#tutorialControls').hidden = state.view !== 'tutorial';
   $('#skBack').disabled = state.view === 'home';
   $('#installBanner').style.display = state.view === 'home' ? '' : 'none';
   screen.replaceChildren();
@@ -193,7 +205,10 @@ function render() {
     case 'notes': renderNotes(screen); break;
     case 'vote': renderVote(screen); break;
     case 'recap': renderRecap(screen); break;
+    case 'tutorial': renderTutorial(screen); break;
   }
+  screen.querySelector('.app-title, .convo-head .title')?.setAttribute('tabindex', '-1');
+  renderTutorialPrompt();
   if (state.view !== 'convo') screen.scrollTop = keepScroll;
   lastKey = key;
   if (hadFocus) { const t = screen.querySelector('textarea'); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } }
@@ -239,6 +254,13 @@ function renderHome(screen) {
   );
   if (state.lobby?.status === 'lobby') home.append(clock, lobbyPanel(), grid);
   else home.append(clock, line, grid);
+  const guide = el('button', 'home-guide');
+  guide.append(el('span', null, 'FIELD GUIDE'), el('small', null,
+    tutorial.status === 'complete' ? 'How to play · revisit any time'
+      : tutorial.status === 'new' ? 'New here? Start the tutorial'
+        : `Resume tutorial · ${tutorial.step + 1} / ${TUTORIAL_TITLES.length}`));
+  guide.onclick = () => startTutorial();
+  home.append(guide);
   home.insertAdjacentHTML('beforeend', MANOR);
   screen.append(home);
 }
@@ -281,6 +303,84 @@ function lobbyPanel() {
   }
   box.append(el('p', 'fine', 'This link is your private phone. Add it to your home screen.'));
   return box;
+}
+
+// ============ new-player field guide ============
+function startTutorial() {
+  if (tutorial.status === 'complete') tutorial.step = 0;
+  tutorial.status = 'active'; saveTutorial(); go('tutorial');
+}
+
+function leaveTutorial(complete = false) {
+  tutorial.status = complete ? 'complete' : 'paused';
+  saveTutorial(); go('home');
+}
+
+function tutorialPage(index) {
+  tutorial.step = index; saveTutorial(); go('tutorial');
+}
+
+function renderTutorialPrompt() {
+  const prompt = $('#tutorialPrompt');
+  const show = tutorial.status === 'active' && state.view !== 'tutorial';
+  prompt.hidden = !show;
+  const key = show ? String(tutorial.step) : '';
+  if (!show || prompt.dataset.step === key) return;
+  prompt.dataset.step = key;
+  prompt.replaceChildren();
+  const text = el('div');
+  text.append(el('small', null, `TUTORIAL ${tutorial.step + 1} / ${TUTORIAL_TITLES.length}`),
+    el('span', null, TUTORIAL_TITLES[tutorial.step]));
+  const back = el('button', null, 'RETURN TO GUIDE');
+  back.onclick = () => go('tutorial');
+  prompt.append(text, back);
+}
+
+function renderTutorial(screen) {
+  const step = tutorialStep(tutorial.step, state);
+  const box = el('article', 'tutorial');
+  const header = el('div', 'tutorial-head');
+  header.append(icon(step.icon), el('span', null, 'HOW TO PLAY'),
+    el('span', 'tutorial-count', `${tutorial.step + 1} / ${TUTORIAL_TITLES.length}`));
+  const progress = el('nav', 'tutorial-progress');
+  progress.setAttribute('aria-label', 'Tutorial steps');
+  TUTORIAL_TITLES.forEach((title, i) => {
+    const button = el('button', i === tutorial.step ? 'current' : i < tutorial.step ? 'past' : '');
+    button.setAttribute('aria-label', `Step ${i + 1}: ${title}`);
+    if (i === tutorial.step) button.setAttribute('aria-current', 'step');
+    button.onclick = () => tutorialPage(i);
+    progress.append(button);
+  });
+  const title = el('h1', null, step.title); title.tabIndex = -1;
+  box.append(header, progress, el('div', 'tutorial-tag', step.tag), title, el('p', 'tutorial-intro', step.intro));
+  if (step.example) {
+    const example = el('div', 'tutorial-example');
+    example.append(el('small', null, 'TRY ASKING'), el('p', null, `“${step.example}”`));
+    box.append(example);
+  }
+  const points = el('ul', 'tutorial-points');
+  step.points.forEach((text) => points.append(el('li', null, text)));
+  const tip = el('div', 'tutorial-tip');
+  tip.append(el('b', null, 'YOUR NEXT MOVE'), el('p', null, step.tip));
+  box.append(points, tip);
+  (step.actions || []).forEach((action, i) => {
+    const button = el('button', i === 0 ? 'wide' : 'wide ghost', action.label);
+    button.onclick = () => go(action.view, action.open);
+    box.append(button);
+  });
+  if (step.actions?.length) box.append(el('p', 'tutorial-return', 'Try it on your phone, then tap RETURN TO GUIDE to continue.'));
+  if (step.extra) box.append(el('p', 'tutorial-extra', step.extra));
+  const controls = el('div', 'tutorial-controls');
+  const previous = el('button', 'wide ghost', 'PREVIOUS');
+  previous.disabled = tutorial.step === 0;
+  previous.onclick = () => tutorialPage(tutorial.step - 1);
+  const next = el('button', 'wide', tutorial.step === TUTORIAL_TITLES.length - 1 ? 'FINISH GUIDE' : 'NEXT');
+  next.onclick = () => tutorial.step === TUTORIAL_TITLES.length - 1 ? leaveTutorial(true) : tutorialPage(tutorial.step + 1);
+  controls.append(previous, next);
+  const later = el('button', 'tutorial-later', 'DO THIS LATER');
+  later.onclick = () => leaveTutorial();
+  $('#tutorialControls').replaceChildren(controls, later);
+  screen.append(box);
 }
 
 function lastOf(thread) {
@@ -496,7 +596,14 @@ function renderConvo(screen, thread) {
       state.drafts[thread] = ''; input.value = ''; // clear first: the reply can re-render this screen before the request returns
       try {
         if (isPeerThread(thread)) await api('/peer', { method: 'POST', body: JSON.stringify({ to: thread.startsWith('dm:') ? thread.slice(3) : thread, text }) });
-        else await api('/messages', { method: 'POST', body: JSON.stringify({ thread, text }) });
+        else {
+          // Same text resent after a failure keeps its id, so a send that did reach the server isn't answered twice.
+          const prev = state.sendIds?.[thread];
+          const clientId = prev?.text === text ? prev.id : (crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`);
+          (state.sendIds ||= {})[thread] = { text, id: clientId };
+          await api('/messages', { method: 'POST', body: JSON.stringify({ thread, text, clientId }) });
+          delete state.sendIds[thread];
+        }
       } catch (ex) {
         state.drafts[thread] = text;
         const live = $('#screen textarea'); if (live && !live.value) live.value = text;
@@ -677,79 +784,115 @@ function incoming({ character, from }) {
 }
 
 // ============ in-app voice calls (WebRTC straight to the character's voice) ============
+// The call logic (usage, heard-only transcripts, guarded topics, wrap-up, hang-up) is the same module the server uses.
 let call = null;
 const callName = (character) => (character.startsWith('caretaker') ? 'UNKNOWN' : state.threads.find((t) => t.key === character)?.name || 'UNKNOWN');
-async function startCall(character) {
-  if (call) return;
-  sfx.unlock();
-  call = { character, started: 0, timer: null };
-  const scr = $('#callScreen');
+function callScreen(character) {
   $('#callName').textContent = callName(character);
   $('#callState').textContent = 'CALLING…';
   $('#callTime').textContent = '';
   $('#callMute').classList.remove('on');
-  scr.hidden = false;
+  $('#callScreen').hidden = false;
+}
+function startClock(maxSeconds, onTick) {
+  call.started = Date.now();
+  $('#callState').textContent = 'ON THE LINE';
+  call.timer = setInterval(() => {
+    if (!call) return;
+    const secs = (Date.now() - call.started) / 1000;
+    $('#callTime').textContent = fmtSec(secs);
+    onTick?.();
+    if (secs > maxSeconds) endCall('max_duration');
+  }, 500);
+}
+// A scripted call (the midnight reveal): a finished recording plays through the call screen.
+function playRecordingCall(character, info) {
+  const audio = $('#callAudio');
+  call.mode = 'recording';
+  audio.srcObject = null;
+  audio.src = info.audio;
+  audio.onended = () => setTimeout(() => endCall('recording_ended'), 800);
+  audio.play().catch(() => {});
+  startClock(info.maxSeconds);
+}
+async function startCall(character) {
+  if (call) return;
+  sfx.unlock();
+  call = { character, started: 0, timer: null };
+  callScreen(character);
   const audio = $('#callAudio');
   audio.play().catch(() => {}); // unlock playback inside the tap
-  try {
+  const getMic = async () => {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('This browser can’t use the microphone. Open the link in Safari or Chrome.');
-    const mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    return navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  };
+  try {
+    // Microphone first (the short-lived call key is only minted once we can use it). The scripted reveal needs none.
+    let mic = character === 'caretaker_reveal' ? null : await getMic();
     call.mic = mic;
-    if (!call) { mic.getTracks().forEach((t) => t.stop()); return; }
+    if (!call) { mic?.getTracks().forEach((t) => t.stop()); return; }
     const info = await api('/call', { method: 'POST', body: JSON.stringify({ character }) });
-    if (!call) { mic.getTracks().forEach((t) => t.stop()); return; }
+    if (!call) { mic?.getTracks().forEach((t) => t.stop()); return; }
+    call.callId = info.callId;
+    if (info.mode === 'recording') { mic?.getTracks().forEach((t) => t.stop()); call.mic = null; playRecordingCall(character, info); return; }
+    if (!mic) { mic = await getMic(); call.mic = mic; }
     const pc = new RTCPeerConnection();
     call.pc = pc;
     pc.ontrack = (e) => { audio.srcObject = e.streams[0]; audio.play().catch(() => {}); meter(e.streams[0]); };
     mic.getTracks().forEach((t) => pc.addTrack(t, mic));
     const dc = pc.createDataChannel('oai-events');
-    dc.onopen = () => {
-      dc.send(JSON.stringify({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: info.opening }] } }));
-      dc.send(JSON.stringify({ type: 'response.create' }));
-    };
-    dc.onmessage = (e) => {
-      let evt; try { evt = JSON.parse(e.data); } catch { return; }
-      if (evt.type === 'conversation.item.input_audio_transcription.completed' && evt.transcript) saveLine('player', evt.transcript);
-      if ((evt.type === 'response.output_audio_transcript.done' || evt.type === 'response.audio_transcript.done') && evt.transcript) saveLine('character', evt.transcript);
-      if (evt.type === 'error') console.warn('call error', evt.error);
-    };
-    pc.onconnectionstatechange = () => { if (['failed', 'closed'].includes(pc.connectionState)) endCall(); };
+    const callId = info.callId;
+    const post = (path, body) => api(path, { method: 'POST', body: JSON.stringify({ callId, character, ...body }) });
+    if (!info.serverControlled) {
+      const { createCallController } = await import('/assets/shared/call-controller.js');
+      call.ctl = createCallController({
+        mode: 'webrtc',
+        send: (evt) => { if (dc.readyState === 'open') dc.send(JSON.stringify(evt)); },
+        opening: info.opening, openingRole: info.openingRole, toolName: info.toolName, timing: info.timing, turns: info.turns,
+        hooks: {
+          transcript: (speaker, text, meta) => post('/call/transcript', { speaker, text, itemId: meta?.itemId }).catch(() => ({})),
+          usage: (rec) => { post('/call/usage', { records: [rec] }).catch(() => {}); },
+          disclose: (topic, recent) => post('/call/disclose', { topic, recent }),
+          end: (reason) => setTimeout(() => endCall(reason), 0),
+          error: (e) => console.warn('call error', e),
+        },
+      });
+      dc.onopen = () => call?.ctl?.start();
+      dc.onmessage = (e) => { let evt; try { evt = JSON.parse(e.data); } catch { return; } call?.ctl?.handle(evt); };
+    }
+    pc.onconnectionstatechange = () => { if (['failed', 'closed'].includes(pc.connectionState)) endCall('connection_lost'); };
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    const r = await fetch(info.url, { method: 'POST', body: offer.sdp, headers: { Authorization: `Bearer ${info.key}`, 'Content-Type': 'application/sdp' } });
+    const r = info.transport === 'sideband'
+      ? await fetch(`/api/p/${token}/call/${callId}/sdp`, { method: 'POST', body: offer.sdp, headers: { 'Content-Type': 'application/sdp' } })
+      : await fetch(info.url, { method: 'POST', body: offer.sdp, headers: { Authorization: `Bearer ${info.key}`, 'Content-Type': 'application/sdp' } });
     if (!r.ok) throw new Error('The call didn’t connect. Try again.');
     await pc.setRemoteDescription({ type: 'answer', sdp: await r.text() });
     if (!call) return;
-    call.started = Date.now();
-    $('#callState').textContent = 'ON THE LINE';
-    call.timer = setInterval(() => {
-      const secs = (Date.now() - call.started) / 1000;
-      $('#callTime').textContent = fmtSec(secs);
-      if (secs > info.maxSeconds) endCall();
-    }, 500);
+    startClock(info.maxSeconds, () => call?.ctl?.tick());
   } catch (ex) {
-    $('#callState').textContent = ex.name === 'NotAllowedError' ? 'MICROPHONE BLOCKED' : 'CALL FAILED';
+    $('#callState').textContent = ex.name === 'NotAllowedError' ? 'MICROPHONE BLOCKED' : /busy/i.test(ex.message) ? 'LINE BUSY' : 'CALL FAILED';
     $('#callTime').textContent = ex.name === 'NotAllowedError' ? 'Allow the microphone to talk to them.'
       : ex instanceof TypeError ? 'The line dropped. Try again.' : ex.message;
-    setTimeout(() => endCall(), 3200);
+    setTimeout(() => endCall('connect_failed'), 3200);
   }
 }
-function saveLine(speaker, text) {
-  if (!call) return;
-  api('/call/transcript', { method: 'POST', body: JSON.stringify({ character: call.character, speaker, text }) }).catch(() => {});
-}
-function endCall() {
+function endCall(reason = 'player_hung_up') {
   if (!call) return;
   const c = call; call = null;
   clearInterval(c.timer); cancelAnimationFrame(meterRaf);
+  c.ctl?.end(reason); // saves what was heard so far and reports any outstanding usage
   c.mic?.getTracks().forEach((t) => t.stop());
   try { c.pc?.close(); } catch { /* already closed */ }
-  $('#callAudio').srcObject = null;
+  const audio = $('#callAudio');
+  audio.pause(); audio.onended = null; audio.srcObject = null; audio.removeAttribute('src');
   $('#callScreen').hidden = true;
-  if (c.started) api('/call/end', { method: 'POST', body: JSON.stringify({ character: c.character, seconds: (Date.now() - c.started) / 1000 }) }).catch(() => {});
+  if (c.started || c.callId) {
+    api('/call/end', { method: 'POST', body: JSON.stringify({ callId: c.callId, character: c.character, mode: c.mode, reason, seconds: c.started ? (Date.now() - c.started) / 1000 : 0 }) }).catch(() => {});
+  }
   sfx.creak();
 }
-$('#callEnd').onclick = endCall;
+$('#callEnd').onclick = () => endCall('player_hung_up');
 $('#callMute').onclick = () => {
   if (!call?.mic) return;
   const on = !$('#callMute').classList.toggle('on');
@@ -1020,6 +1163,7 @@ async function firstRun() {
   if (!roleSeen()) await showRole();
   hidePower();
   store.set(`bw-on-${token}`, '1');
+  if (tutorial.status === 'new' && !state.revealed) startTutorial();
 }
 
 // Pull fresh state when the app comes back to the foreground (phones pause live updates in the background).
@@ -1060,6 +1204,7 @@ async function boot() {
   setupMenu();
   $('#replayBtn').onclick = async () => { $('#menu').close(); sfx.unlock(); await playIntro(); };
   $('#roleBtn').onclick = async () => { $('#menu').close(); await showRole(); };
+  $('#tutorialBtn').onclick = () => { $('#menu').close(); startTutorial(); };
   $('#skBack').onclick = goBack;
   $('#skHome').onclick = () => { if (state.view !== 'home') go('home'); };
   showInstallBanner();
@@ -1072,9 +1217,10 @@ async function boot() {
   if (already || fromHash) {
     $('#power').hidden = true;
     if (state.ringing) incoming({ character: state.ringing.character, from: '' });
-    if (!roleSeen() && state.me.assigned) showRole();
+    if (!roleSeen() && state.me.assigned) await showRole();
+    if (!fromHash && !state.revealed && !state.ringing && ['new', 'active'].includes(tutorial.status)) startTutorial();
   } else {
-    $('#pwrBtn').onclick = (e) => { e.stopPropagation(); firstRun(); };
+    $('#pwrBtn').onclick = (e) => { e.stopPropagation(); $('#pwrBtn').disabled = true; firstRun(); };
   }
 }
 

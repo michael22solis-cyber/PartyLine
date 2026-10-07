@@ -136,6 +136,52 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .manor .win.b { animation-delay: 1.3s; fill: #d0412e; }
 @keyframes candle { 0%,100% { opacity: 0.85; } 8% { opacity: 0.2; } 12% { opacity: 0.9; } 55% { opacity: 0.7; } 60% { opacity: 0.1; } 64% { opacity: 0.85; } }
 
+/* ============ new-player field guide ============ */
+.home-guide {
+  position: relative; z-index: 2; width: 100%; margin: 16px 0 20px; padding: 12px 14px;
+  text-align: left; border: 1px dashed var(--dim); background: rgba(5,7,6,0.9);
+}
+.home-guide span { display: block; font-family: var(--lcd); font-size: 20px; letter-spacing: 0.14em; color: var(--amber); }
+.home-guide small { display: block; margin-top: 4px; font-size: 12px; line-height: 1.5; }
+.tutorial-prompt {
+  flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 12px; border-bottom: 1px dashed var(--dim); background: #111a14;
+}
+.tutorial-prompt div { min-width: 0; }
+.tutorial-prompt small { display: block; font-size: 10px; letter-spacing: 0.08em; color: var(--amber); }
+.tutorial-prompt span { display: block; margin-top: 3px; font-size: 12px; line-height: 1.4; }
+.tutorial-prompt button { flex: none; max-width: 115px; min-height: 44px; padding: 6px 8px; font-family: var(--lcd); font-size: 17px; color: var(--glow); border: 1px solid var(--dim); }
+.tutorial { padding: 16px 20px 24px; background: linear-gradient(150deg, #101a13, var(--bg) 280px); }
+.tutorial-head { display: flex; align-items: center; gap: 10px; font-family: var(--lcd); font-size: 21px; letter-spacing: 0.12em; color: var(--glow); }
+.tutorial-head svg { width: 25px; height: 25px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+.tutorial-count { margin-left: auto; color: var(--amber); white-space: nowrap; }
+.tutorial-progress { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; margin: 4px 0 10px; }
+.tutorial-progress button { min-height: 44px; position: relative; }
+.tutorial-progress button::after { content: ''; position: absolute; left: 0; right: 0; top: 20px; height: 4px; background: var(--line); }
+.tutorial-progress button.past::after { background: var(--dim); }
+.tutorial-progress button.current::after { background: var(--amber); box-shadow: 0 0 10px rgba(230,162,60,0.25); }
+.tutorial-tag { font-size: 10px; line-height: 1.6; letter-spacing: 0.1em; color: var(--amber); }
+.tutorial h1 { font-family: var(--type); font-size: 28px; line-height: 1.2; font-weight: 400; margin: 10px 0 14px; color: #e2ebdc; }
+.tutorial-intro { font-size: 14px; line-height: 1.65; margin: 0 0 18px; }
+.tutorial-points { padding-left: 19px; margin: 0 0 20px; font-size: 13px; line-height: 1.65; }
+.tutorial-points li { padding-left: 3px; margin-bottom: 12px; }
+.tutorial-points li::marker { color: var(--glow); }
+.tutorial-tip { border-left: 2px solid var(--amber); background: #151b12; padding: 12px 14px; margin: 18px 0; }
+.tutorial-tip b { font-family: var(--lcd); font-size: 17px; font-weight: 400; letter-spacing: 0.12em; color: var(--amber); }
+.tutorial-tip p { margin: 5px 0 0; font-size: 13px; line-height: 1.6; }
+.tutorial-example { border: 1px solid var(--line); background: var(--panel); padding: 10px 14px; margin-bottom: 18px; }
+.tutorial-example small { font-size: 10px; letter-spacing: 0.1em; color: var(--glow); }
+.tutorial-example p { margin: 6px 0 0; font-size: 14px; line-height: 1.5; }
+.tutorial-extra, .tutorial-return { font-size: 12px; line-height: 1.65; }
+.tutorial-extra { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 18px; }
+.tutorial-return { color: var(--amber); }
+.tutorial-footer { flex: none; padding: 0 16px 4px; border-top: 1px solid var(--line); background: var(--bg); }
+.tutorial-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tutorial-controls .wide { font-size: 18px; letter-spacing: 0.08em; }
+.tutorial-later { display: block; width: 100%; min-height: 44px; margin-top: 4px; font-family: var(--lcd); font-size: 17px; color: var(--dim); letter-spacing: 0.12em; }
+.tutorial button:focus-visible, .tutorial-footer button:focus-visible, .tutorial-prompt button:focus-visible, .home-guide:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+.tutorial h1:focus, .app-title:focus, .convo-head .title:focus { outline: none; }
+
 /* ============ list rows (messages / calls) ============ */
 .list { list-style: none; margin: 0; padding: 0; }
 .list li button {

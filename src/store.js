@@ -3,13 +3,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { dataFile } from './paths.js';
 
-import { dataFile } from './env.js';
 const FILE = dataFile('game.json');
 const EMPTY = { players: [], messages: [], votes: {}, pushSubs: {}, schedule: [], revealed: false, groups: [], game: null };
 
 let db = load();
-db.players.forEach((p) => { p.pid ||= crypto.randomBytes(4).toString('hex'); });
+db.players.forEach((p) => { p.pid ||= crypto.randomBytes(4).toString('hex'); p.permitted ||= {}; });
+let saveTimer = null;
 
 function load() {
   try {
@@ -19,10 +20,26 @@ function load() {
   }
 }
 
-function save() {
-  fs.mkdirSync(path.dirname(FILE), { recursive: true });
-  fs.writeFileSync(FILE, JSON.stringify(db, null, 2));
+// Writes are batched (at most one every 250 ms) and atomic (temp file + rename), so a busy game no longer
+// rewrites the whole file synchronously on every message.
+function writeNow() {
+  saveTimer = null;
+  try {
+    fs.mkdirSync(path.dirname(FILE), { recursive: true });
+    const tmp = `${FILE}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(db));
+    fs.renameSync(tmp, FILE);
+  } catch (err) {
+    console.error('[store] save failed:', err.message);
+  }
 }
+function save() {
+  if (saveTimer) return;
+  saveTimer = setTimeout(writeNow, 250);
+  saveTimer.unref?.();
+}
+export function flushStore() { if (saveTimer) { clearTimeout(saveTimer); writeNow(); } }
+process.on('exit', flushStore);
 
 export const getDb = () => db;
 
@@ -37,6 +54,7 @@ export function addPlayer({ name, phone, organizer = false }) {
     clue: null,
     unlocked: [],   // suspects whose numbers this player has (see progress.js)
     found: [],      // secrets this player has uncovered
+    permitted: {},  // npc -> topic ids the engine has approved for disclosure to this player (see disclosure.js)
     callsOff: false,
     organizer,
     joinedAt: new Date().toISOString(),
@@ -64,7 +82,11 @@ export function updatePlayer(token, patch) {
 // thread: a character key ('ruth', 'marcus'...), 'line' (narrator) or 'unknown' (the Caretaker's call log)
 // from: 'player' | 'character' | 'system'
 // kind: 'text' | 'clue' | 'memo' | 'call' | 'calllog' | 'missed' | 'voicemail' | 'secret' | 'evidence' | 'reveal'
-export function addMessage({ token, thread, from, text, kind = 'text', audio = null, sender = null, forwarded = false }) {
+export function addMessage({ token, thread, from, text, kind = 'text', audio = null, sender = null, forwarded = false, clientId = null }) {
+  if (clientId) {
+    const dup = db.messages.find((m) => m.token === token && m.clientId === clientId);
+    if (dup) return { ...dup, duplicate: true };
+  }
   const msg = {
     id: crypto.randomUUID(),
     token,
@@ -75,16 +97,19 @@ export function addMessage({ token, thread, from, text, kind = 'text', audio = n
     ...(audio ? { audio } : {}),
     ...(sender ? { sender } : {}),
     ...(forwarded ? { forwarded: true } : {}),
+    ...(clientId ? { clientId: String(clientId).slice(0, 64) } : {}),
     at: new Date().toISOString(),
   };
   db.messages.push(msg);
+  if (from === 'player') playerCounts.set(token, (playerCounts.get(token) || 0) + 1);
   save();
   return msg;
 }
 
 export const messagesFor = (token) => db.messages.filter((m) => m.token === token);
-export const countPlayerMessages = (token) =>
-  db.messages.filter((m) => m.token === token && m.from === 'player').length;
+const playerCounts = new Map();
+for (const m of db.messages) if (m.from === 'player') playerCounts.set(m.token, (playerCounts.get(m.token) || 0) + 1);
+export const countPlayerMessages = (token) => playerCounts.get(token) || 0;
 export const threadHistory = (token, thread, limit = 20) =>
   db.messages.filter((m) => m.token === token && m.thread === thread).slice(-limit);
 
@@ -141,5 +166,6 @@ export function setRevealed() { db.revealed = true; save(); }
 
 export function resetGame() {
   db = structuredClone(EMPTY);
+  playerCounts.clear();
   save();
 }
