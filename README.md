@@ -9,6 +9,7 @@ A 2-night Halloween mystery played on real phones. AI characters **call** player
 | Phone calls | The Caretaker calls players; players can call Ruth (or each suspect, with extra numbers). Real-time AI voices via Twilio + OpenAI Realtime. 4-minute cap. |
 | Haunted old phone | Each player's private link opens a power-on and boot screen, then a home screen with Messages, Calls, Evidence, Notes (suspect board), Vote and The End. Glitches, whispers, synth sounds and a full-screen incoming-call alert. Installs to the home screen; push alerts. |
 | Intro video | A 30-second story intro plays after a player taps the power button, then their private role card (Detective, or a blurred Accomplice card), then the phone. Replay it from Menu. Script: `intro/SCRIPT.md`. |
+| New-player tutorial | A six-step, spoiler-free field guide opens after the first role card. Players can open the real apps from each step, return to the guide, pause and resume, or revisit it from the home screen and Menu → How to play. Progress is saved per private link on the current device. |
 | Recap | After the midnight reveal, "The End" shows each player's detective score, rank, secrets uncovered, and a no-spoiler share card (PNG). |
 | Beats | Every scripted moment from the case doc (intro, clues, 9:40 voice memo, 911 twist, accomplice's secret texts, midnight reveal). Fire by hand or schedule. |
 | Admin CLI | Add players, fire or schedule beats, check votes. |
@@ -48,6 +49,16 @@ Run `beat setup` **before** you send links, so each friend sees their role right
 - **The house is listening:** mention the cellar, Ruth, bingo, the lullaby, mud or the 911 call in the crew chat and, now and then (at most every 12 minutes), Ruth texts someone else about what was just said.
 
 ## Run a playtest
+
+### Helping new players
+
+The tutorial explains the two-night investigation, first clue, suspect questions and calls, sharing with the crew, private notes, voting, and the ending. It adapts its next step when the host has not assigned roles, no clue or contacts have arrived, other players have not joined, a vote is already saved, or the reveal has happened. It keeps roles and the solution private and opens voting for review without sending a vote or making a call.
+
+Players can tap **DO THIS LATER** and use **FIELD GUIDE** on the home screen to resume. **MENU → How to play** reopens the tutorial; after completing it, either entry starts it again. Notifications still open their requested thread directly. Tutorial progress and notes stay on the device.
+
+Run `npm test` to check saved tutorial progress, waiting states, contact and clue unlocks, sharing guidance, voting, and role privacy.
+
+### Host controls
 
 ```bash
 # 1. Add players (phone is optional; without it they only use the app)

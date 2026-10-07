@@ -1,4 +1,6 @@
 // Blackwood Line: a haunted old phone. Vanilla JS, no build step.
+import { TUTORIAL_TITLES, readTutorialProgress, tutorialStep } from './tutorial.js';
+
 const token = location.pathname.split('/').filter(Boolean)[1];
 const api = (path, opts = {}) =>
   fetch(`/api/p/${token}${path}`, { ...opts, headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) } })
@@ -25,6 +27,10 @@ const state = {
   vapidPublicKey: null, view: 'home', open: null, typing: {}, pick: { killer: null, accomplice: null },
   drafts: {}, recap: null, arrived: {},
 };
+
+const tutorialKey = `bw-tutorial-v1-${token}`;
+let tutorial = readTutorialProgress(store.get(tutorialKey));
+const saveTutorial = () => store.set(tutorialKey, JSON.stringify(tutorial));
 
 const READONLY = { line: 'The Line', unknown: 'UNKNOWN' };
 const EVIDENCE_KINDS = new Set(['clue', 'memo', 'evidence', 'reveal']);
@@ -162,8 +168,13 @@ const MANOR = `<svg class="manor" viewBox="0 0 400 180" preserveAspectRatio="xMi
 
 // ============ navigation ============
 function go(view, open = null) {
+  const leavingGuide = state.view === 'tutorial';
   state.view = open ? 'convo' : view; state.open = open;
   sfx.click(); render();
+  if (leavingGuide || view === 'tutorial') {
+    $('#screen').scrollTop = 0;
+    $('#screen h1, #screen .app-title, #screen .convo-head .title, #screen .home-guide')?.focus();
+  }
 }
 function goBack() {
   if (state.view === 'convo') return go('messages');
@@ -180,6 +191,7 @@ function render() {
   const hadFocus = active?.tagName === 'TEXTAREA' && screen.contains(active);
   const phone = $('#phone');
   phone.dataset.view = state.view;
+  $('#tutorialControls').hidden = state.view !== 'tutorial';
   $('#skBack').disabled = state.view === 'home';
   $('#installBanner').style.display = state.view === 'home' ? '' : 'none';
   screen.replaceChildren();
@@ -193,7 +205,10 @@ function render() {
     case 'notes': renderNotes(screen); break;
     case 'vote': renderVote(screen); break;
     case 'recap': renderRecap(screen); break;
+    case 'tutorial': renderTutorial(screen); break;
   }
+  screen.querySelector('.app-title, .convo-head .title')?.setAttribute('tabindex', '-1');
+  renderTutorialPrompt();
   if (state.view !== 'convo') screen.scrollTop = keepScroll;
   lastKey = key;
   if (hadFocus) { const t = screen.querySelector('textarea'); if (t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } }
@@ -238,8 +253,93 @@ function renderHome(screen) {
     appButton('recap', 'THE END', 'recap', 0, !state.revealed),
   );
   home.append(clock, line, grid);
+  const guide = el('button', 'home-guide');
+  guide.append(el('span', null, 'FIELD GUIDE'), el('small', null,
+    tutorial.status === 'complete' ? 'How to play · revisit any time'
+      : tutorial.status === 'new' ? 'New here? Start the tutorial'
+        : `Resume tutorial · ${tutorial.step + 1} / ${TUTORIAL_TITLES.length}`));
+  guide.onclick = () => startTutorial();
+  home.append(guide);
   home.insertAdjacentHTML('beforeend', MANOR);
   screen.append(home);
+}
+
+// ============ new-player field guide ============
+function startTutorial() {
+  if (tutorial.status === 'complete') tutorial.step = 0;
+  tutorial.status = 'active'; saveTutorial(); go('tutorial');
+}
+
+function leaveTutorial(complete = false) {
+  tutorial.status = complete ? 'complete' : 'paused';
+  saveTutorial(); go('home');
+}
+
+function tutorialPage(index) {
+  tutorial.step = index; saveTutorial(); go('tutorial');
+}
+
+function renderTutorialPrompt() {
+  const prompt = $('#tutorialPrompt');
+  const show = tutorial.status === 'active' && state.view !== 'tutorial';
+  prompt.hidden = !show;
+  const key = show ? String(tutorial.step) : '';
+  if (!show || prompt.dataset.step === key) return;
+  prompt.dataset.step = key;
+  prompt.replaceChildren();
+  const text = el('div');
+  text.append(el('small', null, `TUTORIAL ${tutorial.step + 1} / ${TUTORIAL_TITLES.length}`),
+    el('span', null, TUTORIAL_TITLES[tutorial.step]));
+  const back = el('button', null, 'RETURN TO GUIDE');
+  back.onclick = () => go('tutorial');
+  prompt.append(text, back);
+}
+
+function renderTutorial(screen) {
+  const step = tutorialStep(tutorial.step, state);
+  const box = el('article', 'tutorial');
+  const header = el('div', 'tutorial-head');
+  header.append(icon(step.icon), el('span', null, 'HOW TO PLAY'),
+    el('span', 'tutorial-count', `${tutorial.step + 1} / ${TUTORIAL_TITLES.length}`));
+  const progress = el('nav', 'tutorial-progress');
+  progress.setAttribute('aria-label', 'Tutorial steps');
+  TUTORIAL_TITLES.forEach((title, i) => {
+    const button = el('button', i === tutorial.step ? 'current' : i < tutorial.step ? 'past' : '');
+    button.setAttribute('aria-label', `Step ${i + 1}: ${title}`);
+    if (i === tutorial.step) button.setAttribute('aria-current', 'step');
+    button.onclick = () => tutorialPage(i);
+    progress.append(button);
+  });
+  const title = el('h1', null, step.title); title.tabIndex = -1;
+  box.append(header, progress, el('div', 'tutorial-tag', step.tag), title, el('p', 'tutorial-intro', step.intro));
+  if (step.example) {
+    const example = el('div', 'tutorial-example');
+    example.append(el('small', null, 'TRY ASKING'), el('p', null, `“${step.example}”`));
+    box.append(example);
+  }
+  const points = el('ul', 'tutorial-points');
+  step.points.forEach((text) => points.append(el('li', null, text)));
+  const tip = el('div', 'tutorial-tip');
+  tip.append(el('b', null, 'YOUR NEXT MOVE'), el('p', null, step.tip));
+  box.append(points, tip);
+  (step.actions || []).forEach((action, i) => {
+    const button = el('button', i === 0 ? 'wide' : 'wide ghost', action.label);
+    button.onclick = () => go(action.view, action.open);
+    box.append(button);
+  });
+  if (step.actions?.length) box.append(el('p', 'tutorial-return', 'Try it on your phone, then tap RETURN TO GUIDE to continue.'));
+  if (step.extra) box.append(el('p', 'tutorial-extra', step.extra));
+  const controls = el('div', 'tutorial-controls');
+  const previous = el('button', 'wide ghost', 'PREVIOUS');
+  previous.disabled = tutorial.step === 0;
+  previous.onclick = () => tutorialPage(tutorial.step - 1);
+  const next = el('button', 'wide', tutorial.step === TUTORIAL_TITLES.length - 1 ? 'FINISH GUIDE' : 'NEXT');
+  next.onclick = () => tutorial.step === TUTORIAL_TITLES.length - 1 ? leaveTutorial(true) : tutorialPage(tutorial.step + 1);
+  controls.append(previous, next);
+  const later = el('button', 'tutorial-later', 'DO THIS LATER');
+  later.onclick = () => leaveTutorial();
+  $('#tutorialControls').replaceChildren(controls, later);
+  screen.append(box);
 }
 
 function lastOf(thread) {
@@ -973,6 +1073,7 @@ async function firstRun() {
   if (!roleSeen()) await showRole();
   hidePower();
   store.set(`bw-on-${token}`, '1');
+  if (tutorial.status === 'new' && !state.revealed) startTutorial();
 }
 
 // Pull fresh state when the app comes back to the foreground (phones pause live updates in the background).
@@ -1013,6 +1114,7 @@ async function boot() {
   setupMenu();
   $('#replayBtn').onclick = async () => { $('#menu').close(); sfx.unlock(); await playIntro(); };
   $('#roleBtn').onclick = async () => { $('#menu').close(); await showRole(); };
+  $('#tutorialBtn').onclick = () => { $('#menu').close(); startTutorial(); };
   $('#skBack').onclick = goBack;
   $('#skHome').onclick = () => { if (state.view !== 'home') go('home'); };
   showInstallBanner();
@@ -1025,9 +1127,10 @@ async function boot() {
   if (already || fromHash) {
     $('#power').hidden = true;
     if (state.ringing) incoming({ character: state.ringing.character, from: '' });
-    if (!roleSeen() && state.me.assigned) showRole();
+    if (!roleSeen() && state.me.assigned) await showRole();
+    if (!fromHash && !state.revealed && !state.ringing && ['new', 'active'].includes(tutorial.status)) startTutorial();
   } else {
-    $('#pwrBtn').onclick = (e) => { e.stopPropagation(); firstRun(); };
+    $('#pwrBtn').onclick = (e) => { e.stopPropagation(); $('#pwrBtn').disabled = true; firstRun(); };
   }
 }
 
