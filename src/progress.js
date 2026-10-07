@@ -8,6 +8,7 @@ import { notify } from './push.js';
 import { CHARACTERS, TEXTABLE } from './characters/index.js';
 import { SECRETS, MENTIONS } from './secrets.js';
 import { callPhone } from './phone.js';
+import { mayAward } from './disclosure.js';
 
 const { UNLOCK_ALL, CALL_MODE = 'app' } = process.env; // CALL_MODE=phone uses real Twilio calls when a player has a number
 
@@ -35,10 +36,13 @@ export async function unlockAll(reason) {
 }
 
 // ---------- secrets ----------
-export async function checkSecrets(p, characterKey, text) {
-  const fresh = playerByToken(p.token) || p;
+// A secret becomes evidence when the character actually says it AND the engine had approved that disclosure for this
+// player (or, in a group chat, for the conversation: `approved`). Each card is awarded once.
+export async function checkSecrets(p, characterKey, text, { approved = [] } = {}) {
   for (const s of SECRETS) {
+    const fresh = playerByToken(p.token) || p;
     if (s.who !== characterKey || (fresh.found || []).includes(s.id) || !s.test(text || '')) continue;
+    if (!mayAward(fresh, characterKey, s.id, approved)) continue;
     updatePlayer(p.token, { found: [...(fresh.found || []), s.id] });
     await deliver({ token: p.token, thread: characterKey, from: 'system', kind: 'evidence',
       text: `SECRET UNCOVERED\n${s.card}` });
@@ -46,8 +50,8 @@ export async function checkSecrets(p, characterKey, text) {
 }
 
 // Called for everything a character says to a player (texts and call transcripts).
-export async function onCharacterSaid(p, characterKey, text) {
-  await checkSecrets(p, characterKey, text);
+export async function onCharacterSaid(p, characterKey, text, opts = {}) {
+  await checkSecrets(p, characterKey, text, opts);
   await unlockMentions(p, text);
 }
 
@@ -88,7 +92,7 @@ export async function ringInApp(p, character, { opening, voicemail } = {}) {
 export async function callPlayer(p, character, options = {}) {
   if (p.callsOff) return 'off';
   if (CALL_MODE === 'phone' && p.phone) {
-    await callPhone(p.phone, p.name, character);
+    await callPhone(p.phone, p.name, character, p.pid);
     await deliver({ token: p.token, thread: 'unknown', from: 'system', kind: 'call', text: 'Incoming call — Blackwood Manor' });
     return 'phone';
   }

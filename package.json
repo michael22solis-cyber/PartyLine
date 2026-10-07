@@ -12,7 +12,12 @@
     "vapid": "web-push generate-vapid-keys",
     "voice": "node scripts/intro-voice.js",
     "evidence": "node scripts/evidence-audio.js",
-    "say": "node scripts/say.js"
+    "say": "node scripts/say.js",
+    "test": "node --test test/*.test.js",
+    "usage": "node scripts/usage-report.js",
+    "bench": "node bench/simulate.js",
+    "eval:voice": "node scripts/eval-voice.js",
+    "test:browser": "node --test test/browser/*.browser.js"
   },
   "engines": {
     "node": ">=20"
@@ -28,6 +33,7 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "ffmpeg-static": "^5.3.0"
+    "ffmpeg-static": "^5.3.0",
+    "gpt-tokenizer": "^4.0.0"
   }
 }

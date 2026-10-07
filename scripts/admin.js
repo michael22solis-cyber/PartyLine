@@ -5,6 +5,7 @@
 //   npm run admin -- schedule memo 2026-10-30T21:40:00-05:00
 //   npm run admin -- night1 2026-10-30         schedule all of Night 1 (Central time)
 //   npm run admin -- night2 2026-10-31         schedule all of Night 2 + midnight reveal
+//   npm run admin -- usage                     AI cost so far (from the server's usage ledger)
 //   npm run admin -- reset                     wipe the game (careful)
 import 'dotenv/config';
 
@@ -46,11 +47,16 @@ try {
       console.log('Remember: run `npm run admin -- beat setup` once everyone has joined, before Night 1.');
       break;
     }
+    case 'usage': {
+      const { formatReport } = await import('../src/ai/report.js');
+      console.log(formatReport(await api('GET', '/admin/usage')));
+      break;
+    }
     case 'reset':
       console.log(await api('POST', '/admin/reset'));
       break;
     default:
-      console.log('Commands: add, status, beat, schedule, night1, night2, reset (see scripts/admin.js)');
+      console.log('Commands: add, status, beat, schedule, night1, night2, usage, reset (see scripts/admin.js)');
   }
 } catch (err) {
   console.error('Error:', err.message);

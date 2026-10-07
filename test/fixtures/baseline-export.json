@@ -1,0 +1,15 @@
+{
+  "format": "buckets",
+  "label": "Short playtest, provider daily aggregate supplied by the host (not individual traces)",
+  "models": {
+    "gpt-realtime-2025-08-28": {
+      "requests": 6,
+      "cost": 0.48814,
+      "buckets": { "textIn": 16827, "textInCached": 53312, "textOut": 1057, "audioIn": 4335, "audioInCached": 3136, "audioOut": 3791 }
+    },
+    "gpt-4.1-mini-2025-04-14": { "requests": 11, "cost": 0.00929 },
+    "gpt-4o-mini-tts": { "requests": 7, "cost": 0.01212 },
+    "gpt-4o-mini-transcribe": { "requests": 34, "cost": 0.0018 }
+  },
+  "totals": { "requests": 58, "inputTokens": 99787, "cachedTokens": 56448, "outputTokens": 6533, "cost": 0.51135 }
+}
