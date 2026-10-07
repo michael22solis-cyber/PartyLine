@@ -242,9 +242,11 @@ test('talking over the character for long enough stops it, cuts its history, the
   const stop = h.sound('u1', { audioMs: 1200 });
   await tick(60); // past bargeInMs, still talking
   assert.ok(h.sent.some((e) => e.type === 'output_audio_buffer.clear'));
+  const iClear = h.sent.findIndex((e) => e.type === 'output_audio_buffer.clear');
+  const trunc = h.sent.find((e) => e.type === 'conversation.item.truncate');
+  assert.ok(h.sent.indexOf(trunc) > iClear, 'history is cut right away, before anything else happens');
   h.ctl.handle({ type: 'output_audio_buffer.cleared', response_id: 'r1' });
   await tick(20);
-  const trunc = h.sent.find((e) => e.type === 'conversation.item.truncate');
   assert.equal(trunc.item_id, 'i1');
   assert.equal(trunc.audio_end_ms, 2000);
   assert.equal(h.lines.find((l) => l.speaker === 'character').text, 'one two—');

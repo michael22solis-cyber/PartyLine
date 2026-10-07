@@ -202,7 +202,7 @@ test('sideband transport: the server runs the call (tool approvals, usage, heard
   await s.userTurn('wait, stop, what stairs?', { speakMs: 150 });
   assert.equal(s.clears, 1);
   await until(() => allLines().some((l) => l.pid === p.pid && /—$/.test(l.text)), 3000);
-  assert.ok(s.received.some((e) => e.type === 'conversation.item.truncate'), 'the model\'s history is cut too');
+  await until(() => s.received.some((e) => e.type === 'conversation.item.truncate')); // the model's history is cut too
   const cut = allLines().find((l) => l.pid === p.pid && /—$/.test(l.text));
   assert.doesNotMatch(cut.text, /sweetheart/, 'the unheard end of the line is not remembered');
   const n0 = mock.log.hangups.length;

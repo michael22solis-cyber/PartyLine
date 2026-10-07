@@ -128,15 +128,15 @@ export function createCallController({
     const rec = s.responses.get(s.playingResponse);
     const played = rec?.playStartedAt ? ms() - rec.playStartedAt : null;
     send({ type: 'output_audio_buffer.clear' });
-    // Make sure the model's own history also ends where the caller stopped hearing it.
+    // The model's own history must end where the caller stopped hearing it, BEFORE the next response is created.
     if (rec && played != null) {
-      setTimeout(() => {
-        for (const it of itemsOf(rec.id)) {
-          if (it.audioEndMs != null) continue;
-          const end = Math.max(0, Math.round(it.generatedMs ? Math.min(played, it.generatedMs) : played));
-          send({ type: 'conversation.item.truncate', item_id: it.id, content_index: 0, audio_end_ms: end });
-        }
-      }, clearedWaitMs);
+      for (const it of itemsOf(rec.id)) {
+        if (it.audioEndMs != null) continue;
+        const end = Math.max(0, Math.round(it.generatedMs ? Math.min(played, it.generatedMs) : played));
+        send({ type: 'conversation.item.truncate', item_id: it.id, content_index: 0, audio_end_ms: end });
+        it.audioEndMs = end; // we know what was heard; the memory line can be finalized now
+        finalize(it.id);
+      }
     }
   }
 
