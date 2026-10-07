@@ -94,7 +94,7 @@ Reset everything: `npm run admin -- reset`.
 - **Memory:** characters remember what each player said, claimed, promised and accused, compactly and within a token budget (`src/memory.js`, `src/context.js`).
 - **Usage ledger:** every model response is logged to `data/usage.jsonl` with tokens, estimated cost, latency and status (never dialogue). `npm run usage` (or `npm run admin -- usage` against a running server) shows typical and top-5% session cost, cost per completed mystery and cost by capability; `npm run usage -- --reconcile export.json` checks it against a provider export.
 - **Tests:** `npm test` (offline, no key needed). `npm run bench` replays a calibrated playtest through the prompt builders. `npm run eval:voice -- --live --budget 0.50` compares voice models on the same scenarios with a hard spend limit.
-- Full write-up, measured results and rollback switches: `docs/COST_REPORT.md`.
+- Full write-up, measured results and rollback switches: `docs/COST_REPORT.md`. Before the next playtest: `docs/PLAYTEST_CHECKLIST.md`.
 
 ## Guardrails built in
 
