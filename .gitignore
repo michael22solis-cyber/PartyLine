@@ -1,0 +1,6 @@
+node_modules/
+data/
+.env
+intro/.cache/
+audio-src/*
+!audio-src/custom/

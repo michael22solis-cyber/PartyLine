@@ -1,0 +1,31 @@
+{
+  "name": "blackwood-line",
+  "version": "0.1.0",
+  "description": "Party Line demo: AI characters from The Blackwood Line call and answer real phones",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "call": "node src/call.js",
+    "admin": "node scripts/admin.js",
+    "vapid": "web-push generate-vapid-keys",
+    "voice": "node scripts/intro-voice.js",
+    "evidence": "node scripts/evidence-audio.js",
+    "say": "node scripts/say.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@fastify/formbody": "^8.0.0",
+    "@fastify/static": "^8.3.0",
+    "@fastify/websocket": "^11.0.0",
+    "dotenv": "^16.4.0",
+    "fastify": "^5.0.0",
+    "ffmpeg-static": "^5.3.0",
+    "twilio": "^5.3.0",
+    "web-push": "^3.6.7",
+    "ws": "^8.18.0"
+  }
+}

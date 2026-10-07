@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <meta name="theme-color" content="#050706" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Blackwood" />
+  <link rel="apple-touch-icon" href="/assets/icon-180.png" />
+  <link rel="icon" href="/assets/icon.svg" type="image/svg+xml" />
+  <title>Blackwood Line</title>
+  <link rel="stylesheet" href="/assets/app.css" />
+</head>
+<body>
+  <div class="phone" id="phone" data-view="home">
+    <header class="status" id="status">
+      <span class="bars" id="bars" aria-hidden="true"><i></i><i></i><i></i><i class="off"></i></span>
+      <span class="carrier" id="carrier">BLACKWOOD</span>
+      <span class="clock" id="clock">--:--</span>
+      <span class="batt" aria-hidden="true"><b></b></span>
+    </header>
+
+    <div class="banner" id="installBanner" hidden></div>
+    <div class="toast" id="toast" hidden></div>
+
+    <main id="screen" class="screen"></main>
+
+    <nav class="softkeys">
+      <button id="skBack" aria-label="Back">BACK</button>
+      <button id="skHome" aria-label="Home" class="homebtn"><i></i></button>
+      <button id="skMenu" aria-label="Settings">MENU</button>
+    </nav>
+
+    <section class="ring" id="ring" hidden aria-live="assertive">
+      <div class="ring-top">INCOMING CALL</div>
+      <div class="ring-id" id="ringId">UNKNOWN</div>
+      <div class="ring-sub" id="ringSub">BLACKWOOD MANOR</div>
+      <div class="pulse"><i></i><i></i><i></i></div>
+      <p class="ring-note" id="ringNote">Your real phone is ringing. Pick it up.</p>
+      <div class="ring-btns">
+        <button class="round decline" id="ringDismiss">DISMISS</button>
+        <button class="round answer" id="ringAnswer" hidden>ANSWER</button>
+      </div>
+    </section>
+
+    <section class="callscr" id="callScreen" hidden>
+      <div class="call-state" id="callState">CALLING…</div>
+      <div class="call-name" id="callName"></div>
+      <div class="call-time" id="callTime"></div>
+      <div class="call-viz" id="callViz"><i></i><i></i><i></i></div>
+      <div class="ring-btns">
+        <button class="round" id="callMute">MUTE</button>
+        <button class="round decline" id="callEnd">END</button>
+      </div>
+      <p class="fine call-fine">Talk out loud. You can interrupt. Every character is an AI.</p>
+      <audio id="callAudio" autoplay playsinline></audio>
+    </section>
+
+    <section class="intro" id="intro" hidden>
+      <video id="introVideo" playsinline webkit-playsinline preload="auto" src="/assets/intro.mp4"></video>
+      <button class="intro-play" id="introPlay" hidden><span>&#9654;</span>PLAY</button>
+      <button class="intro-skip" id="introSkip">SKIP &rsaquo;</button>
+    </section>
+
+    <section class="role" id="role" hidden>
+      <div class="role-inner" id="roleInner"></div>
+    </section>
+
+    <section class="power" id="power">
+      <pre class="boot" id="boot" hidden></pre>
+      <div class="power-idle" id="powerIdle">
+        <div class="logo">BLACKWOOD<br />MOBILE</div>
+        <button class="pwr" id="pwrBtn" aria-label="Power on"><span></span></button>
+        <div class="hintline">TAP TO POWER ON</div>
+        <div class="hintline small">SOUND ON &middot; HEADPHONES BETTER</div>
+      </div>
+    </section>
+
+    <dialog id="groupSheet" class="sheet">
+      <h2>NEW GROUP</h2>
+      <p class="who">Mix players and suspects any way you like. Suspects in the same chat can read what the others say.</p>
+      <input id="groupName" class="textin" maxlength="40" placeholder="Group name (optional)" />
+      <div id="groupList" class="picklist"></div>
+      <p class="fine bad" id="groupNote"></p>
+      <button class="wide" id="groupCreate">CREATE GROUP</button>
+      <button class="wide ghost" onclick="this.closest('dialog').close()">Cancel</button>
+    </dialog>
+
+    <dialog id="shareSheet" class="sheet">
+      <h2>SHARE WITH…</h2>
+      <p class="who">They’ll see the real card, marked as shared by you.</p>
+      <div class="choices" id="shareList"></div>
+      <button class="wide ghost" onclick="this.closest('dialog').close()">Cancel</button>
+    </dialog>
+
+    <dialog id="menu" class="sheet">
+      <h2>SETTINGS</h2>
+      <p class="who" id="who"></p>
+      <label class="row"><span>Phone calls from characters</span><input type="checkbox" id="callsToggle" /></label>
+      <label class="row"><span>Sound &amp; vibration</span><input type="checkbox" id="soundToggle" /></label>
+      <button class="wide" id="alertsBtn">Turn on alerts</button>
+      <p class="fine" id="alertsNote"></p>
+      <button class="wide ghost" id="roleBtn">My role</button>
+      <button class="wide ghost" id="replayBtn">Replay intro</button>
+      
+      <p class="fine">Every character in this game is an AI. This is a fictional Halloween mystery. If anything real is weighing on you, call or text 988 (US) anytime.</p>
+      <button class="wide ghost" id="closeMenu">Close</button>
+    </dialog>
+  </div>
+  <script src="/assets/app.js" type="module"></script>
+</body>
+</html>

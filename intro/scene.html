@@ -1,0 +1,354 @@
+<!doctype html>
+<html><head><meta charset="utf-8" />
+<!-- The intro, drawn as a pure function of time: setTime(t) puts every element where it belongs at second t.
+     render.py screenshots it 24 times a second and turns the frames into public/intro.mp4.
+     Pictures in intro/assets/ (manor.jpg, ruth.jpg, ...) replace the drawn placeholders automatically. -->
+<style>
+@font-face { font-family: 'Plex'; src: url(../public/fonts/ibm-plex-mono-latin-500-normal.woff2); }
+@font-face { font-family: 'Elite'; src: url(../public/fonts/special-elite-latin-400-normal.woff2); }
+@font-face { font-family: 'LCD'; src: url(../public/fonts/vt323-latin-400-normal.woff2); }
+html, body { margin: 0; background: #000; }
+#stage { position: relative; width: 720px; height: 1280px; overflow: hidden; background: #030504; font-family: Plex, monospace; color: #c9d6c3; }
+.shot { position: absolute; inset: 0; opacity: 0; overflow: hidden; }
+.shot svg.fill, .shot img.fill { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: 50% 50%; }
+img.fill { display: none; }
+img.bgfill { position: absolute; inset: -40px; width: calc(100% + 80px); height: calc(100% + 80px); object-fit: cover; filter: blur(26px) brightness(0.32) saturate(0.7); }
+img.photo { position: absolute; left: 0; width: 100%; height: auto; transform-origin: 50% 50%;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 9%, #000 78%, transparent 100%);
+          mask-image: linear-gradient(to bottom, transparent 0, #000 9%, #000 78%, transparent 100%); }
+#noise { position: absolute; inset: 0; width: 100%; height: 100%; mix-blend-mode: screen; pointer-events: none; }
+#vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 45%, transparent 45%, rgba(0,0,0,0.85) 100%); pointer-events: none; }
+#scan { position: absolute; inset: 0; background: repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 4px); pointer-events: none; }
+#chyron { position: absolute; left: 0; right: 0; top: 150px; text-align: center; font-family: LCD, monospace; font-size: 38px; letter-spacing: 0.2em; color: #9fe0a0; text-shadow: 0 0 14px rgba(159,224,160,0.6); white-space: pre; }
+#caption { position: absolute; left: 60px; right: 60px; bottom: 170px; text-align: center; font-size: 31px; line-height: 1.45; color: #eee6d6; text-shadow: 0 2px 6px #000, 0 0 18px #000; }
+#caption.ember { color: #e8604c; }
+#black { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
+.portrait .name { position: absolute; left: 0; right: 0; bottom: 330px; text-align: center; font-family: Elite, serif; font-size: 62px; color: #efe6d2; text-shadow: 0 3px 12px #000; }
+.portrait .tagline { position: absolute; left: 0; right: 0; bottom: 285px; text-align: center; font-family: LCD, monospace; font-size: 34px; letter-spacing: 0.22em; color: #9fe0a0; }
+.portrait .num { position: absolute; left: 0; right: 0; bottom: 412px; text-align: center; font-family: LCD, monospace; font-size: 30px; letter-spacing: 0.3em; color: #b9c7b2; text-shadow: 0 2px 6px #000, 0 0 16px #000; }
+#title { position: absolute; left: 0; right: 0; top: 380px; text-align: center; font-family: Elite, serif; font-size: 92px; line-height: 1.05; color: #9fe0a0; text-shadow: 0 0 30px rgba(159,224,160,0.55); }
+#title small { display: block; font-family: LCD, monospace; font-size: 32px; letter-spacing: 0.5em; color: #6b7a66; text-shadow: none; margin-bottom: 26px; }
+</style></head>
+<body>
+<div id="stage">
+
+  <!-- 1. the ringing phone in the hallway -->
+  <div class="shot" id="s1">
+    <img class="fill" data-asset="phone" />
+    <svg class="fill" viewBox="0 0 720 1280" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <radialGradient id="lamp" cx="50%" cy="38%" r="55%"><stop offset="0" stop-color="#3a2a14" stop-opacity="0.9"/><stop offset="1" stop-color="#030504" stop-opacity="0"/></radialGradient>
+      </defs>
+      <rect width="720" height="1280" fill="#050605"/>
+      <rect x="60" y="120" width="600" height="900" fill="#0a0c0a" stroke="#141814"/>
+      <path d="M90 150h540v840H90z" fill="none" stroke="#111511"/>
+      <rect width="720" height="1280" fill="url(#lamp)"/>
+      <rect x="120" y="800" width="480" height="26" fill="#1c140c"/>
+      <rect x="150" y="826" width="18" height="400" fill="#140e08"/><rect x="552" y="826" width="18" height="400" fill="#140e08"/>
+      <g id="rotary" transform="translate(360 735)">
+        <path d="M-150 60 L-120 -40 Q0 -70 120 -40 L150 60 Z" fill="#0b0b0b" stroke="#2a2a26" stroke-width="3"/>
+        <circle r="62" cy="5" fill="#111" stroke="#3a3a34" stroke-width="3"/>
+        <g fill="none" stroke="#4a4a42" stroke-width="3">
+          <circle r="9" cx="0" cy="-37"/><circle r="9" cx="30" cy="-25"/><circle r="9" cx="42" cy="5"/><circle r="9" cx="30" cy="35"/>
+          <circle r="9" cx="0" cy="47"/><circle r="9" cx="-30" cy="35"/><circle r="9" cx="-42" cy="5"/><circle r="9" cx="-30" cy="-25"/>
+        </g>
+        <circle r="18" cy="5" fill="#d8cfb8"/>
+        <g id="handset"><path d="M-170 -70 Q-175 -110 -130 -112 L130 -112 Q175 -110 170 -70 L140 -60 Q130 -88 100 -88 L-100 -88 Q-130 -88 -140 -60 Z" fill="#0d0d0d" stroke="#3a3a34" stroke-width="3"/></g>
+        <path d="M150 40 Q220 120 190 200 Q160 260 240 300" fill="none" stroke="#1a1a18" stroke-width="5"/>
+      </g>
+    </svg>
+  </div>
+
+  <!-- 2. the manor at night, a lantern going down to the cellar -->
+  <div class="shot" id="s2">
+    <img class="fill" data-asset="manor" />
+    <svg class="fill" viewBox="0 0 720 1280" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#020403"/><stop offset="0.6" stop-color="#0a120d"/><stop offset="1" stop-color="#050806"/></linearGradient>
+        <radialGradient id="moon"><stop offset="0" stop-color="#d9e6d2" stop-opacity="0.9"/><stop offset="0.3" stop-color="#9fb8a0" stop-opacity="0.25"/><stop offset="1" stop-color="#9fb8a0" stop-opacity="0"/></radialGradient>
+        <radialGradient id="lantern"><stop offset="0" stop-color="#ffd27a"/><stop offset="0.25" stop-color="#e6a23c" stop-opacity="0.7"/><stop offset="1" stop-color="#e6a23c" stop-opacity="0"/></radialGradient>
+      </defs>
+      <rect width="720" height="1280" fill="url(#sky)"/>
+      <circle cx="565" cy="420" r="200" fill="url(#moon)"/><circle cx="565" cy="420" r="42" fill="#cfdcc8" opacity="0.85"/>
+      <g transform="translate(0 -190)">
+      <path d="M0 1280V880l60-10 50 20 40-30 50 10V760l40-60 40-100 30-40 30 40 20-60 20 60 50-20 30 80 70 20 30 60v140l60-10 50 30 50-20v350z" fill="#070b08" stroke="#16201a" stroke-width="2"/>
+      <path d="M150 1280V820l90-110 90 110v460zM420 1280V800l110-90 110 90v480z" fill="#050806" stroke="#1a2620" stroke-width="2"/>
+      <path d="M215 640l-4-60 26 0-4 60z" fill="#040605"/>
+      <rect id="w1" x="210" y="860" width="26" height="40" fill="#e6a23c"/><rect x="262" y="860" width="26" height="40" fill="#120d06"/>
+      <rect x="480" y="850" width="26" height="40" fill="#120d06"/><rect x="540" y="850" width="26" height="40" fill="#120d06"/>
+      <rect x="300" y="1060" width="110" height="70" fill="#020302" stroke="#1a231e" stroke-width="3"/>
+      <path d="M300 1060l55-30 55 30" fill="none" stroke="#1a231e" stroke-width="3"/>
+      <circle id="lamp2" cx="223" cy="880" r="70" fill="url(#lantern)"/>
+      </g>
+      <rect x="0" y="1080" width="720" height="200" fill="#040605"/>
+    </svg>
+  </div>
+
+  <!-- 3a. SOLD sign at the gate -->
+  <div class="shot" id="s3a">
+    <img class="fill" data-asset="gate" />
+    <svg class="fill" viewBox="0 0 720 1280" preserveAspectRatio="xMidYMid slice">
+      <rect width="720" height="1280" fill="#060908"/>
+      <g stroke="#1d2620" stroke-width="10" fill="none">
+        <path d="M40 1280V560M140 1280V600M240 1280V620M480 1280V620M580 1280V600M680 1280V560"/>
+        <path d="M20 700h680M20 1000h680"/>
+        <path d="M40 560l-14 30h28zM680 560l-14 30h28z" fill="#1d2620"/>
+      </g>
+      <g id="sign" transform="translate(360 640)">
+        <path d="M-6 -220v220M-130 -20h260" stroke="#2b2418" stroke-width="10"/>
+        <rect x="-150" y="0" width="300" height="190" fill="#d9d0ba"/>
+        <text x="0" y="62" text-anchor="middle" font-family="LCD, monospace" font-size="38" fill="#3a3326" letter-spacing="6">FOR SALE</text>
+        <rect x="-120" y="86" width="240" height="78" fill="#a3261a" transform="rotate(-8)"/>
+        <text x="0" y="148" text-anchor="middle" font-family="Elite, serif" font-size="68" fill="#f3ead4" transform="rotate(-8)">SOLD</text>
+      </g>
+    </svg>
+  </div>
+
+  <!-- 3b. the cellar stairs, a phone still recording at the bottom -->
+  <div class="shot" id="s3b">
+    <img class="fill" data-asset="stairs" />
+    <svg class="fill" viewBox="0 0 720 1280" preserveAspectRatio="xMidYMid slice">
+      <defs><radialGradient id="glow"><stop offset="0" stop-color="#cfe8ff" stop-opacity="0.6"/><stop offset="1" stop-color="#cfe8ff" stop-opacity="0"/></radialGradient></defs>
+      <rect width="720" height="1280" fill="#040504"/>
+      <g id="steps"></g>
+      <circle cx="360" cy="860" r="170" fill="url(#glow)"/>
+      <rect x="318" y="832" width="84" height="46" rx="6" fill="#0b0f12" stroke="#cfe8ff" stroke-width="2"/>
+      <rect x="324" y="837" width="72" height="36" fill="#9bc4e8" opacity="0.6"/>
+      <circle id="rec" cx="380" cy="848" r="6" fill="#ff3b30"/>
+    </svg>
+  </div>
+
+  <!-- 4. the suspects -->
+  <div class="shot portrait" id="s4"><img class="fill" data-asset="ruth" />
+    <svg class="fill sil" viewBox="0 0 720 1280"></svg><div class="num">SUSPECT 1 OF 4</div><div class="name">Ruth Calloway</div><div class="tagline">THE NIGHT NURSE</div></div>
+  <div class="shot portrait" id="s5"><img class="fill" data-asset="marcus" />
+    <svg class="fill sil" viewBox="0 0 720 1280"></svg><div class="num">SUSPECT 2 OF 4</div><div class="name">Marcus Vane</div><div class="tagline">THE REALTOR</div></div>
+  <div class="shot portrait" id="s6"><img class="fill" data-asset="lily" />
+    <svg class="fill sil" viewBox="0 0 720 1280"></svg><div class="num">SUSPECT 3 OF 4</div><div class="name">Lily Blackwood</div><div class="tagline">MY DAUGHTER</div></div>
+  <div class="shot portrait" id="s7"><img class="fill" data-asset="teddy" />
+    <svg class="fill sil" viewBox="0 0 720 1280"></svg><div class="num">SUSPECT 4 OF 4</div><div class="name">Teddy Fisk</div><div class="tagline">THE GHOST-TOUR GUIDE</div></div>
+
+  <!-- 5. your phone, lighting up on the nightstand -->
+  <div class="shot" id="s8">
+    <svg class="fill" viewBox="0 0 720 1280" preserveAspectRatio="xMidYMid slice">
+      <defs><radialGradient id="screenGlow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#9fe0a0" stop-opacity="0.35"/><stop offset="1" stop-color="#9fe0a0" stop-opacity="0"/></radialGradient></defs>
+      <rect width="720" height="1280" fill="#030403"/>
+      <rect x="0" y="880" width="720" height="400" fill="#0b0907"/>
+      <path d="M0 880h720" stroke="#1a140e" stroke-width="4"/>
+      <ellipse id="tglow" cx="360" cy="890" rx="330" ry="120" fill="url(#screenGlow)"/>
+      <g id="mphone" transform="translate(360 640)">
+        <rect x="-130" y="-250" width="260" height="500" rx="30" fill="#0d110f" stroke="#2a332d" stroke-width="4"/>
+        <rect id="mscreen" x="-114" y="-226" width="228" height="452" rx="16" fill="#08100b"/>
+        <g id="mtext" font-family="LCD, monospace" text-anchor="middle" fill="#9fe0a0">
+          <text y="-150" font-size="24" letter-spacing="6" fill="#d0412e">INCOMING CALL</text>
+          <text y="-60" font-size="50" font-family="Elite, serif" fill="#e8e0cc">UNKNOWN</text>
+          <text y="-14" font-size="26" letter-spacing="4" fill="#e6a23c">BLACKWOOD MANOR</text>
+          <circle cx="0" cy="110" r="44" fill="none" stroke="#d0412e" stroke-width="3"/>
+          <circle id="mring" cx="0" cy="110" r="44" fill="none" stroke="#d0412e" stroke-width="2"/>
+        </g>
+      </g>
+    </svg>
+  </div>
+
+  <!-- 6. title -->
+  <div class="shot" id="s9">
+    <img class="fill" data-asset="manor" data-key="manorTitle" />
+    <svg class="fill" viewBox="0 0 720 1280" preserveAspectRatio="xMidYMid slice">
+      <rect width="720" height="1280" fill="#020302"/>
+      <path d="M140 1280V1010l50-40 30-60 30 40 20-40 20 40 40-20 30 60 60 20v280z" fill="#060907" transform="translate(130 -60)"/>
+      <rect id="lastwin" x="378" y="990" width="16" height="22" fill="#e6a23c"/>
+    </svg>
+    <div id="title"><small>PARTY LINE PRESENTS</small>THE<br/>BLACKWOOD<br/>LINE</div>
+  </div>
+
+  <canvas id="noise" width="180" height="320"></canvas>
+  <div id="scan"></div>
+  <div id="vignette"></div>
+  <div id="chyron"></div>
+  <div id="caption"></div>
+  <div id="black"></div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ramp = (t, a, b) => clamp((t - a) / (b - a));
+// visible from a to b with fade length f
+const win = (t, a, b, f = 0.3) => Math.min(ramp(t, a - f / 2, a + f / 2), 1 - ramp(t, b - f / 2, b + f / 2));
+
+// stairs, drawn once
+(() => {
+  const g = $('steps'); let html = '';
+  for (let i = 0; i < 8; i++) {
+    const y = 120 + i * 110, w = 520 - i * 34, x = 360 - w / 2, shade = 22 - i * 2;
+    html += `<rect x="${x}" y="${y}" width="${w}" height="26" fill="rgb(${shade + 8},${shade + 6},${shade})"/>`;
+    html += `<rect x="${x}" y="${y + 26}" width="${w}" height="84" fill="rgb(${shade - 4},${shade - 5},${shade - 8})"/>`;
+  }
+  html += `<path d="M100 0 L${360 - 120} 1280 M620 0 L${360 + 120} 1280" stroke="#0d100e" stroke-width="40"/>`;
+  g.innerHTML = html;
+})();
+
+// suspect silhouettes with a different rim light each
+const RIM = { s4: '#e6a23c', s5: '#dfe7ef', s6: '#8fb6e0', s7: '#b48cf0' };
+for (const [id, color] of Object.entries(RIM)) {
+  document.querySelector(`#${id} svg.sil`).innerHTML = `
+    <defs><radialGradient id="bg${id}" cx="50%" cy="38%" r="60%"><stop offset="0" stop-color="${color}" stop-opacity="0.22"/><stop offset="1" stop-color="#030504" stop-opacity="0"/></radialGradient></defs>
+    <rect width="720" height="1280" fill="#030504"/><rect width="720" height="1280" fill="url(#bg${id})"/>
+    <g fill="#020302" stroke="${color}" stroke-width="3" stroke-opacity="0.75">
+      <path d="M360 330c-80 0-130 60-130 150 0 70 30 120 70 150-10 30-20 50-60 60-110 25-170 90-180 200v390h600V890c-10-110-70-175-180-200-40-10-50-30-60-60 40-30 70-80 70-150 0-90-50-150-130-150z"/>
+    </g>
+    <g fill="${color}" opacity="0.0" class="eyes"><ellipse cx="318" cy="485" rx="9" ry="4"/><ellipse cx="402" cy="485" rx="9" ry="4"/></g>`;
+}
+
+// use real pictures from intro/assets when they exist: the photo spans the width, a blurred copy fills the rest
+const PHOTO_TOP = { phone: 170, manor: 300, stairs: 150, gate: 260, ruth: 30, marcus: 30, lily: 30, teddy: 30 };
+const photos = {};
+const assetsReady = Promise.all([...document.querySelectorAll('img[data-asset]')].map((img) => new Promise((res) => {
+  const name = img.dataset.asset;
+  const tryExt = (exts) => {
+    if (!exts.length) return res();
+    const probe = new Image();
+    probe.onload = () => {
+      const shot = img.parentElement;
+      const svg = shot.querySelector('svg.fill'); if (svg) svg.style.display = 'none';
+      const bg = new Image(); bg.src = probe.src; bg.className = 'bgfill';
+      img.src = probe.src; img.className = 'photo'; img.style.display = 'block';
+      img.style.top = `${PHOTO_TOP[name] ?? 100}px`;
+      shot.insertBefore(bg, shot.firstChild);
+      photos[img.dataset.key || name] = img;
+      res();
+    };
+    probe.onerror = () => tryExt(exts.slice(1));
+    probe.src = `assets/${name}.${exts[0]}`;
+  };
+  tryExt(['jpg', 'png', 'webp']);
+})));
+
+let SHOTS = [ // id, start, end
+  ['s1', 0.55, 3.05], ['s2', 3.0, 8.05], ['s3a', 8.0, 10.1], ['s3b', 10.0, 13.05],
+  ['s4', 13.0, 15.05], ['s5', 15.0, 17.05], ['s6', 17.0, 19.05], ['s7', 19.0, 21.05],
+  ['s8', 21.0, 26.05], ['s9', 26.0, 30.5],
+];
+const CAPTIONS = [
+  [0.9, 2.9, 'Halloween, 1996.'],
+  [3.3, 7.8, 'I went down into my cellar that night…\nand I never came back up.'],
+  [8.3, 12.9, 'Last night, the woman who bought my house died at the bottom of those stairs. Police say accident.'],
+  [13.3, 16.9, 'Four people were near my house that night.'],
+  [17.1, 20.9, 'One of them is lying.'],
+  [21.3, 23.4, 'So I’m calling you.'],
+  [23.5, 25.9, 'Question them. Share your clues.\nName the killer by midnight on Halloween.'],
+  [26.7, 29.7, 'And careful…\none of your friends already works for the house.', 'ember'],
+];
+const CHYRONS = [
+  [0.9, 2.95, 'BLACKWOOD MANOR\nOCT 31, 1996'],
+  [3.4, 7.9, 'ELIAS BLACKWOOD\nCARETAKER · MISSING'],
+  [8.3, 12.95, 'DANA WHITLOCK\nNEW OWNER'],
+  [21.3, 25.95, 'THE HOUSE IS\nCALLING YOU'],
+];
+const CUTS = [3.0, 8.0, 13.0, 21.0, 26.0];
+
+const nctx = $('noise').getContext('2d');
+const nimg = nctx.createImageData(180, 320);
+function noise(alpha) {
+  for (let i = 0; i < nimg.data.length; i += 4) { const v = Math.random() * 255; nimg.data[i] = nimg.data[i + 1] = nimg.data[i + 2] = v; nimg.data[i + 3] = 255; }
+  nctx.putImageData(nimg, 0, 0);
+  $('noise').style.opacity = alpha;
+}
+
+function setTime(t) {
+  // shots
+  for (const [id, a, b] of SHOTS) $(id).style.opacity = win(t, a, b, 0.25);
+
+  // 1: phone rings in two bursts
+  const ringing = (t > 0.9 && t < 1.9) || (t > 2.2 && t < 2.95);
+  $('rotary').setAttribute('transform', `translate(${360 + (ringing ? Math.sin(t * 90) * 4 : 0)} 735)`);
+  $('handset').setAttribute('transform', ringing ? `translate(0 ${-Math.abs(Math.sin(t * 90)) * 5})` : '');
+  const kb = (id, a, b, from, to, extra = '') => { const k = from + (to - from) * ramp(t, a, b); document.querySelectorAll(`#${id} .fill, #${id} .photo`).forEach((n) => { n.style.transform = `${extra} scale(${k})`; }); };
+  kb('s1', 0.5, 3.1, 1.0, 1.08, ringing ? `translate(${Math.sin(t * 90) * 3}px, 0)` : '');
+
+  // 2: lantern leaves the window and goes down to the cellar door, then dies
+  kb('s2', 3, 8, 1.0, 1.14);
+  const lp = ramp(t, 4.2, 6.8);
+  const lx = 223 + (355 - 223) * lp, ly = 880 + (1095 - 880) * lp;
+  $('lamp2').setAttribute('cx', lx); $('lamp2').setAttribute('cy', ly + Math.sin(t * 9) * 3);
+  $('lamp2').setAttribute('opacity', (1 - ramp(t, 6.9, 7.3)) * (0.85 + Math.sin(t * 23) * 0.15));
+  $('w1').setAttribute('opacity', 1 - ramp(t, 4.0, 4.4));
+  if (photos.manor) {
+    const flick = t > 6.2 && t < 6.5 ? 0.6 : 1;
+    const out = 1 - 0.55 * ramp(t, 6.6, 7.4);
+    photos.manor.style.filter = `brightness(${flick * out})`;
+  }
+
+  // 3: sign sways; then we look down the stairs
+  kb('s3a', 8, 10.1, 1.08, 1.0);
+  $('sign').setAttribute('transform', `translate(360 640) rotate(${Math.sin(t * 2.2) * 2.5})`);
+  document.querySelector('#s3b svg.fill').style.transform = `scale(${1 + 0.1 * ramp(t, 10, 13)}) translateY(${-40 * ramp(t, 10, 13)}px)`;
+  if (photos.stairs) { const a = photos.stairs.parentElement === $('s3b') ? 8 : 10; photos.stairs.style.transform = `scale(${1 + 0.14 * ramp(t, a, 13)}) translateY(${-30 * ramp(t, a, 13)}px)`; photos.stairs.style.filter = `brightness(${t > 11.2 && t < 11.35 ? 0.4 : 1})`; }
+  $('rec').setAttribute('opacity', Math.floor(t * 2) % 2 ? 1 : 0.15);
+
+  // 4: suspects push in; eyes catch the light for a moment
+  [['s4', 13], ['s5', 15], ['s6', 17], ['s7', 19]].forEach(([id, a]) => {
+    kb(id, a, a + 2, 1.0, 1.09);
+    const eyes = document.querySelector(`#${id} .eyes`); if (eyes) eyes.style.opacity = win(t, a + 0.9, a + 1.5, 0.2) * 0.9;
+    const ph = document.querySelector(`#${id} .photo`);
+    if (ph) { const lt = t - a; ph.style.filter = `brightness(${lt > 1.15 && lt < 1.25 ? 0.35 : lt > 1.3 && lt < 1.36 ? 0.6 : 1}) contrast(1.05)`; }
+  });
+
+  // 5: your phone lights up and buzzes
+  const on = ramp(t, 21.4, 21.6);
+  const buzz = on && Math.floor((t - 21.4) / 0.8) % 2 === 0;
+  $('mphone').setAttribute('transform', `translate(${360 + (buzz ? Math.sin(t * 120) * 3 : 0)} ${640 + 20 * (1 - ramp(t, 21, 26))})`);
+  $('mscreen').setAttribute('fill', on ? '#0c1a11' : '#060a08');
+  $('mtext').setAttribute('opacity', on);
+  $('tglow').setAttribute('opacity', on * (0.7 + Math.sin(t * 6) * 0.3));
+  const rp = ((t - 21.4) % 1.2) / 1.2;
+  $('mring').setAttribute('r', 44 + rp * 50); $('mring').setAttribute('opacity', on * (1 - rp));
+
+  // 6: title; the last window goes out
+  $('title').style.opacity = ramp(t, 26.3, 27.2);
+  $('lastwin').setAttribute('opacity', t < 28.6 ? 1 : t < 28.75 ? 0.2 : t < 28.85 ? 0.9 : 0);
+  if (photos.manorTitle) {
+    const lit = t < 28.6 ? 0.42 : t < 28.75 ? 0.15 : t < 28.85 ? 0.38 : 0.1;
+    photos.manorTitle.style.filter = `brightness(${lit}) saturate(0.6)`;
+    photos.manorTitle.style.transform = `scale(${1.04 + 0.04 * ramp(t, 26, 30)})`;
+  }
+
+  // captions + chyrons (typed on)
+  const cap = CAPTIONS.find(([a, b]) => t >= a && t < b);
+  $('caption').textContent = cap ? cap[2] : '';
+  $('caption').className = cap?.[3] || '';
+  $('caption').style.opacity = cap ? win(t, cap[0], cap[1], 0.3) : 0;
+  const ch = CHYRONS.find(([a, b]) => t >= a && t < b);
+  if (ch) { const n = Math.floor((t - ch[0]) * 28); $('chyron').textContent = ch[2].slice(0, n) + (n < ch[2].length && Math.floor(t * 8) % 2 ? '█' : ''); $('chyron').style.opacity = 1 - ramp(t, ch[1] - 0.25, ch[1]); }
+  else $('chyron').textContent = '';
+
+  // static: the cold open, plus a flash at each cut
+  let n = 0.035 + (t < 0.6 ? 0.9 : 0) + (t >= 0.6 && t < 0.8 ? 0.5 : 0);
+  for (const c of CUTS) if (Math.abs(t - c) < 0.08) n = Math.max(n, 0.55);
+  noise(n);
+  $('black').style.opacity = ramp(t, 29.5, 30);
+}
+// Animated character clips: render.py fills window.CLIPS = { ruth: { frames, dir, offset }, ... }
+// and each portrait shows the clip frame for this moment instead of the still.
+window.CLIPS = window.CLIPS || {};
+const CLIP_SHOT = { ruth: 13, marcus: 15, lily: 17, teddy: 19 };
+function setTimeAsync(t) {
+  setTime(t);
+  const pending = [];
+  for (const [name, clip] of Object.entries(window.CLIPS)) {
+    const ph = photos[name]; const start = CLIP_SHOT[name];
+    if (!ph || start == null || t < start - 0.4 || t > start + 2.4) continue;
+    const i = Math.max(0, Math.min(clip.frames - 1, Math.floor((t - start) * 24) + clip.offset));
+    const src = `${clip.dir}/f${String(i + 1).padStart(4, '0')}.jpg`;
+    if (!ph.src.endsWith(src)) { ph.src = src; pending.push(ph.decode().catch(() => {})); }
+  }
+  return Promise.all(pending);
+}
+window.setTimeAsync = setTimeAsync;
+window.setTime = setTime;
+window.ready = Promise.all([document.fonts.ready, assetsReady]).then(() => {
+  if (photos.stairs && !photos.gate) SHOTS = SHOTS.filter(([id]) => id !== 's3a').map((x) => (x[0] === 's3b' ? ['s3b', 8.0, 13.05] : x));
+});
+setTime(0);
+</script>
+</body></html>
