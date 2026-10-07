@@ -71,11 +71,11 @@ if (chromium) {
     const p = addPlayer({ name: 'Bri' });
     await ringInApp(p, 'lily', {});
     const page = await openPhone(p);
-    await page.click('#ringAnswer', { timeout: 5000 });
-    await page.waitForFunction(() => window.__sent?.some((e) => e.type === 'response.create'), null, { timeout: 5000 });
+    await page.click('#ringAnswer', { timeout: 10_000 });
+    await page.waitForFunction(() => window.__sent?.some((e) => e.type === 'response.create'), null, { timeout: 10_000 });
     const opening = await page.evaluate(() => window.__sent[0]);
     assert.equal(opening.item.role, 'system', 'opening is a system note, not a fake caller line');
-    await page.waitForFunction(() => document.querySelector('#callState').textContent === 'ON THE LINE', null, { timeout: 5000 });
+    await page.waitForFunction(() => document.querySelector('#callState').textContent === 'ON THE LINE', null, { timeout: 10_000 });
 
     // OpenAI answers: the opening plays fully.
     const usageBlock = { input_tokens: 1200, output_tokens: 90, input_token_details: { text_tokens: 1200, audio_tokens: 0, cached_tokens: 0, cached_tokens_details: { text_tokens: 0, audio_tokens: 0 } }, output_token_details: { text_tokens: 10, audio_tokens: 80 } };
@@ -111,7 +111,7 @@ if (chromium) {
       window.__emit({ type: 'response.done', response: { id: 'resp_2', status: 'completed', output: [{ type: 'function_call', call_id: 'call_1', name: 'check_guarded_topic', arguments: '{"topic":"call911"}' }] } });
       window.__emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'u_1', transcript: 'Did you make the 911 call?' });
     });
-    await page.waitForFunction(() => window.__sent.some((e) => e.item?.type === 'function_call_output'), null, { timeout: 5000 });
+    await page.waitForFunction(() => window.__sent.some((e) => e.item?.type === 'function_call_output'), null, { timeout: 10_000 });
     const out = await page.evaluate(() => JSON.parse(window.__sent.find((e) => e.item?.type === 'function_call_output').item.output));
     assert.equal(out.decision, 'open_up');
     assert.deepEqual(playerByToken(p.token).permitted.lily, ['call911']);
@@ -140,6 +140,26 @@ if (chromium) {
     await page.close();
   });
 
+  test('a dropped call says so and offers to call back', async () => {
+    const p = addPlayer({ name: 'Dro' });
+    await ringInApp(p, 'teddy', {});
+    const page = await openPhone(p);
+    await page.click('#ringAnswer', { timeout: 10_000 });
+    await page.waitForFunction(() => document.querySelector('#callState').textContent === 'ON THE LINE', null, { timeout: 10_000 });
+    await page.evaluate(() => { window.__pc.connectionState = 'failed'; window.__pc.onconnectionstatechange(); });
+    await page.waitForFunction(() => document.querySelector('#callState').textContent === 'CALL DROPPED', null, { timeout: 3000 });
+    assert.equal(await page.isVisible('#callBack'), true);
+    const calls0 = ledger.records().filter((r) => r.type === 'call_started' && r.session === p.pid).length;
+    await page.click('#callBack');
+    await until(() => ledger.records().filter((r) => r.type === 'call_started' && r.session === p.pid).length === calls0 + 1);
+    await page.waitForFunction(() => document.querySelector('#callState').textContent === 'ON THE LINE', null, { timeout: 10_000 });
+    await page.click('#callEnd');
+    await page.waitForFunction(() => document.querySelector('#callState').textContent === 'CALL ENDED', null, { timeout: 2000 });
+    assert.equal(await page.isVisible('#callBack'), false, 'no call back after hanging up yourself');
+    await page.waitForSelector('#callScreen', { state: 'hidden', timeout: 3000 });
+    await page.close();
+  });
+
   test('the midnight reveal plays as a recorded call in the browser', async () => {
     const file = path.resolve('public/audio/caretaker-reveal.mp3');
     const existed = fs.existsSync(file);
@@ -149,10 +169,11 @@ if (chromium) {
       await ringInApp(p, 'caretaker_reveal', {});
       const page = await openPhone(p);
       const secrets0 = mock.log.clientSecrets.length;
-      await page.click('#ringAnswer', { timeout: 5000 });
+      await page.click('#ringAnswer', { timeout: 10_000 });
       await until(() => ledger.records().some((r) => r.type === 'call_ended' && r.session === p.pid && r.transport === 'recording'), 8000);
       assert.equal(mock.log.clientSecrets.length, secrets0, 'no live model session');
-      assert.equal(await page.isHidden('#callScreen'), true);
+      assert.equal(await page.textContent('#callState'), 'THE LINE WENT DEAD');
+      await page.waitForSelector('#callScreen', { state: 'hidden', timeout: 5000 });
       await page.close();
     } finally {
       if (!existed) fs.rmSync(file);

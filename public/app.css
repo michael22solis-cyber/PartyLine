@@ -318,6 +318,10 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .call-viz i:nth-child(2) { transform: scale(calc(0.62 + var(--lvl) * 0.42)); opacity: calc(0.15 + var(--lvl) * 0.5); }
 .call-viz i:nth-child(3) { transform: scale(calc(0.8 + var(--lvl) * 0.25)); opacity: calc(0.08 + var(--lvl) * 0.35); }
 .call-fine { max-width: 260px; margin-top: 22px; }
+.callscr.ended .call-state { color: var(--ember); animation: callFade 2.6s ease-out forwards; }
+.callscr.ended .call-viz { opacity: 0.25; filter: grayscale(1); }
+@keyframes callFade { 0% { opacity: 0; letter-spacing: 0.6em; } 15% { opacity: 1; letter-spacing: 0.3em; } 100% { opacity: 0.85; } }
+@media (prefers-reduced-motion: reduce) { .callscr.ended .call-state { animation: none; } }
 
 /* convo header call button */
 .convo-head { display: flex; align-items: center; gap: 10px; }

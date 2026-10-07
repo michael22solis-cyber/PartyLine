@@ -53,9 +53,13 @@
       <div class="call-name" id="callName"></div>
       <div class="call-time" id="callTime"></div>
       <div class="call-viz" id="callViz"><i></i><i></i><i></i></div>
-      <div class="ring-btns">
+      <div class="ring-btns" id="callBtns">
         <button class="round" id="callMute">MUTE</button>
         <button class="round decline" id="callEnd">END</button>
+      </div>
+      <div class="ring-btns" id="callAfter" hidden>
+        <button class="round answer" id="callBack" hidden>CALL BACK</button>
+        <button class="round" id="callClose">CLOSE</button>
       </div>
       <p class="fine call-fine">Talk out loud. You can interrupt. Every character is an AI.</p>
       <audio id="callAudio" autoplay playsinline></audio>

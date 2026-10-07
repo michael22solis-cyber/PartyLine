@@ -746,13 +746,42 @@ function incoming({ character, from }) {
 // The call logic (usage, heard-only transcripts, guarded topics, wrap-up, hang-up) is the same module the server uses.
 let call = null;
 const callName = (character) => (character.startsWith('caretaker') ? 'UNKNOWN' : state.threads.find((t) => t.key === character)?.name || 'UNKNOWN');
+let callAfterTimer = null;
 function callScreen(character) {
+  clearTimeout(callAfterTimer);
   $('#callName').textContent = callName(character);
   $('#callState').textContent = 'CALLING…';
   $('#callTime').textContent = '';
   $('#callMute').classList.remove('on');
+  $('#callBtns').hidden = false;
+  $('#callAfter').hidden = true;
+  $('#callScreen').classList.remove('ended');
   $('#callScreen').hidden = false;
 }
+// Say why a call ended instead of the screen just vanishing (characters hang up on their own now).
+const CALL_ENDINGS = {
+  character_hung_up: 'THEY HUNG UP', idle: 'THE LINE WENT QUIET', max_duration: 'THE LINE WENT DEAD',
+  recording_ended: 'THE LINE WENT DEAD', connection_lost: 'CALL DROPPED', player_hung_up: 'CALL ENDED',
+};
+function closeCallScreen() {
+  clearTimeout(callAfterTimer);
+  $('#callScreen').hidden = true;
+  $('#callScreen').classList.remove('ended');
+}
+function showCallEnded(c, reason) {
+  const ghost = c.character.startsWith('caretaker');
+  const label = ghost && reason === 'character_hung_up' ? 'THE LINE WENT DEAD' : CALL_ENDINGS[reason];
+  if (!label || !c.started) { closeCallScreen(); return; }
+  const canCallBack = ['connection_lost', 'idle'].includes(reason) && state.threads.some((t) => t.key === c.character);
+  $('#callState').textContent = label;
+  $('#callScreen').classList.add('ended');
+  $('#callBtns').hidden = true;
+  $('#callAfter').hidden = false;
+  $('#callBack').hidden = !canCallBack;
+  $('#callBack').onclick = () => { closeCallScreen(); startCall(c.character); };
+  callAfterTimer = setTimeout(closeCallScreen, reason === 'player_hung_up' ? 900 : canCallBack ? 8000 : 2600);
+}
+$('#callClose').onclick = closeCallScreen;
 function startClock(maxSeconds, onTick) {
   call.started = Date.now();
   $('#callState').textContent = 'ON THE LINE';
@@ -845,7 +874,7 @@ function endCall(reason = 'player_hung_up') {
   try { c.pc?.close(); } catch { /* already closed */ }
   const audio = $('#callAudio');
   audio.pause(); audio.onended = null; audio.srcObject = null; audio.removeAttribute('src');
-  $('#callScreen').hidden = true;
+  showCallEnded(c, reason);
   if (c.started || c.callId) {
     api('/call/end', { method: 'POST', body: JSON.stringify({ callId: c.callId, character: c.character, mode: c.mode, reason, seconds: c.started ? (Date.now() - c.started) / 1000 : 0 }) }).catch(() => {});
   }
