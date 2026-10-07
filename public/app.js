@@ -733,6 +733,7 @@ let ringTimeout = null;
 let ringFor = null; // character key when the call can be answered in the app
 function showRing(sub, note, { id = 'UNKNOWN', answer = null } = {}) {
   if (call) return; // already on a call
+  closeCallScreen(); // a lingering "call ended" screen would sit on top of the ring
   ringFor = answer;
   $('#ringId').textContent = id; $('#ringSub').textContent = sub; $('#ringNote').textContent = note;
   $('#ringAnswer').hidden = !answer;

@@ -178,6 +178,15 @@ if (chromium) {
     await page.waitForFunction(() => document.querySelector('#callState').textContent === 'CALL ENDED', null, { timeout: 2000 });
     assert.equal(await page.isVisible('#callBack'), false, 'no call back after hanging up yourself');
     await page.waitForSelector('#callScreen', { state: 'hidden', timeout: 3000 });
+    // Another drop, and someone rings while "CALL DROPPED" is still up: the ring must be answerable.
+    await ringInApp(p, 'teddy', {});
+    await page.click('#ringAnswer', { timeout: 10_000 });
+    await page.waitForFunction(() => document.querySelector('#callState').textContent === 'ON THE LINE', null, { timeout: 10_000 });
+    await page.evaluate(() => { window.__pc.connectionState = 'failed'; window.__pc.onconnectionstatechange(); });
+    await page.waitForFunction(() => document.querySelector('#callState').textContent === 'CALL DROPPED', null, { timeout: 3000 });
+    await ringInApp(p, 'lily', {});
+    await page.waitForSelector('#ringAnswer', { state: 'visible', timeout: 5000 });
+    assert.equal(await page.isHidden('#callScreen'), true, 'the ended screen gave way to the ring');
     await page.close();
   });
 
