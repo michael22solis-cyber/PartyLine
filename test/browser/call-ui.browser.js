@@ -1,0 +1,150 @@
+// Real-browser check of the in-app call flow in public/app.js (headless Chromium, fake microphone, fake WebRTC):
+// answering a ring, the shared call controller loading in the page, usage/transcripts/disclosures reaching the server,
+// hanging up, and the recorded reveal call. Needs playwright-core, which is not a project dependency:
+//   npm i --no-save playwright-core && npm run test:browser
+// (or set PLAYWRIGHT_CORE to the path of an installed playwright-core). Skips itself when unavailable.
+import { until } from '../helpers/env.js';
+import { test, after } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import ffmpeg from 'ffmpeg-static';
+import { startMockOpenAI } from '../helpers/mock-openai.js';
+
+let chromium;
+try {
+  ({ chromium } = await import(process.env.PLAYWRIGHT_CORE || 'playwright-core'));
+} catch {
+  test('browser call flow', { skip: 'playwright-core not installed (npm i --no-save playwright-core)' }, () => {});
+}
+
+if (chromium) {
+  process.env.UNLOCK_ALL = '1';
+  const mock = await startMockOpenAI();
+  process.env.OPENAI_BASE_URL = mock.url;
+  const { buildApp } = await import('../../src/server.js');
+  const { addPlayer, messagesFor, playerByToken } = await import('../../src/store.js');
+  const { allLines } = await import('../../src/memory.js');
+  const { ledger } = await import('../../src/ai/ledger.js');
+  const { ringInApp } = await import('../../src/progress.js');
+  const app = buildApp();
+  await app.listen({ port: 0, host: '127.0.0.1' });
+  const base = `http://localhost:${app.server.address().port}`;
+  const browser = await chromium.launch({
+    executablePath: process.env.CHROMIUM_PATH || (fs.existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined),
+    args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required'],
+  });
+  after(async () => { await browser.close(); await app.close(); await mock.close(); });
+
+  // A stand-in RTCPeerConnection: the page talks to it exactly as it would to the real one; the test plays OpenAI.
+  const FAKE_WEBRTC = () => {
+    window.__sent = [];
+    class FakeDC {
+      constructor() { this.readyState = 'connecting'; window.__dc = this; setTimeout(() => { this.readyState = 'open'; this.onopen?.(); }, 30); }
+      send(s) { window.__sent.push(JSON.parse(s)); }
+    }
+    class FakePC {
+      constructor() { this.connectionState = 'new'; window.__pc = this; }
+      createDataChannel() { return new FakeDC(); }
+      addTrack() {}
+      async createOffer() { return { type: 'offer', sdp: 'v=0 fake-offer' }; }
+      async setLocalDescription() {}
+      async setRemoteDescription() { this.connectionState = 'connected'; }
+      close() { this.connectionState = 'closed'; }
+    }
+    window.RTCPeerConnection = FakePC;
+    window.__emit = (evt) => window.__dc.onmessage({ data: JSON.stringify(evt) });
+  };
+
+  async function openPhone(p) {
+    const page = await browser.newPage();
+    page.on('pageerror', (e) => console.error('page error:', e.message));
+    await page.addInitScript(FAKE_WEBRTC);
+    await page.addInitScript((token) => localStorage.setItem(`bw-on-${token}`, '1'), p.token);
+    await page.goto(`${base}/p/${p.token}`);
+    return page;
+  }
+  const usage = (pid) => ledger.usage().filter((r) => r.session === pid);
+
+  test('answering a call in the browser: controller runs, usage + heard transcripts + disclosures reach the server', async () => {
+    const p = addPlayer({ name: 'Bri' });
+    await ringInApp(p, 'lily', {});
+    const page = await openPhone(p);
+    await page.click('#ringAnswer', { timeout: 5000 });
+    await page.waitForFunction(() => window.__sent?.some((e) => e.type === 'response.create'), null, { timeout: 5000 });
+    const opening = await page.evaluate(() => window.__sent[0]);
+    assert.equal(opening.item.role, 'system', 'opening is a system note, not a fake caller line');
+    await page.waitForFunction(() => document.querySelector('#callState').textContent === 'ON THE LINE', null, { timeout: 5000 });
+
+    // OpenAI answers: the opening plays fully.
+    const usageBlock = { input_tokens: 1200, output_tokens: 90, input_token_details: { text_tokens: 1200, audio_tokens: 0, cached_tokens: 0, cached_tokens_details: { text_tokens: 0, audio_tokens: 0 } }, output_token_details: { text_tokens: 10, audio_tokens: 80 } };
+    await page.evaluate((u) => {
+      window.__emit({ type: 'response.created', response: { id: 'resp_1' } });
+      window.__emit({ type: 'response.output_item.added', response_id: 'resp_1', item: { id: 'item_1', type: 'message' } });
+      window.__emit({ type: 'output_audio_buffer.started', response_id: 'resp_1' });
+      window.__emit({ type: 'response.output_audio_transcript.done', response_id: 'resp_1', item_id: 'item_1', transcript: '...who is this?' });
+      window.__emit({ type: 'response.done', response: { id: 'resp_1', status: 'completed', output: [{ type: 'message', id: 'item_1' }], usage: u } });
+      window.__emit({ type: 'output_audio_buffer.stopped', response_id: 'resp_1' });
+    }, usageBlock);
+    await until(() => usage(p.pid).some((r) => r.responseId === 'resp_1'));
+    assert.equal(usage(p.pid).find((r) => r.responseId === 'resp_1').source, 'client');
+    await until(() => allLines().some((l) => l.pid === p.pid && l.text === '...who is this?'));
+
+    // The caller raises the 911 call; the model asks to open up; the server approves; the page answers the tool.
+    await page.evaluate(() => {
+      window.__emit({ type: 'input_audio_buffer.speech_started' });
+      window.__emit({ type: 'input_audio_buffer.speech_stopped' });
+      window.__emit({ type: 'response.created', response: { id: 'resp_2' } });
+      window.__emit({ type: 'response.function_call_arguments.done', response_id: 'resp_2', call_id: 'call_1', name: 'check_guarded_topic', arguments: '{"topic":"call911"}' });
+      window.__emit({ type: 'response.done', response: { id: 'resp_2', status: 'completed', output: [{ type: 'function_call', call_id: 'call_1', name: 'check_guarded_topic', arguments: '{"topic":"call911"}' }] } });
+      window.__emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'u_1', transcript: 'Did you make the 911 call?' });
+    });
+    await page.waitForFunction(() => window.__sent.some((e) => e.item?.type === 'function_call_output'), null, { timeout: 5000 });
+    const out = await page.evaluate(() => JSON.parse(window.__sent.find((e) => e.item?.type === 'function_call_output').item.output));
+    assert.equal(out.decision, 'open_up');
+    assert.deepEqual(playerByToken(p.token).permitted.lily, ['call911']);
+
+    // The confession is interrupted 0.6 s into a 6 s line, before the admission: only the heard part is kept.
+    await page.evaluate(() => {
+      window.__emit({ type: 'response.created', response: { id: 'resp_3' } });
+      window.__emit({ type: 'response.output_item.added', response_id: 'resp_3', item: { id: 'item_3', type: 'message' } });
+      window.__emit({ type: 'output_audio_buffer.started', response_id: 'resp_3' });
+      window.__emit({ type: 'response.output_audio_transcript.done', response_id: 'resp_3', item_id: 'item_3', transcript: 'okay. it was me. i made the call. she was already dead when i got there.' });
+      window.__emit({ type: 'response.done', response: { id: 'resp_3', status: 'completed', output: [{ type: 'message', id: 'item_3' }], usage: { input_tokens: 1300, output_tokens: 130, input_token_details: { text_tokens: 1300, audio_tokens: 0, cached_tokens: 1280, cached_tokens_details: { text_tokens: 1280, audio_tokens: 0 } }, output_token_details: { text_tokens: 10, audio_tokens: 120 } } } });
+      window.__emit({ type: 'input_audio_buffer.speech_started' });
+      window.__emit({ type: 'output_audio_buffer.cleared', response_id: 'resp_3' });
+      window.__emit({ type: 'conversation.item.truncated', item_id: 'item_3', audio_end_ms: 600 });
+    });
+    await until(() => allLines().some((l) => l.pid === p.pid && /^okay\./.test(l.text)));
+    const heard = allLines().find((l) => l.pid === p.pid && /^okay\./.test(l.text)).text;
+    assert.equal(heard, 'okay.—');
+    assert.doesNotMatch(heard, /it was me|already dead/, 'the unheard words are not remembered');
+    assert.deepEqual(playerByToken(p.token).found, [], 'no evidence for words the player never heard');
+    await until(() => usage(p.pid).find((r) => r.responseId === 'resp_3')?.audioPlayedMs === 600);
+
+    await page.click('#callEnd');
+    await until(() => ledger.records().some((r) => r.type === 'call_ended' && r.session === p.pid));
+    await until(() => messagesFor(p.token).some((m) => m.kind === 'calllog'));
+    await page.close();
+  });
+
+  test('the midnight reveal plays as a recorded call in the browser', async () => {
+    const file = path.resolve('public/audio/caretaker-reveal.mp3');
+    const existed = fs.existsSync(file);
+    if (!existed) execFileSync(ffmpeg, ['-loglevel', 'error', '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=mono', '-t', '1.2', '-b:a', '64k', file]);
+    try {
+      const p = addPlayer({ name: 'Mid' });
+      await ringInApp(p, 'caretaker_reveal', {});
+      const page = await openPhone(p);
+      const secrets0 = mock.log.clientSecrets.length;
+      await page.click('#ringAnswer', { timeout: 5000 });
+      await until(() => ledger.records().some((r) => r.type === 'call_ended' && r.session === p.pid && r.transport === 'recording'), 8000);
+      assert.equal(mock.log.clientSecrets.length, secrets0, 'no live model session');
+      assert.equal(await page.isHidden('#callScreen'), true);
+      await page.close();
+    } finally {
+      if (!existed) fs.rmSync(file);
+    }
+  });
+}

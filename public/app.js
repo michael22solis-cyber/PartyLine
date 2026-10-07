@@ -455,7 +455,14 @@ function renderConvo(screen, thread) {
       state.drafts[thread] = ''; input.value = ''; // clear first: the reply can re-render this screen before the request returns
       try {
         if (isPeerThread(thread)) await api('/peer', { method: 'POST', body: JSON.stringify({ to: thread.startsWith('dm:') ? thread.slice(3) : thread, text }) });
-        else await api('/messages', { method: 'POST', body: JSON.stringify({ thread, text }) });
+        else {
+          // Same text resent after a failure keeps its id, so a send that did reach the server isn't answered twice.
+          const prev = state.sendIds?.[thread];
+          const clientId = prev?.text === text ? prev.id : (crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`);
+          (state.sendIds ||= {})[thread] = { text, id: clientId };
+          await api('/messages', { method: 'POST', body: JSON.stringify({ thread, text, clientId }) });
+          delete state.sendIds[thread];
+        }
       } catch (ex) {
         state.drafts[thread] = text;
         const live = $('#screen textarea'); if (live && !live.value) live.value = text;
@@ -636,79 +643,115 @@ function incoming({ character, from }) {
 }
 
 // ============ in-app voice calls (WebRTC straight to the character's voice) ============
+// The call logic (usage, heard-only transcripts, guarded topics, wrap-up, hang-up) is the same module the server uses.
 let call = null;
 const callName = (character) => (character.startsWith('caretaker') ? 'UNKNOWN' : state.threads.find((t) => t.key === character)?.name || 'UNKNOWN');
-async function startCall(character) {
-  if (call) return;
-  sfx.unlock();
-  call = { character, started: 0, timer: null };
-  const scr = $('#callScreen');
+function callScreen(character) {
   $('#callName').textContent = callName(character);
   $('#callState').textContent = 'CALLING…';
   $('#callTime').textContent = '';
   $('#callMute').classList.remove('on');
-  scr.hidden = false;
+  $('#callScreen').hidden = false;
+}
+function startClock(maxSeconds, onTick) {
+  call.started = Date.now();
+  $('#callState').textContent = 'ON THE LINE';
+  call.timer = setInterval(() => {
+    if (!call) return;
+    const secs = (Date.now() - call.started) / 1000;
+    $('#callTime').textContent = fmtSec(secs);
+    onTick?.();
+    if (secs > maxSeconds) endCall('max_duration');
+  }, 500);
+}
+// A scripted call (the midnight reveal): a finished recording plays through the call screen.
+function playRecordingCall(character, info) {
+  const audio = $('#callAudio');
+  call.mode = 'recording';
+  audio.srcObject = null;
+  audio.src = info.audio;
+  audio.onended = () => setTimeout(() => endCall('recording_ended'), 800);
+  audio.play().catch(() => {});
+  startClock(info.maxSeconds);
+}
+async function startCall(character) {
+  if (call) return;
+  sfx.unlock();
+  call = { character, started: 0, timer: null };
+  callScreen(character);
   const audio = $('#callAudio');
   audio.play().catch(() => {}); // unlock playback inside the tap
-  try {
+  const getMic = async () => {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('This browser can’t use the microphone. Open the link in Safari or Chrome.');
-    const mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    return navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  };
+  try {
+    // Microphone first (the short-lived call key is only minted once we can use it). The scripted reveal needs none.
+    let mic = character === 'caretaker_reveal' ? null : await getMic();
     call.mic = mic;
-    if (!call) { mic.getTracks().forEach((t) => t.stop()); return; }
+    if (!call) { mic?.getTracks().forEach((t) => t.stop()); return; }
     const info = await api('/call', { method: 'POST', body: JSON.stringify({ character }) });
-    if (!call) { mic.getTracks().forEach((t) => t.stop()); return; }
+    if (!call) { mic?.getTracks().forEach((t) => t.stop()); return; }
+    call.callId = info.callId;
+    if (info.mode === 'recording') { mic?.getTracks().forEach((t) => t.stop()); call.mic = null; playRecordingCall(character, info); return; }
+    if (!mic) { mic = await getMic(); call.mic = mic; }
     const pc = new RTCPeerConnection();
     call.pc = pc;
     pc.ontrack = (e) => { audio.srcObject = e.streams[0]; audio.play().catch(() => {}); meter(e.streams[0]); };
     mic.getTracks().forEach((t) => pc.addTrack(t, mic));
     const dc = pc.createDataChannel('oai-events');
-    dc.onopen = () => {
-      dc.send(JSON.stringify({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: info.opening }] } }));
-      dc.send(JSON.stringify({ type: 'response.create' }));
-    };
-    dc.onmessage = (e) => {
-      let evt; try { evt = JSON.parse(e.data); } catch { return; }
-      if (evt.type === 'conversation.item.input_audio_transcription.completed' && evt.transcript) saveLine('player', evt.transcript);
-      if ((evt.type === 'response.output_audio_transcript.done' || evt.type === 'response.audio_transcript.done') && evt.transcript) saveLine('character', evt.transcript);
-      if (evt.type === 'error') console.warn('call error', evt.error);
-    };
-    pc.onconnectionstatechange = () => { if (['failed', 'closed'].includes(pc.connectionState)) endCall(); };
+    const callId = info.callId;
+    const post = (path, body) => api(path, { method: 'POST', body: JSON.stringify({ callId, character, ...body }) });
+    if (!info.serverControlled) {
+      const { createCallController } = await import('/assets/shared/call-controller.js');
+      call.ctl = createCallController({
+        mode: 'webrtc',
+        send: (evt) => { if (dc.readyState === 'open') dc.send(JSON.stringify(evt)); },
+        opening: info.opening, openingRole: info.openingRole, toolName: info.toolName, timing: info.timing,
+        hooks: {
+          transcript: (speaker, text, meta) => post('/call/transcript', { speaker, text, itemId: meta?.itemId }).catch(() => ({})),
+          usage: (rec) => { post('/call/usage', { records: [rec] }).catch(() => {}); },
+          disclose: (topic, recent) => post('/call/disclose', { topic, recent }),
+          end: (reason) => setTimeout(() => endCall(reason), 0),
+          error: (e) => console.warn('call error', e),
+        },
+      });
+      dc.onopen = () => call?.ctl?.start();
+      dc.onmessage = (e) => { let evt; try { evt = JSON.parse(e.data); } catch { return; } call?.ctl?.handle(evt); };
+    }
+    pc.onconnectionstatechange = () => { if (['failed', 'closed'].includes(pc.connectionState)) endCall('connection_lost'); };
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    const r = await fetch(info.url, { method: 'POST', body: offer.sdp, headers: { Authorization: `Bearer ${info.key}`, 'Content-Type': 'application/sdp' } });
+    const r = info.transport === 'sideband'
+      ? await fetch(`/api/p/${token}/call/${callId}/sdp`, { method: 'POST', body: offer.sdp, headers: { 'Content-Type': 'application/sdp' } })
+      : await fetch(info.url, { method: 'POST', body: offer.sdp, headers: { Authorization: `Bearer ${info.key}`, 'Content-Type': 'application/sdp' } });
     if (!r.ok) throw new Error('The call didn’t connect. Try again.');
     await pc.setRemoteDescription({ type: 'answer', sdp: await r.text() });
     if (!call) return;
-    call.started = Date.now();
-    $('#callState').textContent = 'ON THE LINE';
-    call.timer = setInterval(() => {
-      const secs = (Date.now() - call.started) / 1000;
-      $('#callTime').textContent = fmtSec(secs);
-      if (secs > info.maxSeconds) endCall();
-    }, 500);
+    startClock(info.maxSeconds, () => call?.ctl?.tick());
   } catch (ex) {
-    $('#callState').textContent = ex.name === 'NotAllowedError' ? 'MICROPHONE BLOCKED' : 'CALL FAILED';
+    $('#callState').textContent = ex.name === 'NotAllowedError' ? 'MICROPHONE BLOCKED' : /busy/i.test(ex.message) ? 'LINE BUSY' : 'CALL FAILED';
     $('#callTime').textContent = ex.name === 'NotAllowedError' ? 'Allow the microphone to talk to them.'
       : ex instanceof TypeError ? 'The line dropped. Try again.' : ex.message;
-    setTimeout(() => endCall(), 3200);
+    setTimeout(() => endCall('connect_failed'), 3200);
   }
 }
-function saveLine(speaker, text) {
-  if (!call) return;
-  api('/call/transcript', { method: 'POST', body: JSON.stringify({ character: call.character, speaker, text }) }).catch(() => {});
-}
-function endCall() {
+function endCall(reason = 'player_hung_up') {
   if (!call) return;
   const c = call; call = null;
   clearInterval(c.timer); cancelAnimationFrame(meterRaf);
+  c.ctl?.end(reason); // saves what was heard so far and reports any outstanding usage
   c.mic?.getTracks().forEach((t) => t.stop());
   try { c.pc?.close(); } catch { /* already closed */ }
-  $('#callAudio').srcObject = null;
+  const audio = $('#callAudio');
+  audio.pause(); audio.onended = null; audio.srcObject = null; audio.removeAttribute('src');
   $('#callScreen').hidden = true;
-  if (c.started) api('/call/end', { method: 'POST', body: JSON.stringify({ character: c.character, seconds: (Date.now() - c.started) / 1000 }) }).catch(() => {});
+  if (c.started || c.callId) {
+    api('/call/end', { method: 'POST', body: JSON.stringify({ callId: c.callId, character: c.character, mode: c.mode, reason, seconds: c.started ? (Date.now() - c.started) / 1000 : 0 }) }).catch(() => {});
+  }
   sfx.creak();
 }
-$('#callEnd').onclick = endCall;
+$('#callEnd').onclick = () => endCall('player_hung_up');
 $('#callMute').onclick = () => {
   if (!call?.mic) return;
   const on = !$('#callMute').classList.toggle('on');

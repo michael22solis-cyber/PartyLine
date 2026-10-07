@@ -6,7 +6,7 @@ A 2-night Halloween mystery played on real phones. AI characters **call** player
 
 | Piece | What it does |
 |---|---|
-| Phone calls | The Caretaker calls players; players can call Ruth (or each suspect, with extra numbers). Real-time AI voices via Twilio + OpenAI Realtime. 4-minute cap. |
+| Phone calls | The Caretaker calls players; players can call Ruth (or each suspect, with extra numbers). Real-time AI voices via Twilio + OpenAI Realtime (`gpt-realtime-2.1-mini` by default). 4-minute cap on every call, incoming ones included. |
 | Haunted old phone | Each player's private link opens a power-on and boot screen, then a home screen with Messages, Calls, Evidence, Notes (suspect board), Vote and The End. Glitches, whispers, synth sounds and a full-screen incoming-call alert. Installs to the home screen; push alerts. |
 | Intro video | A 30-second story intro plays after a player taps the power button, then their private role card (Detective, or a blurred Accomplice card), then the phone. Replay it from Menu. Script: `intro/SCRIPT.md`. |
 | Recap | After the midnight reveal, "The End" shows each player's detective score, rank, secrets uncovered, and a no-spoiler share card (PNG). |
@@ -17,7 +17,7 @@ A 2-night Halloween mystery played on real phones. AI characters **call** player
 
 1. `npm install`
 2. `cp .env.example .env` and fill in:
-   - `OPENAI_API_KEY`
+   - `OPENAI_API_KEY` (an older `.env` that says `OPENAI_REALTIME_MODEL=gpt-realtime` keeps the old, deprecated and ~3.5x pricier voice model: change it to `gpt-realtime-2.1-mini` or delete the line)
    - Twilio `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and a Voice-enabled number in `CARETAKER_NUMBER` and `RUTH_NUMBER` (the same number is fine)
    - `ADMIN_KEY`: any long random string
    - Push alerts: run `npm run vapid` and paste both keys into `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`
@@ -38,7 +38,7 @@ Run `beat setup` **before** you send links, so each friend sees their role right
 - **Talk to them in the app.** Characters ring your Blackwood phone (ANSWER / DECLINE) and you talk out loud; unlocked suspects have a ☎ CALL button. Uses OpenAI Realtime straight from the phone's browser (needs mic permission and HTTPS, which ngrok gives you). Set `CALL_MODE=phone` to use real Twilio calls instead for players with a number.
 - **Contacts unlock gradually.** You start with The Line. Your clue gives you Ruth plus anyone it names; anyone a suspect mentions (or you mention) gets added. The `cast` beat (21:15 on Night 1) unlocks everyone as a backup. `UNLOCK_ALL=1` turns this off.
 - **Secrets become evidence.** When a suspect lets a locked secret slip, a NEW EVIDENCE card lands in that player's case file.
-- **Real audio evidence.** Run `npm run evidence` once (uses your OpenAI key) to make `public/audio/memo.mp3`, `call911.mp3` and `ruth-voicemail.mp3`. The memo, 911 call and Ruth's voicemail then play in the app. Ruth's late-night warning is now a call; if you don't pick up, she leaves the voicemail.
+- **Real audio evidence.** Run `npm run evidence` once (uses your OpenAI key) to make `public/audio/memo.mp3`, `call911.mp3`, `ruth-voicemail.mp3` and `caretaker-reveal.mp3`. The memo, 911 call and Ruth's voicemail then play in the app. Ruth's late-night warning is now a call; if you don't pick up, she leaves the voicemail. With `caretaker-reveal.mp3` present, the scripted midnight reveal call plays the recording instead of a live model (no cost per player). Lines are cached, so re-running only pays for lines you changed.
 
 ## Players talking to each other
 
@@ -76,15 +76,24 @@ Tell iPhone players to tap **Share → Add to Home Screen**, open Blackwood from
 
 Reset everything: `npm run admin -- reset`.
 
+## AI costs, memory and secrets
+
+- **What each character knows:** only their own story, relationships and cover. Locked clues live in the game engine (`src/secrets.js`) and reach a character only after that player's own words meet the clue's condition (`src/disclosure.js`). No character is ever sent the solution.
+- **Memory:** characters remember what each player said, claimed, promised and accused, compactly and within a token budget (`src/memory.js`, `src/context.js`).
+- **Usage ledger:** every model response is logged to `data/usage.jsonl` with tokens, estimated cost, latency and status (never dialogue). `npm run usage` (or `npm run admin -- usage` against a running server) shows typical and top-5% session cost, cost per completed mystery and cost by capability; `npm run usage -- --reconcile export.json` checks it against a provider export.
+- **Tests:** `npm test` (offline, no key needed). `npm run bench` replays a calibrated playtest through the prompt builders. `npm run eval:voice -- --live --budget 0.50` compares voice models on the same scenarios with a hard spend limit.
+- Full write-up, measured results and rollback switches: `docs/COST_REPORT.md`.
+
 ## Guardrails built in
 
-- Characters must follow the case file and only reveal locked clues when asked the right thing.
+- Characters must follow the case file and only reveal locked clues when asked the right thing (the engine decides, not the model).
 - Every character is disclosed as AI; players can turn calls off in the ⋮ menu.
 - If a player writes something that sounds like real distress, the game steps out and points to 988.
-- Calls are capped at 4 minutes; texts are capped per player (`MAX_TEXTS_PER_PLAYER`).
+- Calls are capped at 4 minutes (characters wrap up and hang up, idle calls end, one live call per player, a server-wide cap); texts are capped per player (`MAX_TEXTS_PER_PLAYER`).
 - Only call phones whose owners agreed to it. Start with your own.
 
 ## Next up
 
 - Signup + payment page so hosts can buy a case themselves
 - Supabase storage and Twilio request-signature checks before going public
+- Validate `REALTIME_TRANSPORT=sideband` live, then make it the default (server-enforced call limits)

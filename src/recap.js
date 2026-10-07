@@ -1,27 +1,23 @@
 // Post-game recap: per-player detective score, clues found, and a shareable card.
 import { messagesFor, votes, players } from './store.js';
 import { tallyVotes } from './beats.js';
-import { CHARACTERS } from './characters/index.js';
-import fs from 'node:fs';
-import path from 'node:path';
+import { KEY_BY_NAME } from './characters/index.js';
+import { allLines } from './memory.js';
+import { mayAward } from './disclosure.js';
 
 const TRUTH = { killer: 'Ruth Calloway' };
 
 import { SECRETS } from './secrets.js';
 const FOUND = SECRETS.map((x) => ({ ...x, test: { test: x.test } }));
 
-function memoryLines() {
-  try { return JSON.parse(fs.readFileSync(path.resolve('data/memory.json'), 'utf8')).lines || []; } catch { return []; }
-}
-
 export function recapFor(player) {
-  const keyByName = Object.fromEntries(Object.entries(CHARACTERS).map(([k, c]) => [c.name, k]));
   const heard = []; // { who, text } things characters said to this player (texts + calls)
   for (const m of messagesFor(player.token)) if (m.from === 'character') heard.push({ who: m.thread, text: m.text });
-  for (const l of memoryLines()) {
-    if (l.player === player.name && l.speaker === 'character') heard.push({ who: keyByName[l.character], text: l.text });
+  for (const l of allLines()) {
+    if ((l.pid ? l.pid === player.pid : l.player === player.name) && l.speaker === 'character') heard.push({ who: l.npc || KEY_BY_NAME[l.character], text: l.text });
   }
-  const found = FOUND.filter((f) => (player.found || []).includes(f.id) || heard.some((h) => h.who === f.who && f.test.test(h.text)));
+  const found = FOUND.filter((f) => (player.found || []).includes(f.id)
+    || (heard.some((h) => h.who === f.who && f.test.test(h.text)) && mayAward(player, f.who, f.id)));
   const asked = messagesFor(player.token).filter((m) => m.from === 'player').length;
 
   const v = votes()[player.token] || null;
