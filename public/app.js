@@ -526,6 +526,14 @@ function renderConvo(screen, thread) {
     wrap.append(messageNode(m));
   });
   if (!wrap.children.length) wrap.append(el('div', 'empty', 'No messages yet.'));
+  // Read receipt under your last text to a character (they don't answer everything, but they do read it).
+  const mine = state.messages.filter((m) => m.thread === thread && m.from !== 'system');
+  const lastMsg = mine[mine.length - 1];
+  if (lastMsg?.from === 'player' && !READONLY[thread] && !isPeerThread(thread)) {
+    wrap.append(el('div', 'receipt', lastMsg.readAt
+      ? `Read ${new Date(lastMsg.readAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+      : 'Delivered'));
+  }
   if (state.typing[thread]) {
     const t = el('div', 'typing');
     if (typeof state.typing[thread] === 'string') t.append(`${state.typing[thread].split(' ')[0]} is typing `);
@@ -1029,6 +1037,11 @@ function connect() {
   });
   es.addEventListener('incoming', (e) => incoming(JSON.parse(e.data)));
   es.addEventListener('ringEnd', (e) => { if (ringFor === JSON.parse(e.data).character) hideRing(); });
+  es.addEventListener('read', (e) => {
+    const { thread, at } = JSON.parse(e.data);
+    state.messages.forEach((m) => { if (m.thread === thread && m.from === 'player' && !m.readAt) m.readAt = at; });
+    render();
+  });
   es.addEventListener('typing', (e) => {
     const { thread, on, who } = JSON.parse(e.data);
     state.typing[thread] = on ? (who || true) : false; render();

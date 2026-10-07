@@ -145,6 +145,22 @@ if (chromium) {
     await page.close();
   });
 
+  test('an unanswered "ok thanks" shows as Read, so silence looks intentional', async () => {
+    const { handlePlayerText } = await import('../../src/chat.js');
+    const { threadHistory } = await import('../../src/store.js');
+    const p = addPlayer({ name: 'Rec' });
+    await handlePlayerText(p, 'ruth', 'Tell me about the house');
+    await until(() => threadHistory(p.token, 'ruth', 10).some((m) => m.from === 'character'));
+    await handlePlayerText(p, 'ruth', 'ok thanks');
+    await until(() => threadHistory(p.token, 'ruth', 10).at(-1).readAt);
+    const page = await browser.newPage();
+    await page.addInitScript((token) => localStorage.setItem(`bw-on-${token}`, '1'), p.token);
+    await page.goto(`${base}/p/${p.token}#ruth`);
+    await page.waitForSelector('.receipt', { timeout: 10_000 });
+    assert.match(await page.textContent('.receipt'), /^Read /);
+    await page.close();
+  });
+
   test('a dropped call says so and offers to call back', async () => {
     const p = addPlayer({ name: 'Dro' });
     await ringInApp(p, 'teddy', {});

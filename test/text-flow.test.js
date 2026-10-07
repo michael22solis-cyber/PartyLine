@@ -111,6 +111,8 @@ test('pure acknowledgements after a statement get no reply and no model call', a
   await handlePlayerText(p, 'ruth', '👍');
   await sleep(50);
   assert.equal(mock.log.chat.length, n0);
+  // Unanswered, but read (the phone shows a "Read" receipt).
+  assert.ok(threadHistory(p.token, 'ruth', 10).filter((m) => m.from === 'player').every((m) => m.readAt));
   assert.equal(ledger.records().filter((r) => r.type === 'text_skipped' && r.session === p.pid).length, 2);
   // A real question still gets answered.
   await handlePlayerText(p, 'ruth', 'ok but where were you?');

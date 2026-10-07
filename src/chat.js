@@ -1,7 +1,7 @@
 // Character text replies in the burner-phone app. Same brain and shared memory as the phone calls.
 import { CHARACTERS } from './characters/index.js';
 import { remember, tagLine } from './memory.js';
-import { threadHistory, countPlayerMessages } from './store.js';
+import { threadHistory, countPlayerMessages, markRead } from './store.js';
 import { deliver, emit } from './live.js';
 import { isUnlocked, onCharacterSaid, unlockMentions } from './progress.js';
 import { buildTextPrompt, buildNudgePrompt } from './context.js';
@@ -72,6 +72,8 @@ export async function handlePlayerText(player, thread, text, { clientId = null }
   }
   if (!approved.length && isAckOnly(clean, before)) {
     ledger.event('text_skipped', { session: player.pid, npc: thread, reason: 'acknowledgement' });
+    // No reply, like a real person: but they did see it.
+    delay(1500 + Math.random() * 2500).then(() => read(player, thread)).catch(() => {});
     return mine;
   }
   const s = { approved: new Set(approved.map((t) => t.id)), followUp: false };
@@ -89,6 +91,11 @@ export async function handlePlayerText(player, thread, text, { clientId = null }
   return mine;
 }
 
+function read(player, thread) {
+  const at = markRead(player.token, thread);
+  if (at) emit(player.token, 'read', { thread, at });
+}
+
 // Optional escalation of key moments (accusations, contradictions, evidence) to another model. Off unless configured.
 function route(text) {
   const tags = tagLine({ speaker: 'player', text });
@@ -101,6 +108,7 @@ async function replyOnce(player, thread, s) {
   let approvedIds = [];
   try {
     await delay(1200 + Math.random() * 1800); // "read" delay; texts that arrive meanwhile are answered together
+    read(player, thread);
     emit(player.token, 'typing', { thread, on: true });
     // Everything up to here is answered by this reply; only texts arriving from now on need a follow-up.
     s.followUp = false;
