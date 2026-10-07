@@ -180,3 +180,125 @@ test('transcription usage is reported once per item', () => {
   h.ctl.handle(evt);
   assert.equal(h.usage.filter((u) => u.kind === 'transcription').length, 1);
 });
+
+// ---------- noise-tolerant turn taking (turns.managed) ----------
+function managed(opts = {}) {
+  let clock = 1_000_000;
+  const sent = [];
+  const lines = [];
+  const interrupts = [];
+  const ctl = createCallController({
+    send: (e) => sent.push(e),
+    now: () => clock,
+    mode: opts.mode || 'webrtc',
+    clearedWaitMs: 5,
+    transcriptWaitMs: 50,
+    turns: { managed: true, bargeInMs: 30, minTurnMs: 300, ...opts.turns },
+    hooks: { transcript: (speaker, text) => { lines.push({ speaker, text }); return {}; }, interrupt: () => interrupts.push(clock) },
+  });
+  ctl.start();
+  ctl.handle({ type: 'response.created', response: { id: 'r0' } });
+  ctl.handle({ type: 'response.done', response: { id: 'r0', status: 'completed', output: [], usage: usageBlock(0) } });
+  const creates = () => sent.filter((e) => e.type === 'response.create').length;
+  // The character is mid-sentence (generation done, audio still playing).
+  const talking = () => {
+    ctl.handle({ type: 'response.created', response: { id: 'r1' } });
+    ctl.handle({ type: 'response.output_item.added', response_id: 'r1', item: { id: 'i1', type: 'message' } });
+    ctl.handle({ type: 'output_audio_buffer.started', response_id: 'r1' });
+    ctl.handle({ type: 'response.output_audio_transcript.done', response_id: 'r1', item_id: 'i1', transcript: 'one two three four five six seven eight nine ten' });
+    ctl.handle({ type: 'response.done', response: { id: 'r1', status: 'completed', output: [{ type: 'message', id: 'i1' }], usage: usageBlock(200) } });
+    if (opts.mode === 'websocket') ctl.noteAssistantAudioUntil(clock + 10_000);
+  };
+  const sound = (id, { audioMs, startedAt = 5000 }) => {
+    ctl.handle({ type: 'input_audio_buffer.speech_started', item_id: id, audio_start_ms: startedAt });
+    return () => {
+      ctl.handle({ type: 'input_audio_buffer.speech_stopped', item_id: id, audio_end_ms: startedAt + audioMs });
+      ctl.handle({ type: 'input_audio_buffer.committed', item_id: id });
+    };
+  };
+  return { ctl, sent, lines, interrupts, creates, talking, sound, advance: (ms) => { clock += ms; } };
+}
+
+test('a cough while the character talks: no interruption, no answer, removed, not remembered', async () => {
+  const h = managed();
+  h.talking();
+  const before = h.creates();
+  const stop = h.sound('n1', { audioMs: 150 });
+  await tick(10);
+  stop();
+  h.ctl.handle({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'n1', transcript: 'you' });
+  await tick(50);
+  assert.ok(!h.sent.some((e) => e.type === 'output_audio_buffer.clear' || e.type === 'response.cancel'));
+  assert.equal(h.creates(), before);
+  assert.ok(h.sent.some((e) => e.type === 'conversation.item.delete' && e.item_id === 'n1'));
+  assert.ok(!h.lines.some((l) => l.speaker === 'player'));
+  assert.equal(h.ctl.summary().ignoredSounds, 1);
+});
+
+test('talking over the character for long enough stops it, cuts its history, then answers', async () => {
+  const h = managed();
+  h.talking();
+  h.advance(2000); // 2 s of a 10 s line has played
+  const stop = h.sound('u1', { audioMs: 1200 });
+  await tick(60); // past bargeInMs, still talking
+  assert.ok(h.sent.some((e) => e.type === 'output_audio_buffer.clear'));
+  h.ctl.handle({ type: 'output_audio_buffer.cleared', response_id: 'r1' });
+  await tick(20);
+  const trunc = h.sent.find((e) => e.type === 'conversation.item.truncate');
+  assert.equal(trunc.item_id, 'i1');
+  assert.equal(trunc.audio_end_ms, 2000);
+  assert.equal(h.lines.find((l) => l.speaker === 'character').text, 'one two—');
+  const before = h.creates();
+  stop();
+  assert.equal(h.creates(), before + 1, 'the interruption is answered');
+  assert.equal(h.ctl.summary().bargeIns, 1);
+});
+
+test('very short sounds count as a turn only if they contain words', async () => {
+  const h = managed();
+  const n = h.creates();
+  h.sound('a', { audioMs: 200 })();
+  h.ctl.handle({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'a', transcript: 'hmm.' });
+  assert.equal(h.creates(), n);
+  assert.ok(h.sent.some((e) => e.type === 'conversation.item.delete' && e.item_id === 'a'));
+  h.sound('b', { audioMs: 250 })();
+  h.ctl.handle({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'b', transcript: 'Yes.' });
+  assert.equal(h.creates(), n + 1, 'a short "yes" is answered');
+  h.ctl.handle({ type: 'response.created', response: { id: 'r9' } });
+  h.ctl.handle({ type: 'response.done', response: { id: 'r9', status: 'completed', output: [], usage: usageBlock(0) } });
+  h.sound('c', { audioMs: 1400 })();
+  assert.equal(h.creates(), n + 2, 'a normal turn is answered at once, without waiting for the transcript');
+});
+
+test('phone calls: the host stops playback only after sustained speech; barge-in can be switched off', async () => {
+  const h = managed({ mode: 'websocket' });
+  h.talking();
+  h.sound('n', { audioMs: 100 })();
+  await tick(50);
+  assert.equal(h.interrupts.length, 0);
+  const stop = h.sound('u', { audioMs: 1500 });
+  await tick(60);
+  assert.equal(h.interrupts.length, 1);
+  stop();
+
+  const off = managed({ turns: { bargeIn: false } });
+  off.talking();
+  const n = off.creates();
+  const stop2 = off.sound('u', { audioMs: 1500 });
+  await tick(60);
+  assert.ok(!off.sent.some((e) => e.type === 'output_audio_buffer.clear'), 'never interrupted');
+  stop2();
+  assert.equal(off.creates(), n + 1, 'still answered once the character is done');
+});
+
+test('original behavior (turns not managed): the controller leaves turns to OpenAI', () => {
+  const h = harness();
+  h.ctl.start();
+  h.ctl.handle({ type: 'response.created', response: { id: 'r1' } });
+  h.ctl.handle({ type: 'response.done', response: { id: 'r1', status: 'completed', output: [], usage: usageBlock(0) } });
+  const n = h.sent.filter((e) => e.type === 'response.create').length;
+  h.ctl.handle({ type: 'input_audio_buffer.speech_started', audio_start_ms: 0 });
+  h.ctl.handle({ type: 'input_audio_buffer.speech_stopped', audio_end_ms: 100 });
+  assert.equal(h.sent.filter((e) => e.type === 'response.create').length, n);
+  assert.ok(!h.sent.some((e) => e.type === 'conversation.item.delete'));
+});

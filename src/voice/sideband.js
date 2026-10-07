@@ -5,7 +5,7 @@ import { createCallController } from '../shared/call-controller.js';
 import { openSideband, hangup } from './realtime-api.js';
 import { callTranscript, callDisclose, callUsage, closeCall } from './calls.js';
 
-export function attachSideband(call, player, { openaiCallId, opening, toolName, timing }) {
+export function attachSideband(call, player, { openaiCallId, opening, toolName, timing, turns }) {
   const ws = openSideband(openaiCallId);
   let controller = null;
   let timer = null;
@@ -25,7 +25,7 @@ export function attachSideband(call, player, { openaiCallId, opening, toolName, 
 
   ws.on('open', () => {
     controller = createCallController({
-      mode: 'webrtc', send, opening: opening.text, openingRole: opening.role, toolName, timing,
+      mode: 'webrtc', send, opening: opening.text, openingRole: opening.role, toolName, timing, turns,
       hooks: {
         transcript: (speaker, text, meta) => callTranscript(call, player, speaker, text, meta),
         usage: (rec) => callUsage(call, rec, 'sideband'),

@@ -48,7 +48,7 @@ The price book (`src/ai/pricing.js`) reproduces the export's Realtime cost to th
 
 | Call site | Before | After |
 |---|---|---|
-| In-app voice (`web.js` → browser WebRTC) | gpt-realtime; full case file and 40 memory lines; server VAD; no usage capture; 240 s cap enforced only by the client | 2.1-mini (env, per-character override); bounded per-character prompt plus guarded-topic tool; semantic VAD; near-field noise reduction; 1,500-token reply cap; usage, latency and heard audio reported; one call per player; global cap; wrap-up and hang-up; idle hang-up |
+| In-app voice (`web.js` → browser WebRTC) | gpt-realtime; full case file and 40 memory lines; server VAD; no usage capture; 240 s cap enforced only by the client | 2.1-mini (env, per-character override); bounded per-character prompt plus guarded-topic tool; semantic VAD with noise-tolerant turn taking (§10); far-field noise reduction in the app, near-field on phone calls; 1,500-token reply cap; usage, latency and heard audio reported; one call per player; global cap; wrap-up and hang-up; idle hang-up |
 | Phone voice (Twilio bridge) | Same prompts; **no time limit on incoming calls**; barge-in sent `response.cancel` without truncating, so memory kept unheard words | Shared call controller; mark-based **truncation at the played position**; heard-only memory; server-side usage; hard limit for all calls; automatic minimal-config fallback |
 | Text replies (`chat.js`) | ~2,000-token prompt, uncached; no retries; double texts rejected | ~730-token prompt; bounded retries and timeouts; fair concurrency; idempotent sends; double texts answered together in **one** call; pure acks skipped |
 | Group chats (`groups.js`) | Full prompt per AI reply (plus a 40% chance of a second reply) | Bounded prompt; disclosures approved for everyone in the room; cut-in chance configurable |
@@ -225,6 +225,7 @@ Rollback switches (env only; no code change):
 |---|---|
 | Voice model | `OPENAI_REALTIME_MODEL=gpt-realtime` (or per character: `OPENAI_REALTIME_MODEL_RUTH=…`) |
 | Prompts, secret gating and session shape (all at once) | `CONTEXT_MODE=legacy` |
+| Noise-tolerant turn taking (see §10) | `REALTIME_TURN_TAKING=server` |
 | Turn detection / noise reduction / reply cap | `REALTIME_TURN_DETECTION=server_vad`, `REALTIME_NOISE_REDUCTION=off`, `REALTIME_MAX_OUTPUT_TOKENS=inf` |
 | Goodbye cue / idle hang-up | `CALL_WRAP_UP=off`, `CALL_IDLE_SECONDS=0` |
 | Acknowledgement skipping | `TEXT_SKIP_ACKS=off` |
@@ -233,3 +234,39 @@ Rollback switches (env only; no code change):
 | Everything | `git revert` the branch's commit |
 
 Old `data/` files load unchanged: missing fields are filled in on load.
+
+## 10. Follow-up: noise interrupting characters
+
+Playtest feedback: "any subtle noise interrupts the AI character". The cause was the original setup, kept in the
+first version of this branch: OpenAI's turn detection cancels the character's reply on *any* detected speech
+(`interrupt_response` defaults to on), and every blip it commits becomes a turn the character answers.
+
+Change (`src/shared/call-controller.js`, `src/voice/session.js`): the session now runs with `create_response: false` and
+`interrupt_response: false`, and the shared call controller decides instead:
+
+- **Interrupting needs sustained speech.** The character stops only if the caller is still talking 500 ms
+  (`REALTIME_BARGE_IN_MS`) after they started. Coughs, clatters and breaths are shorter. Real interruptions now take
+  about half a second, so the character finishes the word it was on.
+- **Short sounds aren't turns.** A sound under the character's voice that never reached the interruption threshold is
+  dropped. When the character is silent, sounds under 300 ms (`REALTIME_MIN_TURN_MS`) count only if their transcript has
+  real words: "yes" is answered, "hmm" and noise are not.
+- **Dropped sounds disappear.** The audio item is deleted from the conversation (no tokens re-read), its transcript
+  never reaches memory, and a phantom reply is never generated. This saves money as well as annoyance.
+- **Noise reduction matches the device.** In-app calls use `far_field` (a phone held in front of the face on speaker);
+  real phone calls keep `near_field`. `server_vad`, if chosen, defaults to a less sensitive threshold (0.6).
+- **Interrupted lines stay accurate.** When the character is cut off, the model's own history is truncated to what was
+  heard, as well as the game's memory.
+
+Turns that do count are answered on `speech_stopped` with no extra wait. Only sub-300 ms sounds wait for their
+transcript, typically a few hundred ms.
+
+Tested (offline):
+
+- **Controller unit tests:** a cough mid-line is ignored and removed; sustained speech interrupts and truncates at the
+  played position; short "yes" vs "hmm"; barge-in off; the original mode is unchanged.
+- **Sideband and Twilio integration:** noise doesn't clear or truncate; talking over does.
+- **Real browser:** a cough mid-line is deleted and nothing is interrupted.
+
+Still untested: how real microphones and rooms behave against the live API. If characters still get cut off, raise
+`REALTIME_BARGE_IN_MS` (e.g. 700). If players find them hard to interrupt, lower it (e.g. 350).
+`REALTIME_BARGE_IN=off` makes characters uninterruptible. `REALTIME_TURN_TAKING=server` restores the old behavior.

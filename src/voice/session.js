@@ -10,16 +10,30 @@ export const realtimeModel = (npc) => env[`OPENAI_REALTIME_MODEL_${String(npc ||
 export const transcribeModel = () => env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe';
 const isReasoningModel = (m) => /^gpt-realtime-2(\.|-|$)/.test(m);
 
-function turnDetection() {
+// Turn taking. By default the call controller (src/shared/call-controller.js) decides when a sound is a turn and when
+// it may interrupt the character, so a cough or a door doesn't cut a character off or get an answer.
+// REALTIME_TURN_TAKING=server hands both decisions back to OpenAI's turn detection (the original behavior).
+export function turnTaking({ minimal = false } = {}) {
+  return {
+    managed: !minimal && env.REALTIME_TURN_TAKING !== 'server',
+    bargeIn: env.REALTIME_BARGE_IN !== 'off', // off: the character can't be talked over; the caller waits their turn
+    bargeInMs: Number(env.REALTIME_BARGE_IN_MS ?? 500), // keep talking this long over the character to interrupt
+    minTurnMs: Number(env.REALTIME_MIN_TURN_MS ?? 300), // shorter sounds count only if they contain words
+  };
+}
+
+function turnDetection(turns) {
   const type = env.REALTIME_TURN_DETECTION || 'semantic_vad';
+  const control = turns.managed ? { create_response: false, interrupt_response: false } : {};
   if (type === 'server_vad') {
     return {
       type: 'server_vad',
-      ...(env.REALTIME_VAD_THRESHOLD ? { threshold: Number(env.REALTIME_VAD_THRESHOLD) } : {}),
+      threshold: Number(env.REALTIME_VAD_THRESHOLD || 0.6), // API default 0.5; higher = less sensitive to noise
       ...(env.REALTIME_VAD_SILENCE_MS ? { silence_duration_ms: Number(env.REALTIME_VAD_SILENCE_MS) } : {}),
+      ...control,
     };
   }
-  return { type: 'semantic_vad', ...(env.REALTIME_VAD_EAGERNESS ? { eagerness: env.REALTIME_VAD_EAGERNESS } : {}) };
+  return { type: 'semantic_vad', ...(env.REALTIME_VAD_EAGERNESS ? { eagerness: env.REALTIME_VAD_EAGERNESS } : {}), ...control };
 }
 
 // Call timing for one character: when to cue the goodbye, the hard limit, and the idle hang-up.
@@ -48,6 +62,7 @@ export function realtimeSession({ npc, player, format = null, minimal = false })
   // CONTEXT_MODE=legacy is the one-switch rollback: original prompts AND the original session shape.
   const legacy = contextMode() === 'legacy';
   if (legacy) minimal = true;
+  const turns = turnTaking({ minimal });
   const session = {
     type: 'realtime',
     model,
@@ -57,13 +72,15 @@ export function realtimeSession({ npc, player, format = null, minimal = false })
       input: {
         ...(format ? { format: { type: format } } : {}),
         transcription: { model: transcribeModel() },
-        turn_detection: minimal ? { type: 'server_vad' } : turnDetection(),
+        turn_detection: minimal ? { type: 'server_vad' } : turnDetection(turns),
       },
       output: { ...(format ? { format: { type: format } } : {}), voice: c.voice },
     },
   };
   if (!minimal) {
-    const nr = env.REALTIME_NOISE_REDUCTION ?? 'near_field';
+    // In-app calls are usually a phone held in front of the face on speaker (far field); real phone calls are held to
+    // the ear (near field).
+    const nr = env.REALTIME_NOISE_REDUCTION ?? (format ? 'near_field' : 'far_field');
     if (nr && nr !== 'off') session.audio.input.noise_reduction = { type: nr };
     if (tools.length) { session.tools = tools; session.tool_choice = 'auto'; }
     const maxOut = env.REALTIME_MAX_OUTPUT_TOKENS ?? '1500';
@@ -77,7 +94,7 @@ export function realtimeSession({ npc, player, format = null, minimal = false })
       };
     }
   }
-  return { session, model, stats, toolName: tools.length && !minimal ? TOOL_NAME : null };
+  return { session, model, stats, turns, toolName: tools.length && !minimal ? TOOL_NAME : null };
 }
 
 // How the call opens: a system note in the conversation (bounded mode) or the original fake "user" line (legacy).

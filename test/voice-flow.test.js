@@ -9,6 +9,7 @@ import WebSocket from 'ws';
 import { startMockOpenAI } from './helpers/mock-openai.js';
 
 process.env.UNLOCK_ALL = '1';
+process.env.REALTIME_BARGE_IN_MS = '80'; // keep tests fast; the default is 500 ms
 const mock = await startMockOpenAI();
 process.env.OPENAI_BASE_URL = mock.url;
 
@@ -38,7 +39,11 @@ test('in-app call: short-lived key with the configured model, tools, limits and 
   assert.equal(sent.session.model, 'gpt-realtime-2.1-mini');
   assert.equal(sent.session.max_output_tokens, 1500);
   assert.equal(sent.session.audio.input.turn_detection.type, 'semantic_vad');
-  assert.equal(sent.session.audio.input.noise_reduction.type, 'near_field');
+  // The game, not OpenAI's turn detection, decides when a sound is a turn or may interrupt (noise tolerance).
+  assert.equal(sent.session.audio.input.turn_detection.create_response, false);
+  assert.equal(sent.session.audio.input.turn_detection.interrupt_response, false);
+  assert.equal(sent.session.audio.input.noise_reduction.type, 'far_field', 'phones on speaker in the app');
+  assert.deepEqual(r.body.turns, { managed: true, bargeIn: true, bargeInMs: 80, minTurnMs: 300 });
   assert.equal(sent.session.tools[0].name, 'check_guarded_topic');
   assert.ok(sent.expires_after.seconds <= 120);
   assert.doesNotMatch(sent.session.instructions, /already dead when you arrived/);
@@ -183,10 +188,21 @@ test('sideband transport: the server runs the call (tool approvals, usage, heard
   const recs = usage().filter((r) => r.callId === call.callId);
   assert.ok(recs.length >= 3 && recs.every((r) => r.source === 'sideband'));
   assert.ok(recs.some((r) => r.capability === 'transcription'));
-  // Barge-in: only what was heard is remembered.
+  // A cough while the character talks: no interruption, no answer, nothing remembered, removed from the conversation.
   s.userTurn('tell me more about the stairs');
-  s.interrupted(1000);
-  await until(() => allLines().some((l) => l.pid === p.pid && /—$/.test(l.text)));
+  await until(() => s.responses.length >= 4);
+  const noiseId = s.noise({ audioMs: 150 });
+  await until(() => s.deleted.includes(noiseId));
+  assert.equal(s.clears, 0, 'noise did not cut the character off');
+  assert.equal(s.responses.length, 4, 'noise was not answered');
+  // Real speech over the character: it stops, and only what was heard is remembered (here, the first word).
+  await sleep(500);
+  await s.userTurn('wait, stop, what stairs?', { speakMs: 150 });
+  assert.equal(s.clears, 1);
+  await until(() => allLines().some((l) => l.pid === p.pid && /—$/.test(l.text)), 3000);
+  assert.ok(s.received.some((e) => e.type === 'conversation.item.truncate'), 'the model\'s history is cut too');
+  const cut = allLines().find((l) => l.pid === p.pid && /—$/.test(l.text));
+  assert.doesNotMatch(cut.text, /sweetheart/, 'the unheard end of the line is not remembered');
   const n0 = mock.log.hangups.length;
   await post(p, '/call/end', { callId: call.callId, character: 'lily', seconds: 40 });
   await until(() => mock.log.hangups.length - n0 === 1);
@@ -223,7 +239,13 @@ test('phone call (Twilio): barge-in truncates the character at what was actually
   for (let ms = 20; ms <= 1200; ms += 20) t.media(1000 + ms);
   t.mark();
   await sleep(50);
-  s.userTurn('wait, who is this?', { respond: false });
+  // A short noise does not interrupt...
+  s.noise({ audioMs: 120 });
+  await sleep(150);
+  assert.equal(s.truncations.length, 0);
+  assert.ok(!t.got.some((m) => m.event === 'clear'));
+  // ...but the caller talking over the character does.
+  await s.userTurn('wait, who is this?', { speakMs: 150 });
   await until(() => s.truncations.length === 1);
   assert.ok(Math.abs(s.truncations[0].audio_end_ms - 1200) <= 20, `truncated at ${s.truncations[0].audio_end_ms}`);
   assert.ok(t.got.some((m) => m.event === 'clear'));

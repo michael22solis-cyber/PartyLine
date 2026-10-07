@@ -199,7 +199,7 @@ export function registerWeb(app) {
       } else {
         const minted = await mintClientSecret({ npc: character, player: p });
         call.model = minted.built.model;
-        out = { ...base, key: minted.key, url: `${OPENAI_BASE_URL}/realtime/calls`, toolName: minted.built.toolName };
+        out = { ...base, key: minted.key, url: `${OPENAI_BASE_URL}/realtime/calls`, toolName: minted.built.toolName, turns: minted.built.turns };
       }
       if (answering) answerRing(p.token);
       callCounts.set(p.token, n);
@@ -221,7 +221,7 @@ export function registerWeb(app) {
     try {
       const made = await createSidebandCall({ npc: call.npc, player: p, sdp: req.body });
       call.model = made.built.model;
-      attachSideband(call, p, { openaiCallId: made.openaiCallId, opening, toolName: made.built.toolName, timing });
+      attachSideband(call, p, { openaiCallId: made.openaiCallId, opening, toolName: made.built.toolName, timing, turns: made.built.turns });
       reply.type('application/sdp').send(made.answer);
     } catch (err) {
       closeCall(call.id, 'connect_failed');

@@ -156,6 +156,10 @@ class MockRealtimeSession {
     this.received = [];
     this.responses = [];
     this.truncations = [];
+    this.clears = 0;
+    this.cancels = 0;
+    this.deleted = [];
+    this.clock = 10_000; // input audio clock (ms) for speech_started/stopped timestamps
     this.closed = false;
     ws.on('message', (raw) => this.onMessage(JSON.parse(raw)));
     ws.on('close', () => { this.closed = true; });
@@ -183,6 +187,19 @@ class MockRealtimeSession {
       }
       case 'response.create':
         this.respond();
+        break;
+      case 'response.cancel':
+        this.cancels += 1;
+        if (!this.active) this.emit({ type: 'error', error: { code: 'response_cancel_not_active', message: 'no active response' } });
+        break;
+      case 'output_audio_buffer.clear':
+        this.clears += 1;
+        this.emit({ type: 'output_audio_buffer.cleared', response_id: this.lastAssistant?.rid });
+        break;
+      case 'conversation.item.delete':
+        this.items = this.items.filter((i) => i.id !== evt.item_id);
+        this.deleted.push(evt.item_id);
+        this.emit({ type: 'conversation.item.deleted', item_id: evt.item_id });
         break;
       case 'conversation.item.truncate': {
         const it = this.items.find((i) => i.id === evt.item_id);
@@ -262,19 +279,36 @@ class MockRealtimeSession {
     this.emit({ type: 'conversation.item.truncated', item_id: itemId, content_index: 0, audio_end_ms: ms });
   }
 
-  // A caller turn as server turn detection would report it, then (by default) the automatic response.
-  userTurn(text, { audioMs = 1500, respond = true, startedAlready = false } = {}) {
+  // OpenAI only answers by itself when the session lets turn detection create responses.
+  get autoRespond() { return this.config?.audio?.input?.turn_detection?.create_response !== false; }
+
+  // A caller turn as turn detection reports it: speech start/stop (with audio timestamps), the committed item, the
+  // automatic response if the session allows one, then the transcript. speakMs > 0 makes the caller keep talking
+  // that long in real time between start and stop (returns a promise).
+  userTurn(text, { audioMs = 1500, respond = this.autoRespond, startedAlready = false, speakMs = 0 } = {}) {
     const itemId = this.id('item');
-    if (!startedAlready) this.emit({ type: 'input_audio_buffer.speech_started', item_id: itemId });
-    this.emit({ type: 'input_audio_buffer.speech_stopped', item_id: itemId });
-    const audioTokens = Math.round((audioMs / 1000) * RATES.userAudioTokPerSec);
-    this.items.push({ id: itemId, role: 'user', kind: 'user_audio', transcript: text, segment: { id: itemId, kind: 'audio', tokens: audioTokens } });
-    this.emit({ type: 'conversation.item.created', item: { id: itemId, type: 'message', role: 'user' } });
-    if (respond) this.respond();
-    this.emit({
-      type: 'conversation.item.input_audio_transcription.completed', item_id: itemId, content_index: 0, transcript: text,
-      usage: { type: 'tokens', total_tokens: audioTokens + tokens(text), input_tokens: audioTokens, input_token_details: { text_tokens: 0, audio_tokens: audioTokens }, output_tokens: tokens(text) },
-    });
-    return itemId;
+    const startMs = this.clock;
+    this.clock += audioMs;
+    if (!startedAlready) this.emit({ type: 'input_audio_buffer.speech_started', item_id: itemId, audio_start_ms: startMs });
+    const finish = () => {
+      this.emit({ type: 'input_audio_buffer.speech_stopped', item_id: itemId, audio_end_ms: startMs + audioMs });
+      const audioTokens = Math.round((audioMs / 1000) * RATES.userAudioTokPerSec);
+      this.items.push({ id: itemId, role: 'user', kind: 'user_audio', transcript: text, segment: { id: itemId, kind: 'audio', tokens: audioTokens } });
+      this.emit({ type: 'input_audio_buffer.committed', item_id: itemId });
+      this.emit({ type: 'conversation.item.created', item: { id: itemId, type: 'message', role: 'user' } });
+      if (respond) this.respond();
+      this.emit({
+        type: 'conversation.item.input_audio_transcription.completed', item_id: itemId, content_index: 0, transcript: text,
+        usage: { type: 'tokens', total_tokens: audioTokens + tokens(text), input_tokens: audioTokens, input_token_details: { text_tokens: 0, audio_tokens: audioTokens }, output_tokens: tokens(text) },
+      });
+      return itemId;
+    };
+    if (!speakMs) return finish();
+    return new Promise((r) => setTimeout(() => r(finish()), speakMs));
+  }
+
+  // A short non-speech sound (a cough, a door) picked up by turn detection.
+  noise({ audioMs = 180, transcript = '' } = {}) {
+    return this.userTurn(transcript, { audioMs });
   }
 }

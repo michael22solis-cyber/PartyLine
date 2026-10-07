@@ -90,6 +90,7 @@ Reset everything: `npm run admin -- reset`.
 - Every character is disclosed as AI; players can turn calls off in the ⋮ menu.
 - If a player writes something that sounds like real distress, the game steps out and points to 988.
 - Calls are capped at 4 minutes (characters wrap up and hang up, idle calls end, one live call per player, a server-wide cap); texts are capped per player (`MAX_TEXTS_PER_PLAYER`).
+- Background noise doesn't cut characters off: a player has to keep talking for half a second to interrupt (`REALTIME_BARGE_IN_MS`), and coughs or clatters are ignored instead of answered.
 - Only call phones whose owners agreed to it. Start with your own.
 
 ## Next up

@@ -707,7 +707,7 @@ async function startCall(character) {
       call.ctl = createCallController({
         mode: 'webrtc',
         send: (evt) => { if (dc.readyState === 'open') dc.send(JSON.stringify(evt)); },
-        opening: info.opening, openingRole: info.openingRole, toolName: info.toolName, timing: info.timing,
+        opening: info.opening, openingRole: info.openingRole, toolName: info.toolName, timing: info.timing, turns: info.turns,
         hooks: {
           transcript: (speaker, text, meta) => post('/call/transcript', { speaker, text, itemId: meta?.itemId }).catch(() => ({})),
           usage: (rec) => { post('/call/usage', { records: [rec] }).catch(() => {}); },

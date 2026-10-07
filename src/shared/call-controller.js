@@ -4,7 +4,9 @@
 //  - transcripts that keep only what the player actually HEARD when they interrupt (memory stays truthful),
 //  - the guarded-topic tool (the server approves; the model only asks),
 //  - a wrap-up cue, the character hanging up after their goodbye, an idle hang-up and a hard time limit,
-//  - never sending a second response.create while one is active (no duplicate responses).
+//  - never sending a second response.create while one is active (no duplicate responses),
+//  - noise-tolerant turn taking (turns.managed): the character is only interrupted by speech that lasts, and coughs,
+//    clatters or a stray "mm" are dropped instead of being answered or remembered.
 // The host calls tick() about twice a second. Pure ES module: no Node or DOM APIs.
 
 const AUDIO_OUT_TOKENS_PER_SEC = 20; // ~1,200 output audio tokens per spoken minute
@@ -20,8 +22,13 @@ export function createCallController({
   now = () => Date.now(),
   clearedWaitMs = 600,
   transcriptWaitMs = 1500,
+  // managed: the session has create_response/interrupt_response off and this controller decides instead.
+  // bargeInMs: how long the caller must keep talking over the character before it stops. minTurnMs: shorter sounds
+  // only count as a turn if their transcript has real words.
+  turns = {},
 }) {
   const t = { wrapUpAt: 200, maxSeconds: 240, idleSeconds: 45, goodbyeGraceMs: 1200, ...timing };
+  const tt = { managed: false, bargeIn: true, bargeInMs: 500, minTurnMs: 300, ...turns };
   const s = {
     startedAt: null, ended: null, opened: false,
     activeResponse: null, createQueued: null, lastCreatePurpose: null, nextPurpose: null,
@@ -29,8 +36,10 @@ export function createCallController({
     wrapSent: false, wrapPending: false, goodbyeResponse: null, endAt: null,
     responses: new Map(), items: new Map(), handledCalls: new Set(), usageSeen: new Set(), transcribed: new Set(),
     playerLines: [], lastPlayerTranscriptAt: 0,
+    speechAt: 0, speechAudioStart: null, turnItem: null, overlap: false, interrupted: false, bargeTimer: null,
+    playingResponse: null, discard: new Set(), committed: new Set(), shortTurns: new Map(),
   };
-  const stats = { responses: 0, cancelled: 0, interruptedLines: 0, toolCalls: 0, approvals: 0, playerTurns: 0, rejectedCreates: 0 };
+  const stats = { responses: 0, cancelled: 0, interruptedLines: 0, toolCalls: 0, approvals: 0, playerTurns: 0, rejectedCreates: 0, bargeIns: 0, ignoredSounds: 0 };
   const ms = () => now();
 
   const resp = (id) => {
@@ -96,6 +105,53 @@ export function createCallController({
   }
   const itemsOf = (responseId) => [...s.items.values()].filter((i) => i.responseId === responseId);
   function finalizeResponse(responseId, opts) { for (const it of itemsOf(responseId)) finalize(it.id, opts); }
+
+  // ---------- noise-tolerant turn taking ----------
+  const characterAudible = () => (mode === 'webrtc' ? s.playing : ms() < s.assistantAudioUntil);
+  const FILLER = new Set(['uh', 'um', 'umm', 'hmm', 'hm', 'mm', 'mhm', 'mmm', 'ah', 'oh', 'eh', 'you', 'huh']);
+  const hasWords = (text) => (String(text || '').toLowerCase().match(/[a-z']+/g) || []).some((w) => !FILLER.has(w));
+
+  // Throw a sound away: never answered, never remembered, and removed from the conversation (no tokens re-read).
+  function ignoreSound(itemId) {
+    stats.ignoredSounds += 1;
+    if (!itemId) return;
+    s.discard.add(itemId);
+    if (s.committed.has(itemId)) send({ type: 'conversation.item.delete', item_id: itemId });
+  }
+
+  // The caller has talked over the character long enough: stop the character where the caller heard it stop.
+  function interruptCharacter() {
+    s.interrupted = true;
+    stats.bargeIns += 1;
+    if (s.activeResponse && s.activeResponse !== 'pending') send({ type: 'response.cancel' });
+    if (mode !== 'webrtc') { hooks.interrupt?.(); return; }
+    const rec = s.responses.get(s.playingResponse);
+    const played = rec?.playStartedAt ? ms() - rec.playStartedAt : null;
+    send({ type: 'output_audio_buffer.clear' });
+    // Make sure the model's own history also ends where the caller stopped hearing it.
+    if (rec && played != null) {
+      setTimeout(() => {
+        for (const it of itemsOf(rec.id)) {
+          if (it.audioEndMs != null) continue;
+          const end = Math.max(0, Math.round(it.generatedMs ? Math.min(played, it.generatedMs) : played));
+          send({ type: 'conversation.item.truncate', item_id: it.id, content_index: 0, audio_end_ms: end });
+        }
+      }, clearedWaitMs);
+    }
+  }
+
+  function onSpeechStopped(evt) {
+    const id = evt.item_id || s.turnItem;
+    const dur = evt.audio_end_ms != null && s.speechAudioStart != null ? evt.audio_end_ms - s.speechAudioStart : ms() - s.speechAt;
+    // A short sound under the character's voice: noise or an "mm-hm", not a turn.
+    if (s.overlap && !s.interrupted && tt.bargeIn && dur < tt.bargeInMs) { ignoreSound(id); return; }
+    // Very short: only a turn if it turns out to contain words (decided when its transcript arrives).
+    if (dur < tt.minTurnMs) {
+      s.shortTurns.set(id, setTimeout(() => { s.shortTurns.delete(id); ignoreSound(id); }, transcriptWaitMs + 2000));
+      return;
+    }
+    createResponse('reply');
+  }
 
   // ---------- the guarded-topic tool ----------
   const recentPlayerText = () => s.playerLines.slice(-3).map((l) => l.text).join(' / ');
@@ -196,7 +252,7 @@ export function createCallController({
       }
       case 'output_audio_buffer.started': {
         const rec = resp(evt.response_id);
-        if (rec) { rec.firstAudioAt ||= ms(); rec.playStartedAt = ms(); }
+        if (rec) { rec.firstAudioAt ||= ms(); rec.playStartedAt = ms(); s.playingResponse = rec.id; }
         s.playing = true;
         s.lastActivity = ms();
         break;
@@ -235,20 +291,47 @@ export function createCallController({
       case 'input_audio_buffer.speech_started':
         s.userSpeaking = true;
         s.lastActivity = ms();
+        s.speechAt = ms();
+        s.speechAudioStart = evt.audio_start_ms ?? null;
+        s.turnItem = evt.item_id || null;
+        s.overlap = characterAudible();
+        s.interrupted = false;
         if (s.endAt) s.endAt = Math.max(s.endAt, ms() + 4000); // let them say goodbye back
+        if (tt.managed && s.overlap && tt.bargeIn) {
+          clearTimeout(s.bargeTimer);
+          s.bargeTimer = setTimeout(() => {
+            if (s.userSpeaking && !s.ended && characterAudible()) interruptCharacter();
+          }, tt.bargeInMs);
+        }
         break;
       case 'input_audio_buffer.speech_stopped':
         s.userSpeaking = false;
         s.speechStoppedAt = ms();
         s.lastActivity = ms();
+        clearTimeout(s.bargeTimer);
+        if (tt.managed) onSpeechStopped(evt);
         break;
+      case 'input_audio_buffer.committed':
+      case 'conversation.item.created':
+      case 'conversation.item.added': {
+        const id = evt.item_id || evt.item?.id;
+        if (!id) break;
+        s.committed.add(id);
+        if (s.discard.has(id)) send({ type: 'conversation.item.delete', item_id: id });
+        break;
+      }
       case 'conversation.item.input_audio_transcription.completed': {
         if (evt.usage && evt.item_id && !s.transcribed.has(evt.item_id)) {
           s.transcribed.add(evt.item_id);
           hooks.usage?.({ kind: 'transcription', responseId: `tr_${evt.item_id}`, usage: evt.usage });
         }
         const text = String(evt.transcript || '').trim();
-        if (!text) break;
+        if (s.shortTurns.has(evt.item_id)) { // a very short sound: a turn only if it had words
+          clearTimeout(s.shortTurns.get(evt.item_id));
+          s.shortTurns.delete(evt.item_id);
+          if (hasWords(text)) createResponse('reply'); else ignoreSound(evt.item_id);
+        }
+        if (!text || s.discard.has(evt.item_id)) break; // noise never reaches memory
         stats.playerTurns += 1;
         s.playerLines.push({ text, at: ms() });
         if (s.playerLines.length > 12) s.playerLines.shift();
@@ -313,6 +396,8 @@ export function createCallController({
       finalize(it.id, { playedMs: played });
     }
     for (const rec of s.responses.values()) emitUsage(rec); // anything still waiting (e.g. no transcript arrived)
+    clearTimeout(s.bargeTimer);
+    for (const timer of s.shortTurns.values()) clearTimeout(timer);
     s.ended = reason;
     hooks.end?.(reason, summary());
   }

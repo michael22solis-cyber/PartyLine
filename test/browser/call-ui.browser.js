@@ -91,6 +91,17 @@ if (chromium) {
     assert.equal(usage(p.pid).find((r) => r.responseId === 'resp_1').source, 'client');
     await until(() => allLines().some((l) => l.pid === p.pid && l.text === '...who is this?'));
 
+    // A cough while the character is speaking: the page ignores it (no interruption, removed from the conversation).
+    await page.evaluate(() => {
+      window.__emit({ type: 'output_audio_buffer.started', response_id: 'resp_1' });
+      window.__emit({ type: 'input_audio_buffer.speech_started', item_id: 'noise_1', audio_start_ms: 4000 });
+      window.__emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'noise_1', audio_end_ms: 4150 });
+      window.__emit({ type: 'input_audio_buffer.committed', item_id: 'noise_1' });
+    });
+    await page.waitForFunction(() => window.__sent.some((e) => e.type === 'conversation.item.delete' && e.item_id === 'noise_1'), null, { timeout: 3000 });
+    assert.equal(await page.evaluate(() => window.__sent.some((e) => e.type === 'output_audio_buffer.clear')), false, 'noise did not interrupt');
+    await page.evaluate(() => window.__emit({ type: 'output_audio_buffer.stopped', response_id: 'resp_1' }));
+
     // The caller raises the 911 call; the model asks to open up; the server approves; the page answers the tool.
     await page.evaluate(() => {
       window.__emit({ type: 'input_audio_buffer.speech_started' });

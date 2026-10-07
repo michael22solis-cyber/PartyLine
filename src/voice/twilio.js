@@ -59,6 +59,19 @@ function bridge(twilioWs) {
   const sendTwilio = (msg) => { if (twilioWs.readyState === WebSocket.OPEN) twilioWs.send(JSON.stringify(msg)); };
   const sendOpenAI = (evt) => { if (openai?.readyState === WebSocket.OPEN) openai.send(JSON.stringify(evt)); };
 
+  // Stop the character's audio on the phone and cut its item at what Twilio actually played.
+  function interruptPlayback() {
+    if (marks > 0 && lastAssistantItem && responseStartTs != null) {
+      sendOpenAI({ type: 'conversation.item.truncate', item_id: lastAssistantItem, content_index: 0, audio_end_ms: Math.max(0, latestMediaTs - responseStartTs) });
+      sendTwilio({ event: 'clear', streamSid });
+      controller?.clearAssistantAudio();
+      audioUntil = Date.now();
+    }
+    marks = 0;
+    lastAssistantItem = null;
+    responseStartTs = null;
+  }
+
   function finish(reason) {
     if (closed) return;
     closed = true;
@@ -98,7 +111,9 @@ function bridge(twilioWs) {
           const opening = openingItem(c.opening(player.name));
           controller = createCallController({
             mode: 'websocket', send: sendOpenAI, opening: opening.text, openingRole: opening.role, toolName: built.toolName, timing,
+            turns: built.turns,
             hooks: {
+              interrupt: interruptPlayback, // only after the caller has kept talking (see turns.bargeInMs)
               transcript: (speaker, text, meta) => callTranscript(call, player, speaker, text, meta),
               usage: (rec) => callUsage(call, rec, 'server'),
               disclose: (topic, recent) => callDisclose(call, player, topic, recent),
@@ -130,17 +145,10 @@ function bridge(twilioWs) {
             controller.noteAssistantAudioUntil(audioUntil);
           }
           break;
-        // The caller started talking over the character: stop playback where it is and cut the item there.
+        // Original behavior (OpenAI decides turns): any detected speech stops the character at once. With managed turns
+        // the controller calls interruptPlayback() only once the caller has kept talking.
         case 'input_audio_buffer.speech_started':
-          if (marks > 0 && lastAssistantItem && responseStartTs != null) {
-            sendOpenAI({ type: 'conversation.item.truncate', item_id: lastAssistantItem, content_index: 0, audio_end_ms: Math.max(0, latestMediaTs - responseStartTs) });
-            sendTwilio({ event: 'clear', streamSid });
-            controller.clearAssistantAudio();
-            audioUntil = Date.now();
-          }
-          marks = 0;
-          lastAssistantItem = null;
-          responseStartTs = null;
+          if (!built.turns?.managed) interruptPlayback();
           break;
         default:
           break;
