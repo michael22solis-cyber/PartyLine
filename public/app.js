@@ -266,6 +266,9 @@ function renderHome(screen) {
 }
 
 // ---- auto mode lobby (before the organizer starts the game) ----
+// The organizer lands on the lobby (invite + Start) rather than the tutorial; the field guide is one tap away.
+const organizerWaiting = () => state.lobby?.status === 'lobby' && state.lobby.organizer;
+
 function lobbyPanel() {
   const L = state.lobby;
   const box = el('div', 'lobby');
@@ -1163,7 +1166,7 @@ async function firstRun() {
   if (!roleSeen()) await showRole();
   hidePower();
   store.set(`bw-on-${token}`, '1');
-  if (tutorial.status === 'new' && !state.revealed) startTutorial();
+  if (tutorial.status === 'new' && !state.revealed && !organizerWaiting()) startTutorial();
 }
 
 // Pull fresh state when the app comes back to the foreground (phones pause live updates in the background).
@@ -1218,7 +1221,7 @@ async function boot() {
     $('#power').hidden = true;
     if (state.ringing) incoming({ character: state.ringing.character, from: '' });
     if (!roleSeen() && state.me.assigned) await showRole();
-    if (!fromHash && !state.revealed && !state.ringing && ['new', 'active'].includes(tutorial.status)) startTutorial();
+    if (!fromHash && !state.revealed && !state.ringing && !organizerWaiting() && ['new', 'active'].includes(tutorial.status)) startTutorial();
   } else {
     $('#pwrBtn').onclick = (e) => { e.stopPropagation(); $('#pwrBtn').disabled = true; firstRun(); };
   }
