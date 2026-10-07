@@ -1,0 +1,8 @@
+node_modules
+data
+.env
+.git
+intro/.cache
+intro/assets
+audio-src
+*.zip

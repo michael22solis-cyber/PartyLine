@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#050706" />
+<meta name="robots" content="noindex" />
+<title>Blackwood Host</title>
+<link rel="icon" href="/assets/icon.svg" type="image/svg+xml" />
+<style>
+@font-face { font-family: 'Plex'; font-weight: 400; src: url(/assets/fonts/ibm-plex-mono-latin-400-normal.woff2) format('woff2'); }
+@font-face { font-family: 'Plex'; font-weight: 600; src: url(/assets/fonts/ibm-plex-mono-latin-600-normal.woff2) format('woff2'); }
+@font-face { font-family: 'LCD'; src: url(/assets/fonts/vt323-latin-400-normal.woff2) format('woff2'); }
+@font-face { font-family: 'Elite'; src: url(/assets/fonts/special-elite-latin-400-normal.woff2) format('woff2'); }
+:root { --bg: #050706; --panel: #0c110e; --line: #1a231e; --ink: #c9d6c3; --dim: #6b7a66; --glow: #9fe0a0; --ember: #d0412e; --amber: #e6a23c; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: Plex, ui-monospace, monospace; font-size: 15px; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; background: none; border: 1px solid var(--line); padding: 10px 12px; }
+button:disabled { opacity: 0.4; cursor: default; }
+main { max-width: 720px; margin: 0 auto; padding: calc(env(safe-area-inset-top) + 14px) 16px 60px; }
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+h1 { margin: 0; font-family: Elite, serif; font-weight: 400; font-size: 26px; color: var(--glow); }
+.sub { font-family: LCD, monospace; font-size: 18px; letter-spacing: 0.14em; color: var(--dim); }
+h2 { font-family: LCD, monospace; font-weight: 400; font-size: 20px; letter-spacing: 0.2em; color: var(--dim); margin: 28px 0 10px; display: flex; justify-content: space-between; align-items: center; }
+h2 small { font-size: 15px; letter-spacing: 0.1em; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
+.stat { border: 1px solid var(--line); background: var(--panel); padding: 10px; }
+.stat b { display: block; font-family: LCD, monospace; font-size: 34px; font-weight: 400; color: var(--glow); line-height: 1; }
+.stat span { font-size: 11.5px; color: var(--dim); }
+.card { border: 1px solid var(--line); background: var(--panel); padding: 12px; }
+.player { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.player:last-child { border-bottom: 0; }
+.player .name { font-weight: 600; }
+.player .meta { grid-column: 1 / -1; font-size: 12px; color: var(--dim); }
+.player .link { grid-column: 1 / -1; font-size: 11.5px; color: var(--dim); word-break: break-all; }
+.tag { font-family: LCD, monospace; font-size: 15px; letter-spacing: 0.1em; padding: 1px 6px; border: 1px solid var(--line); margin-left: 6px; }
+.tag.acc { color: var(--ember); border-color: var(--ember); }
+.tag.ok { color: var(--glow); border-color: rgba(159,224,160,0.4); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.row input { flex: 1; min-width: 120px; padding: 10px 12px; background: var(--bg); border: 1px solid var(--line); }
+.primary { background: var(--glow); color: var(--bg); border-color: var(--glow); font-weight: 600; }
+.danger { border-color: var(--ember); color: var(--ember); }
+.beats { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.beat { text-align: left; background: var(--panel); }
+.beat b { display: block; font-family: LCD, monospace; font-weight: 400; font-size: 19px; letter-spacing: 0.08em; color: var(--glow); }
+.beat span { font-size: 12px; color: var(--dim); }
+.beat.armed { border-color: var(--amber); }
+.beat.armed b { color: var(--amber); }
+.beat.done b::after { content: '  ✓'; color: var(--dim); }
+.group-label { font-size: 12px; color: var(--amber); letter-spacing: 0.12em; margin: 14px 0 6px; }
+.sched { font-size: 13px; }
+.sched div { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+.sched .done { color: var(--dim); text-decoration: line-through; }
+.toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 18px); transform: translateX(-50%); background: var(--panel); border: 1px solid var(--glow); padding: 10px 14px; max-width: 90vw; font-size: 13px; }
+.toast.bad { border-color: var(--ember); }
+.note { font-size: 12.5px; color: var(--dim); line-height: 1.5; }
+.tally div { display: flex; justify-content: space-between; padding: 4px 0; }
+#login { max-width: 380px; margin: 18vh auto 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <section id="login" hidden>
+    <h1>Blackwood Host</h1>
+    <p class="note">Enter the ADMIN_KEY from your server settings. It stays on this device.</p>
+    <div class="row"><input id="key" type="password" placeholder="Admin key" autocomplete="current-password" /><button class="primary" id="go">Enter</button></div>
+    <p class="note" id="loginErr"></p>
+  </section>
+
+  <section id="app" hidden>
+    <header>
+      <div><h1>The Blackwood Line</h1><div class="sub">HOST CONTROLS</div></div>
+      <button id="logout" title="Forget the key on this device">Lock</button>
+    </header>
+
+    <div class="stats">
+      <div class="stat"><b id="sPlayers">0</b><span>players</span></div>
+      <div class="stat"><b id="sVotes">0</b><span>votes in</span></div>
+      <div class="stat"><b id="sNext">—</b><span id="sNextLabel">next beat</span></div>
+    </div>
+
+    <h2>PLAYERS <small><button id="toggleRoles">Show roles</button></small></h2>
+    <div class="card">
+      <div id="players"></div>
+      <div class="row" style="margin-top:10px">
+        <input id="pName" placeholder="Name" maxlength="30" />
+        <input id="pPhone" placeholder="+15555550123 (optional)" />
+        <button class="primary" id="addP">Add</button>
+      </div>
+      <p class="note">Send each friend their own link. Run <b>setup</b> once everyone is in, before Night 1.</p>
+    </div>
+
+    <h2>STORY BEATS</h2>
+    <p class="note">Tap once to arm, tap again to send. Everyone's phone reacts right away.</p>
+    <div id="beats"></div>
+
+    <h2>SCHEDULE</h2>
+    <div class="card">
+      <div class="row"><input id="d1" type="date" /><button id="n1">Schedule Night 1</button></div>
+      <div class="row" style="margin-top:8px"><input id="d2" type="date" /><button id="n2">Schedule Night 2 + reveal</button></div>
+      <div class="sched" id="sched" style="margin-top:12px"></div>
+      <button id="clearSched" style="margin-top:10px">Clear upcoming</button>
+    </div>
+
+    <h2>VOTES</h2>
+    <div class="card tally" id="tally"></div>
+
+    <h2>DANGER ZONE</h2>
+    <div class="card">
+      <p class="note">Reset wipes every player, message and vote. Everyone needs new links afterward.</p>
+      <div class="row"><input id="resetConfirm" placeholder="Type RESET" /><button class="danger" id="reset">Reset game</button></div>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const BEATS = [
+  ['Before the game', [
+    ['setup', 'Pick the accomplice and deal clues. Run once, after everyone joins.'],
+    ['welcome', 'Noon heads-up: the line opens tonight.'],
+  ]],
+  ['Night 1', [
+    ['accomplice', 'Secret orders to the accomplice.'],
+    ['intro', 'The story arrives on The Line.'],
+    ['calls', 'The Caretaker rings everyone, then each clue arrives.'],
+    ['clues', 'Just the clues, no calls.'],
+    ['cast', 'Everyone gets every suspect’s number (backup).'],
+    ['memo', 'Dana’s voice memo.'],
+    ['ruthWarning', 'Ruth calls whoever dug into the cellar most.'],
+    ['closeNight1', 'Night 1 sign-off.'],
+  ]],
+  ['Night 2', [
+    ['twist', 'The anonymous 911 call.'],
+    ['planted', 'Planted evidence for the accomplice.'],
+    ['caretakerHint', 'The Caretaker calls with hints.'],
+    ['votesOpen', 'Open the Vote app.'],
+    ['lineRinging', '“The line is ringing.”'],
+    ['reveal', 'Midnight call, results and recap.'],
+  ]],
+];
+const $ = (id) => document.getElementById(id);
+let key = ''; try { key = localStorage.getItem('bw-admin') || ''; } catch {}
+let showRoles = false; let status = null; const fired = new Set(); let armed = null; let armTimer = null;
+
+function toast(text, bad) {
+  const t = $('toast'); t.textContent = text; t.className = `toast${bad ? ' bad' : ''}`; t.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, 3200);
+}
+async function api(method, path, body) {
+  const r = await fetch(path, { method, headers: { 'x-admin-key': key, ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 401) { lock(); throw new Error('Wrong admin key'); }
+  if (!r.ok) throw new Error(data.error || `Error ${r.status}`);
+  return data;
+}
+function lock() { key = ''; try { localStorage.removeItem('bw-admin'); } catch {} $('app').hidden = true; $('login').hidden = false; }
+const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+const fmt = (iso) => new Date(iso).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+
+async function refresh() {
+  try { status = await api('GET', '/admin/status'); } catch (e) { if (key) toast(e.message, true); return; }
+  $('login').hidden = true; $('app').hidden = false;
+  const ps = status.players;
+  $('sPlayers').textContent = ps.length;
+  $('sVotes').textContent = `${status.tally.votes}/${ps.length}`;
+  const next = status.schedule.filter((s) => !s.done).sort((a, b) => a.at.localeCompare(b.at))[0];
+  $('sNext').textContent = next ? next.beat : '—';
+  $('sNextLabel').textContent = next ? fmt(next.at) : 'nothing scheduled';
+  const box = $('players'); box.replaceChildren();
+  if (!ps.length) box.append(el('p', 'note', 'No players yet. Add your friends below.'));
+  ps.forEach((p) => {
+    const row = el('div', 'player');
+    const name = el('div', 'name', p.name);
+    if (showRoles && p.role === 'accomplice') name.append(el('span', 'tag acc', 'ACCOMPLICE'));
+    if (p.voted) name.append(el('span', 'tag ok', 'VOTED'));
+    const btns = el('div', 'row');
+    const copy = el('button', null, 'Copy link');
+    copy.onclick = async () => { try { await navigator.clipboard.writeText(p.link); toast(`${p.name}’s link copied`); } catch { prompt('Copy this link', p.link); } };
+    btns.append(copy);
+    if (navigator.share) {
+      const share = el('button', null, 'Send');
+      share.onclick = () => navigator.share({ title: 'The Blackwood Line', text: `${p.name}, the house is calling. This link is yours alone:`, url: p.link }).catch(() => {});
+      btns.append(share);
+    }
+    row.append(name, btns,
+      el('div', 'meta', `${p.phone ? 'phone on file' : 'app only'} · ${p.contacts} contacts · ${p.found} secrets found${p.callsOff ? ' · calls off' : ''}`),
+      el('div', 'link', p.link));
+    box.append(row);
+  });
+  const sched = $('sched'); sched.replaceChildren();
+  const list = [...status.schedule].sort((a, b) => a.at.localeCompare(b.at));
+  if (!list.length) sched.append(el('p', 'note', 'Nothing scheduled. Fire beats by hand, or schedule both nights.'));
+  list.forEach((s) => { const d = el('div', s.done ? 'done' : ''); d.append(el('span', null, s.beat), el('span', null, fmt(s.at))); sched.append(d); });
+  const t = $('tally'); t.replaceChildren();
+  const tl = status.tally;
+  const line = (a, b) => { const d = el('div'); d.append(el('span', null, a), el('span', null, b)); t.append(d); };
+  line('Most-named killer', tl.killer || '—');
+  line('Most-named accomplice', showRoles ? (tl.accomplice || '—') : (tl.accomplice ? 'hidden (show roles)' : '—'));
+  line('Votes in', `${tl.votes} of ${tl.players}`);
+  line('Revealed', status.revealed ? 'yes' : 'not yet');
+}
+
+function drawBeats() {
+  const wrap = $('beats'); wrap.replaceChildren();
+  BEATS.forEach(([label, beats]) => {
+    wrap.append(el('div', 'group-label', label.toUpperCase()));
+    const grid = el('div', 'beats');
+    beats.forEach(([name, desc]) => {
+      const b = el('button', `beat${armed === name ? ' armed' : ''}${fired.has(name) ? ' done' : ''}`);
+      b.append(el('b', null, armed === name ? `SEND ${name}?` : name), el('span', null, desc));
+      b.onclick = async () => {
+        if (armed !== name) { armed = name; clearTimeout(armTimer); armTimer = setTimeout(() => { armed = null; drawBeats(); }, 4000); drawBeats(); return; }
+        armed = null; b.disabled = true;
+        try { await api('POST', `/admin/beat/${name}`); fired.add(name); toast(`${name} sent`); refresh(); }
+        catch (e) { toast(e.message, true); }
+        drawBeats();
+      };
+      grid.append(b);
+    });
+    wrap.append(grid);
+  });
+}
+
+$('go').onclick = async () => {
+  key = $('key').value.trim();
+  try { await api('GET', '/admin/status'); try { localStorage.setItem('bw-admin', key); } catch {} refresh(); }
+  catch (e) { $('loginErr').textContent = e.message; }
+};
+$('key').onkeydown = (e) => { if (e.key === 'Enter') $('go').click(); };
+$('logout').onclick = lock;
+$('toggleRoles').onclick = () => { showRoles = !showRoles; $('toggleRoles').textContent = showRoles ? 'Hide roles' : 'Show roles'; refresh(); };
+$('addP').onclick = async () => {
+  const name = $('pName').value.trim(); const phone = $('pPhone').value.trim();
+  if (!name) return toast('Add a name first', true);
+  try { await api('POST', '/admin/players', { name, phone: phone || undefined }); $('pName').value = ''; $('pPhone').value = ''; toast(`${name} added`); refresh(); }
+  catch (e) { toast(e.message, true); }
+};
+$('n1').onclick = async () => { try { const r = await api('POST', '/admin/night/1', { date: $('d1').value }); toast(`Night 1: ${r.scheduled.length} beats scheduled`); refresh(); } catch (e) { toast(e.message, true); } };
+$('n2').onclick = async () => { try { const r = await api('POST', '/admin/night/2', { date: $('d2').value }); toast(`Night 2: ${r.scheduled.length} beats scheduled`); refresh(); } catch (e) { toast(e.message, true); } };
+$('clearSched').onclick = async () => { try { await api('POST', '/admin/schedule/clear'); toast('Upcoming beats cleared'); refresh(); } catch (e) { toast(e.message, true); } };
+$('reset').onclick = async () => {
+  if ($('resetConfirm').value !== 'RESET') return toast('Type RESET to confirm', true);
+  try { await api('POST', '/admin/reset'); $('resetConfirm').value = ''; fired.clear(); toast('Game reset'); refresh(); drawBeats(); } catch (e) { toast(e.message, true); }
+};
+
+const y = new Date().getFullYear();
+$('d1').value = `${y}-10-30`; $('d2').value = `${y}-10-31`;
+drawBeats();
+if (key) refresh(); else $('login').hidden = false;
+setInterval(() => { if (key && !document.hidden) refresh(); }, 10000);
+</script>
+</body>
+</html>

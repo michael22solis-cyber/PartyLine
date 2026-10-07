@@ -11,7 +11,6 @@ import 'dotenv/config';
 
 const { ADMIN_KEY, PORT = 5050 } = process.env;
 const BASE = process.env.ADMIN_BASE_URL || `http://localhost:${PORT}`;
-const TZ = process.env.GAME_TZ_OFFSET || '-05:00'; // Central Daylight Time in late October
 
 async function api(method, path, body) {
   const res = await fetch(BASE + path, {
@@ -23,15 +22,6 @@ async function api(method, path, body) {
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
 }
-
-// Times follow the case doc. Night 2's reveal fires at midnight (start of Nov 1).
-const NIGHT1 = [
-  ['welcome', '12:00'], ['accomplice', '19:55'], ['intro', '20:00'], ['calls', '20:05'],
-  ['cast', '21:15'], ['memo', '21:40'], ['ruthWarning', '22:30'], ['closeNight1', '23:00'],
-];
-const NIGHT2 = [
-  ['twist', '19:00'], ['planted', '20:00'], ['caretakerHint', '21:00'], ['votesOpen', '22:30'], ['lineRinging', '23:59'],
-];
 
 const [cmd, ...args] = process.argv.slice(2);
 try {
@@ -52,19 +42,8 @@ try {
       break;
     case 'night1':
     case 'night2': {
-      const day = args[0];
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(day || '')) throw new Error('Give a date like 2026-10-30');
-      for (const [beat, time] of cmd === 'night1' ? NIGHT1 : NIGHT2) {
-        const r = await api('POST', '/admin/schedule', { beat, at: `${day}T${time}:00${TZ}` });
-        console.log(`scheduled ${beat} at ${day} ${time}`, r.id);
-      }
-      if (cmd === 'night2') {
-        const next = new Date(`${day}T12:00:00${TZ}`);
-        next.setUTCDate(next.getUTCDate() + 1);
-        const midnight = `${next.toISOString().slice(0, 10)}T00:00:00${TZ}`;
-        await api('POST', '/admin/schedule', { beat: 'reveal', at: midnight });
-        console.log(`scheduled reveal at ${midnight}`);
-      }
+      const r = await api('POST', `/admin/night/${cmd === 'night1' ? 1 : 2}`, { date: args[0] });
+      r.scheduled.forEach((x) => console.log(`scheduled ${x.beat} at ${x.at}`));
       console.log('Remember: run `npm run admin -- beat setup` once everyone has joined, before Night 1.');
       break;
     }

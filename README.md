@@ -48,6 +48,11 @@ Run `beat setup` **before** you send links, so each friend sees their role right
 - **↗ SHARE:** any clue, evidence card, memo or voicemail can be sent to the crew or one player as the real card.
 - **The house is listening:** mention the cellar, Ruth, bingo, the lullaby, mud or the 911 call in the crew chat and, now and then (at most every 12 minutes), Ruth texts someone else about what was just said.
 
+## Host it online + run it from your phone
+
+See **DEPLOY.md** to put the game on Railway (permanent link, no laptop needed).
+Then open **`/host`** on that link: add players and copy their links, fire or schedule beats, watch votes, reset. No PowerShell needed during the game.
+
 ## Run a playtest
 
 ### Helping new players

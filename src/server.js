@@ -1,6 +1,7 @@
 // The Blackwood Line server: the burner-phone web app, in-app calls (WebRTC to OpenAI Realtime), and real phone
 // calls (Twilio Media Streams bridged to OpenAI Realtime, see voice/twilio.js).
 import 'dotenv/config';
+import './env.js';
 import { pathToFileURL } from 'node:url';
 import Fastify from 'fastify';
 import fastifyWs from '@fastify/websocket';

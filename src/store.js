@@ -155,6 +155,8 @@ export function addGroup({ name, players: pids, ai, createdBy }) {
 export const groupById = (id) => db.groups.find((g) => g.id === id) || null;
 export const groupsFor = (pid) => db.groups.filter((g) => g.players.includes(pid));
 
+export function clearPendingSchedule() { db.schedule = db.schedule.filter((x) => x.done); save(); }
+
 export function setRevealed() { db.revealed = true; save(); }
 
 export function resetGame() {
