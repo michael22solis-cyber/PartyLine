@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 
 import { dataFile } from './env.js';
 const FILE = dataFile('game.json');
-const EMPTY = { players: [], messages: [], votes: {}, pushSubs: {}, schedule: [], revealed: false, groups: [] };
+const EMPTY = { players: [], messages: [], votes: {}, pushSubs: {}, schedule: [], revealed: false, groups: [], game: null };
 
 let db = load();
 db.players.forEach((p) => { p.pid ||= crypto.randomBytes(4).toString('hex'); });
@@ -27,7 +27,7 @@ function save() {
 export const getDb = () => db;
 
 // ---- players ----
-export function addPlayer({ name, phone }) {
+export function addPlayer({ name, phone, organizer = false }) {
   const player = {
     token: crypto.randomBytes(9).toString('base64url'),
     pid: crypto.randomBytes(4).toString('hex'), // public id other players see (the token stays secret)
@@ -38,6 +38,7 @@ export function addPlayer({ name, phone }) {
     unlocked: [],   // suspects whose numbers this player has (see progress.js)
     found: [],      // secrets this player has uncovered
     callsOff: false,
+    organizer,
     joinedAt: new Date().toISOString(),
   };
   db.players.push(player);
@@ -131,6 +132,10 @@ export const groupById = (id) => db.groups.find((g) => g.id === id) || null;
 export const groupsFor = (pid) => db.groups.filter((g) => g.players.includes(pid));
 
 export function clearPendingSchedule() { db.schedule = db.schedule.filter((x) => x.done); save(); }
+
+// ---- auto mode: one game per server with a self-serve invite link ----
+export function setGame(game) { db.game = game; save(); return game; }
+export const getGame = () => db.game;
 
 export function setRevealed() { db.revealed = true; save(); }
 

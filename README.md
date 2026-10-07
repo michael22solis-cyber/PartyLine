@@ -47,6 +47,11 @@ Run `beat setup` **before** you send links, so each friend sees their role right
 - **↗ SHARE:** any clue, evidence card, memo or voicemail can be sent to the crew or one player as the real card.
 - **The house is listening:** mention the cellar, Ruth, bingo, the lullaby, mud or the 911 call in the crew chat and, now and then (at most every 12 minutes), Ruth texts someone else about what was just said.
 
+## Auto mode (no host needed)
+
+On `/host`, pick a length and tap **New game**. Send the one invite link to your group: each friend types their name and lands on their own phone. The first to join is the organizer and gets a **Start** button; the story then runs on its own.
+Lengths live in `src/modes.js` (minutes after Start for each beat): *Play now* ~75 min, *One evening* ~2 hrs, *Two nights* (Halloween event). Tune the minutes after real playtests.
+
 ## Host it online + run it from your phone
 
 See **DEPLOY.md** to put the game on Railway (permanent link, no laptop needed).

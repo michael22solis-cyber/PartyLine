@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#050706" />
+<title>The Blackwood Line</title>
+<link rel="icon" href="/assets/icon.svg" type="image/svg+xml" />
+<style>
+@font-face { font-family: 'Plex'; src: url(/assets/fonts/ibm-plex-mono-latin-400-normal.woff2) format('woff2'); }
+@font-face { font-family: 'LCD'; src: url(/assets/fonts/vt323-latin-400-normal.woff2) format('woff2'); }
+@font-face { font-family: 'Elite'; src: url(/assets/fonts/special-elite-latin-400-normal.woff2) format('woff2'); }
+:root { --bg: #050706; --line: #1a231e; --ink: #c9d6c3; --dim: #6b7a66; --glow: #9fe0a0; --ember: #d0412e; }
+html, body { margin: 0; min-height: 100%; background: radial-gradient(ellipse at 50% 30%, #0d1510, #000 70%); color: var(--ink); font-family: Plex, monospace; }
+main { max-width: 380px; margin: 0 auto; padding: 18vh 22px 40px; text-align: center; }
+.kicker { font-family: LCD, monospace; font-size: 20px; letter-spacing: 0.3em; color: var(--ember); }
+h1 { font-family: Elite, serif; font-weight: 400; font-size: 40px; line-height: 1.05; color: var(--glow); text-shadow: 0 0 22px rgba(159,224,160,0.45); margin: 14px 0 10px; }
+p { color: var(--dim); font-size: 14px; line-height: 1.6; }
+input, button { font: inherit; width: 100%; box-sizing: border-box; padding: 14px; margin-top: 10px; }
+input { background: #0c110e; color: var(--ink); border: 1px solid var(--line); font-size: 17px; text-align: center; }
+button { background: var(--glow); color: var(--bg); border: 0; font-family: LCD, monospace; font-size: 22px; letter-spacing: 0.14em; cursor: pointer; }
+button:disabled { opacity: 0.5; }
+.err { color: var(--ember); min-height: 20px; }
+.fine { font-size: 11.5px; margin-top: 26px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="kicker">YOU’VE BEEN INVITED</div>
+  <h1>The Blackwood Line</h1>
+  <p>A murder mystery played on your phone. The suspects text you. The house calls you. One of your friends is lying.</p>
+  <input id="name" maxlength="30" placeholder="Your first name" autocomplete="given-name" />
+  <button id="join">ANSWER THE LINE</button>
+  <p class="err" id="err"></p>
+  <p class="fine">Every character is an AI. Best with sound on and headphones.</p>
+</main>
+<script>
+const code = location.pathname.split('/').pop();
+const btn = document.getElementById('join'); const err = document.getElementById('err'); const name = document.getElementById('name');
+async function go() {
+  if (!name.value.trim()) { err.textContent = 'Enter your name.'; return; }
+  btn.disabled = true; err.textContent = '';
+  try {
+    const r = await fetch(`/api/join/${code}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.value }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Something went wrong');
+    location.replace(d.link);
+  } catch (e) { err.textContent = e.message; btn.disabled = false; }
+}
+btn.onclick = go; name.onkeydown = (e) => { if (e.key === 'Enter') go(); };
+</script>
+</body>
+</html>
