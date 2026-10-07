@@ -37,6 +37,7 @@ Run `beat setup` **before** you send links, so each friend sees their role right
 ## Immersion features
 
 - **Talk to them in the app.** Characters ring your Blackwood phone (ANSWER / DECLINE) and you talk out loud; unlocked suspects have a ☎ CALL button. Uses OpenAI Realtime straight from the phone's browser (needs mic permission and HTTPS, which ngrok gives you). Set `CALL_MODE=phone` to use real Twilio calls instead for players with a number.
+- **Captions on calls** (⋮ menu, off by default): the character's words appear in step with their voice, handy at a loud party. The recorded midnight reveal is captioned too.
 - **Contacts unlock gradually.** You start with The Line. Your clue gives you Ruth plus anyone it names; anyone a suspect mentions (or you mention) gets added. The `cast` beat (21:15 on Night 1) unlocks everyone as a backup. `UNLOCK_ALL=1` turns this off.
 - **Secrets become evidence.** When a suspect lets a locked secret slip, a NEW EVIDENCE card lands in that player's case file.
 - **Real audio evidence.** Run `npm run evidence` once (uses your OpenAI key) to make `public/audio/memo.mp3`, `call911.mp3`, `ruth-voicemail.mp3` and `caretaker-reveal.mp3`. The memo, 911 call and Ruth's voicemail then play in the app. Ruth's late-night warning is now a call; if you don't pick up, she leaves the voicemail. With `caretaker-reveal.mp3` present, the scripted midnight reveal call plays the recording instead of a live model (no cost per player). Lines are cached, so re-running only pays for lines you changed.
@@ -103,7 +104,7 @@ Reset everything: `npm run admin -- reset`.
 - **Memory:** characters remember what each player said, claimed, promised and accused, compactly and within a token budget (`src/memory.js`, `src/context.js`).
 - **Usage ledger:** every model response is logged to `data/usage.jsonl` with tokens, estimated cost, latency and status (never dialogue). `npm run usage` (or `npm run admin -- usage` against a running server) shows typical and top-5% session cost, cost per completed mystery and cost by capability; `npm run usage -- --reconcile export.json` checks it against a provider export.
 - **Tests:** `npm test` (offline, no key needed). `npm run bench` replays a calibrated playtest through the prompt builders. `npm run eval:voice -- --live --budget 0.50` compares voice models on the same scenarios with a hard spend limit.
-- Full write-up, measured results and rollback switches: `docs/COST_REPORT.md`.
+- Full write-up, measured results and rollback switches: `docs/COST_REPORT.md`. Before the next playtest: `docs/PLAYTEST_CHECKLIST.md`.
 
 ## Guardrails built in
 
@@ -113,9 +114,10 @@ Reset everything: `npm run admin -- reset`.
 - Calls are capped at 4 minutes (characters wrap up and hang up, idle calls end, one live call per player, a server-wide cap); texts are capped per player (`MAX_TEXTS_PER_PLAYER`).
 - Background noise doesn't cut characters off: a player has to keep talking for half a second to interrupt (`REALTIME_BARGE_IN_MS`), and coughs or clatters are ignored instead of answered.
 - Only call phones whose owners agreed to it. Start with your own.
+- Only Twilio can start a phone call's voice session: `/voice` checks Twilio's request signature (when `TWILIO_AUTH_TOKEN` is set) and `/media-stream` refuses streams without a signed, single-use ticket from our own TwiML.
 
 ## Next up
 
 - Signup + payment page so hosts can buy a case themselves
-- Supabase storage and Twilio request-signature checks before going public
+- Supabase storage before going public (Twilio webhooks are now signature-checked and media streams need a signed ticket)
 - Validate `REALTIME_TRANSPORT=sideband` live, then make it the default (server-enforced call limits)

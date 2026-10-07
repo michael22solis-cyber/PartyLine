@@ -31,7 +31,7 @@ export function tutorialStep(index, state) {
         'Your private role card explains your goal. Keep it to yourself. You can read it again in MENU → My role.',
         'The host releases the story over two nights. You can explore the phone at your own pace between updates.',
       ],
-      tip: 'BACK returns to the previous app. The round HOME button opens your apps. MENU has sound, calls, and alerts. You can return to this guide at any time.',
+      tip: 'BACK returns to the previous app. The round HOME button opens your apps. MENU has sound, calls, call captions, and alerts. You can return to this guide at any time.',
       extra: 'To catch new messages, use MENU → Turn on alerts. On iPhone, first add Blackwood to your Home Screen. If alerts are unavailable, keep the page open during play.',
     },
     {

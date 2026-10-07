@@ -570,6 +570,14 @@ function renderConvo(screen, thread) {
     wrap.append(messageNode(m));
   });
   if (!wrap.children.length) wrap.append(el('div', 'empty', 'No messages yet.'));
+  // Read receipt under your last text to a character (they don't answer everything, but they do read it).
+  const mine = state.messages.filter((m) => m.thread === thread && m.from !== 'system');
+  const lastMsg = mine[mine.length - 1];
+  if (lastMsg?.from === 'player' && !READONLY[thread] && !isPeerThread(thread)) {
+    wrap.append(el('div', 'receipt', lastMsg.readAt
+      ? `Read ${new Date(lastMsg.readAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+      : 'Delivered'));
+  }
   if (state.typing[thread]) {
     const t = el('div', 'typing');
     if (typeof state.typing[thread] === 'string') t.append(`${state.typing[thread].split(' ')[0]} is typing `);
@@ -769,6 +777,7 @@ let ringTimeout = null;
 let ringFor = null; // character key when the call can be answered in the app
 function showRing(sub, note, { id = 'UNKNOWN', answer = null } = {}) {
   if (call) return; // already on a call
+  closeCallScreen(); // a lingering "call ended" screen would sit on top of the ring
   ringFor = answer;
   $('#ringId').textContent = id; $('#ringSub').textContent = sub; $('#ringNote').textContent = note;
   $('#ringAnswer').hidden = !answer;
@@ -790,13 +799,99 @@ function incoming({ character, from }) {
 // The call logic (usage, heard-only transcripts, guarded topics, wrap-up, hang-up) is the same module the server uses.
 let call = null;
 const callName = (character) => (character.startsWith('caretaker') ? 'UNKNOWN' : state.threads.find((t) => t.key === character)?.name || 'UNKNOWN');
+// ============ call captions (optional, ⋮ menu) ============
+// The character's words appear in step with their voice: a line is revealed while its audio plays, never ahead of it.
+const captionsOn = () => store.get('bw-captions', '0') === '1';
+const captions = (() => {
+  const itemOf = new Map(); // response id -> item id
+  const textOf = new Map(); // item id -> transcript
+  const startedAt = new Map(); // response id -> when its audio started playing
+  let words = [];
+  let shown = 0;
+  let timer = null;
+  const box = () => $('#callCaptions');
+  const show = () => { box().textContent = words.slice(Math.max(0, shown - 16), shown).join(' '); };
+  function stop() { clearTimeout(timer); timer = null; }
+  function play(text, durMs, alreadyMs = 0) {
+    stop();
+    words = String(text || '').split(/\s+/).filter(Boolean);
+    if (!words.length) return;
+    const per = Math.max(180, Math.min(700, (durMs || words.length * 370) / words.length));
+    shown = Math.min(words.length, Math.floor(alreadyMs / per));
+    const step = () => { shown += 1; show(); if (shown < words.length) timer = setTimeout(step, per); };
+    step();
+  }
+  function maybeStart(rid) {
+    const item = itemOf.get(rid);
+    if (!startedAt.has(rid) || !item || !textOf.has(item)) return;
+    play(textOf.get(item), null, Date.now() - startedAt.get(rid));
+  }
+  return {
+    reset() { stop(); itemOf.clear(); textOf.clear(); startedAt.clear(); words = []; box().textContent = ''; box().hidden = !captionsOn(); },
+    event(evt) {
+      if (!captionsOn()) return;
+      switch (evt.type) {
+        case 'response.output_item.added':
+          if (evt.item?.type === 'message') itemOf.set(evt.response_id, evt.item.id);
+          break;
+        case 'response.output_audio_transcript.done':
+        case 'response.audio_transcript.done':
+          textOf.set(evt.item_id, evt.transcript || '');
+          if (evt.response_id) { itemOf.set(evt.response_id, evt.item_id); maybeStart(evt.response_id); }
+          break;
+        case 'output_audio_buffer.started':
+          startedAt.set(evt.response_id, Date.now());
+          maybeStart(evt.response_id);
+          break;
+        case 'output_audio_buffer.cleared': // interrupted: the rest was never said
+          stop();
+          break;
+        default:
+          break;
+      }
+    },
+    line(text, durMs) { if (captionsOn()) { box().hidden = false; play(text, durMs); } }, // recorded calls
+    stop,
+  };
+})();
+
+let callAfterTimer = null;
 function callScreen(character) {
+  clearTimeout(callAfterTimer);
+  captions.reset();
   $('#callName').textContent = callName(character);
   $('#callState').textContent = 'CALLING…';
   $('#callTime').textContent = '';
   $('#callMute').classList.remove('on');
+  $('#callBtns').hidden = false;
+  $('#callAfter').hidden = true;
+  $('#callScreen').classList.remove('ended');
   $('#callScreen').hidden = false;
 }
+// Say why a call ended instead of the screen just vanishing (characters hang up on their own now).
+const CALL_ENDINGS = {
+  character_hung_up: 'THEY HUNG UP', idle: 'THE LINE WENT QUIET', max_duration: 'THE LINE WENT DEAD',
+  recording_ended: 'THE LINE WENT DEAD', connection_lost: 'CALL DROPPED', player_hung_up: 'CALL ENDED',
+};
+function closeCallScreen() {
+  clearTimeout(callAfterTimer);
+  $('#callScreen').hidden = true;
+  $('#callScreen').classList.remove('ended');
+}
+function showCallEnded(c, reason) {
+  const ghost = c.character.startsWith('caretaker');
+  const label = ghost && reason === 'character_hung_up' ? 'THE LINE WENT DEAD' : CALL_ENDINGS[reason];
+  if (!label || !c.started) { closeCallScreen(); return; }
+  const canCallBack = ['connection_lost', 'idle'].includes(reason) && state.threads.some((t) => t.key === c.character);
+  $('#callState').textContent = label;
+  $('#callScreen').classList.add('ended');
+  $('#callBtns').hidden = true;
+  $('#callAfter').hidden = false;
+  $('#callBack').hidden = !canCallBack;
+  $('#callBack').onclick = () => { closeCallScreen(); startCall(c.character); };
+  callAfterTimer = setTimeout(closeCallScreen, reason === 'player_hung_up' ? 900 : canCallBack ? 8000 : 2600);
+}
+$('#callClose').onclick = closeCallScreen;
 function startClock(maxSeconds, onTick) {
   call.started = Date.now();
   $('#callState').textContent = 'ON THE LINE';
@@ -815,6 +910,7 @@ function playRecordingCall(character, info) {
   audio.srcObject = null;
   audio.src = info.audio;
   audio.onended = () => setTimeout(() => endCall('recording_ended'), 800);
+  audio.onloadedmetadata = () => { if (info.captions) captions.line(info.captions, audio.duration * 1000); };
   audio.play().catch(() => {});
   startClock(info.maxSeconds);
 }
@@ -861,8 +957,12 @@ async function startCall(character) {
         },
       });
       dc.onopen = () => call?.ctl?.start();
-      dc.onmessage = (e) => { let evt; try { evt = JSON.parse(e.data); } catch { return; } call?.ctl?.handle(evt); };
     }
+    dc.onmessage = (e) => {
+      let evt; try { evt = JSON.parse(e.data); } catch { return; }
+      captions.event(evt);
+      call?.ctl?.handle(evt);
+    };
     pc.onconnectionstatechange = () => { if (['failed', 'closed'].includes(pc.connectionState)) endCall('connection_lost'); };
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
@@ -884,12 +984,13 @@ function endCall(reason = 'player_hung_up') {
   if (!call) return;
   const c = call; call = null;
   clearInterval(c.timer); cancelAnimationFrame(meterRaf);
+  captions.stop();
   c.ctl?.end(reason); // saves what was heard so far and reports any outstanding usage
   c.mic?.getTracks().forEach((t) => t.stop());
   try { c.pc?.close(); } catch { /* already closed */ }
   const audio = $('#callAudio');
   audio.pause(); audio.onended = null; audio.srcObject = null; audio.removeAttribute('src');
-  $('#callScreen').hidden = true;
+  showCallEnded(c, reason);
   if (c.started || c.callId) {
     api('/call/end', { method: 'POST', body: JSON.stringify({ callId: c.callId, character: c.character, mode: c.mode, reason, seconds: c.started ? (Date.now() - c.started) / 1000 : 0 }) }).catch(() => {});
   }
@@ -987,6 +1088,11 @@ function connect() {
   });
   es.addEventListener('incoming', (e) => incoming(JSON.parse(e.data)));
   es.addEventListener('ringEnd', (e) => { if (ringFor === JSON.parse(e.data).character) hideRing(); });
+  es.addEventListener('read', (e) => {
+    const { thread, at } = JSON.parse(e.data);
+    state.messages.forEach((m) => { if (m.thread === thread && m.from === 'player' && !m.readAt) m.readAt = at; });
+    render();
+  });
   es.addEventListener('typing', (e) => {
     const { thread, on, who } = JSON.parse(e.data);
     state.typing[thread] = on ? (who || true) : false; render();
@@ -1006,10 +1112,12 @@ function setupMenu() {
     $('#callsToggle').checked = !state.me.callsOff;
     $('#callsToggle').disabled = !state.me.hasPhone;
     $('#soundToggle').checked = store.get('bw-sound', '1') !== '0';
+    $('#captionsToggle').checked = captionsOn();
     menu.showModal();
   };
   $('#closeMenu').onclick = () => menu.close();
   $('#soundToggle').onchange = (e) => store.set('bw-sound', e.target.checked ? '1' : '0');
+  $('#captionsToggle').onchange = (e) => store.set('bw-captions', e.target.checked ? '1' : '0');
   $('#callsToggle').onchange = async (e) => {
     try {
       const r = await api('/settings', { method: 'POST', body: JSON.stringify({ callsOff: !e.target.checked }) });

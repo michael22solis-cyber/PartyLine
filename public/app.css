@@ -209,6 +209,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .bubble { max-width: 82%; padding: 9px 12px; font-size: 14.5px; line-height: 1.45; white-space: pre-wrap; word-wrap: break-word; }
 .bubble.them { align-self: flex-start; background: var(--panel); border: 1px solid var(--line); border-left: 2px solid var(--glow); }
 .bubble.me { align-self: flex-end; background: #16201b; border: 1px solid #2c3b33; color: #e1ecdc; }
+.receipt { align-self: flex-end; margin-top: -4px; font-family: var(--lcd); font-size: 14px; letter-spacing: 0.06em; color: var(--dim); }
 .bubble.system { align-self: center; max-width: 92%; font-size: 12px; color: var(--dim); background: none; text-align: center; }
 .fresh { animation: arrive 0.9s steps(14) 1; }
 @keyframes arrive { 0% { opacity: 0; filter: blur(3px); transform: translateX(-4px); } 30% { opacity: 1; } 45% { opacity: 0.3; } 60% { opacity: 1; filter: none; transform: none; } 100% { opacity: 1; } }
@@ -318,6 +319,11 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .call-viz i:nth-child(2) { transform: scale(calc(0.62 + var(--lvl) * 0.42)); opacity: calc(0.15 + var(--lvl) * 0.5); }
 .call-viz i:nth-child(3) { transform: scale(calc(0.8 + var(--lvl) * 0.25)); opacity: calc(0.08 + var(--lvl) * 0.35); }
 .call-fine { max-width: 260px; margin-top: 22px; }
+.call-captions { font-family: var(--type); font-size: 17px; line-height: 1.35; color: var(--ink); max-width: 320px; min-height: 2.7em; margin: 0 0 14px; text-shadow: 0 0 12px rgba(159,224,160,0.25); overflow-wrap: anywhere; }
+.callscr.ended .call-state { color: var(--ember); animation: callFade 2.6s ease-out forwards; }
+.callscr.ended .call-viz { opacity: 0.25; filter: grayscale(1); }
+@keyframes callFade { 0% { opacity: 0; letter-spacing: 0.6em; } 15% { opacity: 1; letter-spacing: 0.3em; } 100% { opacity: 0.85; } }
+@media (prefers-reduced-motion: reduce) { .callscr.ended .call-state { animation: none; } }
 
 /* convo header call button */
 .convo-head { display: flex; align-items: center; gap: 10px; }

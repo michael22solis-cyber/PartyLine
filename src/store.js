@@ -107,6 +107,17 @@ export function addMessage({ token, thread, from, text, kind = 'text', audio = n
 }
 
 export const messagesFor = (token) => db.messages.filter((m) => m.token === token);
+// A character has read the player's texts in a thread: stamp them (shows "Read" on the phone). Returns the time, or
+// null if there was nothing new to mark.
+export function markRead(token, thread) {
+  const at = new Date().toISOString();
+  let changed = false;
+  for (const m of db.messages) {
+    if (m.token === token && m.thread === thread && m.from === 'player' && !m.readAt) { m.readAt = at; changed = true; }
+  }
+  if (changed) save();
+  return changed ? at : null;
+}
 const playerCounts = new Map();
 for (const m of db.messages) if (m.from === 'player') playerCounts.set(m.token, (playerCounts.get(m.token) || 0) + 1);
 export const countPlayerMessages = (token) => playerCounts.get(token) || 0;
