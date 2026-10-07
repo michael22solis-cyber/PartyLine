@@ -81,6 +81,21 @@ h2 small { font-size: 15px; letter-spacing: 0.1em; }
       <div class="stat"><b id="sNext">—</b><span id="sNextLabel">next beat</span></div>
     </div>
 
+    <h2>AUTO MODE</h2>
+    <div class="card">
+      <p class="note" id="gameState">No game yet. Create one and send the invite link to your group: friends join themselves, the first to join is the organizer, and the story runs on its own once they tap Start.</p>
+      <div class="row">
+        <select id="len" style="flex:1;padding:10px;background:var(--bg);color:var(--ink);border:1px solid var(--line)">
+          <option value="quick">Play now · about 75 minutes</option>
+          <option value="evening">One evening · about 2 hours</option>
+          <option value="twonights">Two nights · Halloween event</option>
+        </select>
+        <button class="primary" id="newGame">New game</button>
+      </div>
+      <div class="row" id="inviteRow" style="margin-top:8px" hidden><input id="invite" readonly /><button id="copyInvite">Copy</button></div>
+      <div class="row" id="startRow" style="margin-top:8px" hidden><input id="startDate" type="date" hidden /><button id="startGame">Start now</button></div>
+    </div>
+
     <h2>PLAYERS <small><button id="toggleRoles">Show roles</button></small></h2>
     <div class="card">
       <div id="players"></div>
@@ -169,6 +184,13 @@ async function refresh() {
   const next = status.schedule.filter((s) => !s.done).sort((a, b) => a.at.localeCompare(b.at))[0];
   $('sNext').textContent = next ? next.beat : '—';
   $('sNextLabel').textContent = next ? fmt(next.at) : 'nothing scheduled';
+  const g = status.game;
+  $('inviteRow').hidden = !g?.invite; $('startRow').hidden = !(g && g.status === 'lobby');
+  if (g?.invite) $('invite').value = g.invite;
+  $('startDate').hidden = !(g && g.length === 'twonights');
+  $('gameState').textContent = !g ? $('gameState').textContent
+    : g.status === 'lobby' ? `Lobby open (${g.lengthLabel}). ${g.joined.length} joined. The organizer can start from their phone, or you can start it here.`
+    : `Running since ${fmt(g.startedAt)} (${g.lengthLabel}). Beats are scheduled below.`;
   const box = $('players'); box.replaceChildren();
   if (!ps.length) box.append(el('p', 'note', 'No players yet. Add your friends below.'));
   ps.forEach((p) => {
@@ -246,7 +268,16 @@ $('reset').onclick = async () => {
   try { await api('POST', '/admin/reset'); $('resetConfirm').value = ''; fired.clear(); toast('Game reset'); refresh(); drawBeats(); } catch (e) { toast(e.message, true); }
 };
 
+$('newGame').onclick = async () => {
+  if (status?.players?.length && !confirm('Starting a new game resets everything (players, messages, votes). Continue?')) return;
+  try { await api('POST', '/admin/reset'); const g = await api('POST', '/admin/game', { length: $('len').value }); fired.clear(); toast('Game created. Send the invite link.'); $('invite').value = g.invite; refresh(); drawBeats(); }
+  catch (e) { toast(e.message, true); }
+};
+$('copyInvite').onclick = async () => { try { await navigator.clipboard.writeText($('invite').value); toast('Invite link copied'); } catch { $('invite').select(); } };
+$('startGame').onclick = async () => { try { await api('POST', '/admin/start', { date: $('startDate').value }); toast('The line is open'); refresh(); } catch (e) { toast(e.message, true); } };
+
 const y = new Date().getFullYear();
+$('startDate').value = `${y}-10-30`;
 $('d1').value = `${y}-10-30`; $('d2').value = `${y}-10-31`;
 drawBeats();
 if (key) refresh(); else $('login').hidden = false;

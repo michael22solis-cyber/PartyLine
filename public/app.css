@@ -405,3 +405,11 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .pickrow span { display: flex; flex-direction: column; }
 .pickrow small { color: var(--dim); font-size: 11.5px; }
 .fine.bad { color: var(--ember); }
+
+/* auto mode lobby */
+.lobby { position: relative; z-index: 2; margin: 12px 0 16px; padding: 14px; border: 1px dashed rgba(230,162,60,0.5); background: rgba(12,17,14,0.88); text-align: center; }
+.lobby-title { font-family: var(--lcd); font-size: 19px; letter-spacing: 0.16em; color: var(--amber); }
+.lobby-sub { font-size: 12px; color: var(--dim); margin-top: 2px; }
+.lobby-names { margin: 10px 0 4px; font-size: 14px; }
+.lobby .wide { margin-top: 10px; }
+.lobby .note { margin: 8px 0 0; }

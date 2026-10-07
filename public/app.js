@@ -252,7 +252,8 @@ function renderHome(screen) {
     appButton('vote', 'VOTE', 'vote'),
     appButton('recap', 'THE END', 'recap', 0, !state.revealed),
   );
-  home.append(clock, line, grid);
+  if (state.lobby?.status === 'lobby') home.append(clock, lobbyPanel(), grid);
+  else home.append(clock, line, grid);
   const guide = el('button', 'home-guide');
   guide.append(el('span', null, 'FIELD GUIDE'), el('small', null,
     tutorial.status === 'complete' ? 'How to play · revisit any time'
@@ -262,6 +263,49 @@ function renderHome(screen) {
   home.append(guide);
   home.insertAdjacentHTML('beforeend', MANOR);
   screen.append(home);
+}
+
+// ---- auto mode lobby (before the organizer starts the game) ----
+// The organizer lands on the lobby (invite + Start) rather than the tutorial; the field guide is one tap away.
+const organizerWaiting = () => state.lobby?.status === 'lobby' && state.lobby.organizer;
+
+function lobbyPanel() {
+  const L = state.lobby;
+  const box = el('div', 'lobby');
+  box.append(el('div', 'lobby-title', 'WAITING FOR THE LINE TO OPEN'), el('div', 'lobby-sub', L.lengthLabel),
+    el('div', 'lobby-names', `${L.joined.join(' · ')}  (${L.joined.length})`));
+  if (L.invite) {
+    const url = `${location.origin}${L.invite}`;
+    const inv = el('button', 'wide ghost', 'INVITE FRIENDS');
+    inv.onclick = async () => {
+      sfx.click();
+      if (navigator.share) { navigator.share({ title: 'The Blackwood Line', text: 'The house is calling. Join my game:', url }).catch(() => {}); return; }
+      try { await navigator.clipboard.writeText(url); inv.textContent = 'LINK COPIED'; } catch { prompt('Send this link to your friends', url); }
+    };
+    box.append(inv);
+  }
+  if (L.organizer) {
+    const err = el('p', 'note bad');
+    let date = null;
+    if (L.length === 'twonights') {
+      date = el('input', 'textin'); date.type = 'date';
+      const y = new Date().getFullYear(); date.value = `${y}-10-30`;
+      box.append(el('p', 'note', 'Night 1 date (8 pm start):'), date);
+    }
+    const ready = L.joined.length >= L.minPlayers;
+    const start = el('button', 'wide', ready ? 'START THE GAME' : `NEED ${L.minPlayers - L.joined.length} MORE`);
+    start.disabled = !ready;
+    start.onclick = async () => {
+      start.disabled = true; sfx.creak();
+      try { await api('/start', { method: 'POST', body: JSON.stringify({ date: date?.value }) }); }
+      catch (ex) { err.textContent = ex.message; start.disabled = false; }
+    };
+    box.append(start, err);
+  } else {
+    box.append(el('p', 'note', 'The organizer will start the game. Keep this phone close.'));
+  }
+  box.append(el('p', 'fine', 'This link is your private phone. Add it to your home screen.'));
+  return box;
 }
 
 // ============ new-player field guide ============
@@ -930,6 +974,12 @@ function connect() {
     if (!state.threads.some((x) => x.key === t.key)) state.threads.push(t);
     render();
   });
+  es.addEventListener('lobby', (e) => {
+    const was = state.lobby?.status;
+    state.lobby = JSON.parse(e.data);
+    if (was === 'lobby' && state.lobby.status === 'running') { sfx.ring(); setTimeout(() => sfx.stopRing(), 2400); refresh(); }
+    render();
+  });
   es.addEventListener('group', (e) => {
     const g = JSON.parse(e.data);
     state.groups = [...(state.groups || []).filter((x) => x.id !== g.id), g];
@@ -1064,7 +1114,7 @@ function showRole() {
       d.append(el('span', 'tag', 'PERSONNEL FILE'), el('span', 'stamp-ink', 'DETECTIVE'), el('h3', null, 'Your role'), el('div', 'agent', `AGENT: ${name}`),
         el('p', null, 'Text and call the four suspects. They remember everything your friends ask them.'),
         el('p', null, 'You each hold different clues. Share them. But one of your friends is working for the house.'),
-        el('p', null, 'Name the killer and the accomplice in the Vote app by 11:30 pm on Halloween.'));
+        el('p', null, 'Name the killer and the accomplice in the Vote app before the line goes dead.'));
       inner.append(d);
     }
     const go = el('button', 'wide', 'OPEN THE PHONE');
@@ -1116,7 +1166,7 @@ async function firstRun() {
   if (!roleSeen()) await showRole();
   hidePower();
   store.set(`bw-on-${token}`, '1');
-  if (tutorial.status === 'new' && !state.revealed) startTutorial();
+  if (tutorial.status === 'new' && !state.revealed && !organizerWaiting()) startTutorial();
 }
 
 // Pull fresh state when the app comes back to the foreground (phones pause live updates in the background).
@@ -1127,7 +1177,7 @@ async function refresh() {
     fresh.messages.filter((m) => !known.has(m.id)).forEach((m) => state.messages.push(m));
     Object.assign(state.me, fresh.me);
     state.threads = fresh.threads;
-    state.revealed = fresh.revealed; state.vote = fresh.vote; state.players = fresh.players; state.peers = fresh.peers; state.groups = fresh.groups;
+    state.revealed = fresh.revealed; state.vote = fresh.vote; state.players = fresh.players; state.peers = fresh.peers; state.groups = fresh.groups; state.lobby = fresh.lobby;
     if (state.revealed && !state.recap) loadRecap();
     render();
     if ($('#power').hidden && !roleSeen() && state.me.assigned) showRole();
@@ -1171,7 +1221,7 @@ async function boot() {
     $('#power').hidden = true;
     if (state.ringing) incoming({ character: state.ringing.character, from: '' });
     if (!roleSeen() && state.me.assigned) await showRole();
-    if (!fromHash && !state.revealed && !state.ringing && ['new', 'active'].includes(tutorial.status)) startTutorial();
+    if (!fromHash && !state.revealed && !state.ringing && !organizerWaiting() && ['new', 'active'].includes(tutorial.status)) startTutorial();
   } else {
     $('#pwrBtn').onclick = (e) => { e.stopPropagation(); $('#pwrBtn').disabled = true; firstRun(); };
   }

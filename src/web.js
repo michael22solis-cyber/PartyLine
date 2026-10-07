@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import fastifyStatic from '@fastify/static';
 import { scheduleNight } from './schedule.js';
+import { createGame, join, startGame, lobbyView } from './lobby.js';
+import { getGame } from './store.js';
 import {
   addPlayer, players, playerByToken, updatePlayer, messagesFor, castVote, votes,
   savePushSub, addScheduled, scheduled, markScheduledDone, getDb, resetGame, clearPendingSchedule,
@@ -94,6 +96,7 @@ export function registerWeb(app) {
       suspects: SUSPECTS,
       players: players().map((x) => x.name),
       groups: groupsForPlayer(p),
+      lobby: lobbyView(p),
       peers: players().filter((x) => x.token !== p.token).map((x) => ({ pid: x.pid, name: x.name })),
       vote: votes()[p.token] || null,
       revealed: getDb().revealed,
@@ -326,6 +329,7 @@ export function registerWeb(app) {
         voted: Boolean(votes()[p.token]), found: (p.found || []).length, contacts: (p.unlocked || []).length,
       })),
       revealed: getDb().revealed,
+      game: getGame() ? { ...lobbyView(null), invite: getGame().status === 'lobby' ? `https://${PUBLIC_HOST || 'localhost:5050'}/join/${getGame().code}` : null } : null,
       tally: tallyVotes(),
       schedule: scheduled(),
       beats: Object.keys(BEATS),
@@ -362,6 +366,35 @@ export function registerWeb(app) {
     if (!requireAdmin(req, reply)) return;
     clearPendingSchedule();
     reply.send({ ok: true });
+  });
+
+  // ---------- auto mode: invite link, lobby, start ----------
+  app.post('/admin/game', (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    try {
+      const g = createGame({ length: req.body?.length });
+      reply.send({ ...g, invite: `https://${PUBLIC_HOST || 'localhost:5050'}/join/${g.code}` });
+    } catch (err) { reply.code(err.status || 500).send({ error: err.message }); }
+  });
+  app.post('/admin/start', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    try { reply.send(await startGame({ date: req.body?.date })); }
+    catch (err) { reply.code(err.status || 500).send({ error: err.message }); }
+  });
+  app.get('/join/:code', (req, reply) => {
+    const g = getGame();
+    if (!g || g.code !== req.params.code) return reply.code(404).type('text/html').send('<h1 style="font-family:monospace">This invite has expired.</h1>');
+    reply.type('text/html').header('Cache-Control', 'no-store').send(fs.readFileSync(path.join(PUBLIC_DIR, 'join.html'), 'utf8'));
+  });
+  app.post('/api/join/:code', (req, reply) => {
+    try { const p = join(req.params.code, req.body?.name); reply.send({ link: `/p/${p.token}` }); }
+    catch (err) { reply.code(err.status || 500).send({ error: err.message }); }
+  });
+  app.post('/api/p/:token/start', async (req, reply) => {
+    const p = requirePlayer(req, reply); if (!p) return;
+    if (!p.organizer) return reply.code(403).send({ error: 'Only the organizer can start the game.' });
+    try { reply.send(await startGame({ date: req.body?.date })); }
+    catch (err) { reply.code(err.status || 500).send({ error: err.message }); }
   });
 
   // The host's control panel (the admin key is entered on the page, never in the URL).
