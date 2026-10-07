@@ -6,9 +6,9 @@ import {
   addPlayer, players, playerByToken, updatePlayer, messagesFor, castVote, votes,
   savePushSub, addScheduled, scheduled, markScheduledDone, getDb, resetGame,
 } from './store.js';
-import { TEXTABLE, CHARACTERS, buildInstructions } from './characters/index.js';
-import { remember, summary } from './memory.js';
-import { unlockedFor, isUnlocked, answerRing, pendingRing, onCharacterSaid, unlockMentions } from './progress.js';
+import { TEXTABLE, CHARACTERS } from './characters/index.js';
+import { remember, resetMemory } from './memory.js';
+import { unlockedFor, isUnlocked, answerRing, pendingRing, onCharacterSaid, unlockMentions, audioIf } from './progress.js';
 import { deliver } from './live.js';
 import { sendPeer } from './crew.js';
 import { createGroup, groupsForPlayer } from './groups.js';
@@ -17,15 +17,21 @@ import { subscribe } from './live.js';
 import { vapidPublicKey } from './push.js';
 import { runBeat, SUSPECTS, tallyVotes, BEATS } from './beats.js';
 import { recapFor } from './recap.js';
+import { ledger, readLedgerFile } from './ai/ledger.js';
+import { buildReport } from './ai/report.js';
+import { BusyError } from './ai/limiter.js';
+import { callTiming, openingItem, realtimeModel } from './voice/session.js';
+import { mintClientSecret, createSidebandCall } from './voice/realtime-api.js';
+import { attachSideband } from './voice/sideband.js';
+import { openCall, getCall, closeCall, callTranscript, callUsage, callDisclose } from './voice/calls.js';
 
 const {
   ADMIN_KEY, PUBLIC_HOST, OPENAI_API_KEY,
   OPENAI_BASE_URL = 'https://api.openai.com/v1',
-  OPENAI_REALTIME_MODEL = 'gpt-realtime',
-  OPENAI_TRANSCRIBE_MODEL = 'gpt-4o-mini-transcribe',
   MAX_CALLS_PER_PLAYER = 30,
 } = process.env;
 const callCounts = new Map();
+const SHARED_DIR = path.resolve('src/shared');
 const PUBLIC_DIR = path.resolve('public');
 const APP_HTML = () => fs.readFileSync(path.join(PUBLIC_DIR, 'app.html'), 'utf8');
 
@@ -112,7 +118,7 @@ export function registerWeb(app) {
   app.post('/api/p/:token/messages', async (req, reply) => {
     const p = requirePlayer(req, reply); if (!p) return;
     try {
-      const msg = await handlePlayerText(p, req.body?.thread, req.body?.text);
+      const msg = await handlePlayerText(p, req.body?.thread, req.body?.text, { clientId: req.body?.clientId });
       reply.send(msg);
     } catch (err) {
       reply.code(err.status || 500).send({ error: err.message });
@@ -141,7 +147,15 @@ export function registerWeb(app) {
   });
 
   // ---------- in-app voice calls (browser <-> OpenAI Realtime over WebRTC) ----------
-  // The phone asks for a short-lived key for one call; the character's instructions and the group's memory go in it.
+  // The call controller runs in the browser too: same module, served as-is.
+  app.get('/assets/shared/call-controller.js', (_req, reply) => {
+    reply.type('application/javascript').header('Cache-Control', 'no-cache')
+      .send(fs.readFileSync(path.join(SHARED_DIR, 'call-controller.js'), 'utf8'));
+  });
+  app.addContentTypeParser('application/sdp', { parseAs: 'string' }, (_req, body, done) => done(null, body));
+
+  // Start a call. Default transport: a short-lived key so the phone talks to OpenAI directly (the permanent key stays
+  // here). REALTIME_TRANSPORT=sideband: the phone sends its SDP to us and the server controls the call.
   app.post('/api/p/:token/call', async (req, reply) => {
     const p = requirePlayer(req, reply); if (!p) return;
     const character = String(req.body?.character || '');
@@ -152,55 +166,116 @@ export function registerWeb(app) {
     if (!answering && !(c.textable && isUnlocked(p, character))) return reply.code(403).send({ error: 'This number cannot be reached.' });
     const n = (callCounts.get(p.token) || 0) + 1;
     if (n > Number(MAX_CALLS_PER_PLAYER)) return reply.code(429).send({ error: 'The line is dead for tonight.' });
-    if (!OPENAI_API_KEY) return reply.code(500).send({ error: 'Calls are not set up on this server.' });
-    const opening = (answering && ring.opening) || (answering
-      ? c.opening(p.name)
-      : `${p.name} has just called you. Answer the phone in character, like you were not expecting a call.`);
-    try {
-      const res = await fetch(`${OPENAI_BASE_URL}/realtime/client_secrets`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session: {
-            type: 'realtime',
-            model: OPENAI_REALTIME_MODEL,
-            instructions: buildInstructions(character, p.name, summary(), 'voice'),
-            audio: {
-              input: { transcription: { model: OPENAI_TRANSCRIBE_MODEL }, turn_detection: { type: 'server_vad' } },
-              output: { voice: c.voice },
-            },
-          },
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.value) throw new Error(`OpenAI ${res.status}: ${JSON.stringify(data).slice(0, 300)}`);
+    const timing = callTiming(character);
+
+    // Scripted calls (the midnight reveal) play a finished recording: no live model, no cost.
+    const recording = c.recording && process.env.REVEAL_MODE !== 'live' ? audioIf(c.recording) : null;
+    if (recording) {
       if (answering) answerRing(p.token);
       callCounts.set(p.token, n);
-      reply.send({ key: data.value, url: `${OPENAI_BASE_URL}/realtime/calls`, opening, name: c.name, maxSeconds: 240 });
+      ledger.event('call_started', { session: p.pid, npc: character, transport: 'recording' });
+      if (c.revealText) remember({ player: p.name, pid: p.pid, npc: character, character: c.name, speaker: 'character', text: c.revealText, channel: 'call' });
+      return reply.send({ mode: 'recording', audio: recording, name: c.name, maxSeconds: timing.maxSeconds });
+    }
+
+    if (!OPENAI_API_KEY) return reply.code(500).send({ error: 'Calls are not set up on this server.' });
+    const opening = openingItem((answering && ring.opening) || (answering
+      ? c.opening(p.name)
+      : `${p.name} has just called you. Answer the phone in character, like you were not expecting a call.`));
+    const transport = process.env.REALTIME_TRANSPORT === 'sideband' ? 'sideband' : 'ephemeral';
+    let call;
+    try {
+      call = openCall({ player: p, npc: character, transport, timing, model: realtimeModel(character) });
     } catch (err) {
+      if (err instanceof BusyError) return reply.code(503).send({ error: err.message });
+      throw err;
+    }
+    try {
+      const base = { callId: call.id, transport, opening: opening.text, openingRole: opening.role, name: c.name, maxSeconds: timing.maxSeconds, timing };
+      let out;
+      if (transport === 'sideband') {
+        call.pending = { opening, timing };
+        out = { ...base, serverControlled: true };
+      } else {
+        const minted = await mintClientSecret({ npc: character, player: p });
+        call.model = minted.built.model;
+        out = { ...base, key: minted.key, url: `${OPENAI_BASE_URL}/realtime/calls`, toolName: minted.built.toolName, turns: minted.built.turns };
+      }
+      if (answering) answerRing(p.token);
+      callCounts.set(p.token, n);
+      reply.send(out);
+    } catch (err) {
+      closeCall(call.id, 'connect_failed');
       console.error(`[call ${character}] could not start:`, err.message);
       reply.code(502).send({ error: 'The call didn’t connect. Try again.' });
     }
   });
 
-  // What was said on an in-app call goes into the shared memory (so other characters know).
+  // Sideband transport: the phone's WebRTC offer comes here; we open the call at OpenAI and keep a control socket.
+  app.post('/api/p/:token/call/:callId/sdp', async (req, reply) => {
+    const p = requirePlayer(req, reply); if (!p) return;
+    const call = getCall(p.token, req.params.callId);
+    if (!call?.pending || typeof req.body !== 'string') return reply.code(404).send({ error: 'That call has ended.' });
+    const { opening, timing } = call.pending;
+    call.pending = null;
+    try {
+      const made = await createSidebandCall({ npc: call.npc, player: p, sdp: req.body });
+      call.model = made.built.model;
+      attachSideband(call, p, { openaiCallId: made.openaiCallId, opening, toolName: made.built.toolName, timing, turns: made.built.turns });
+      reply.type('application/sdp').send(made.answer);
+    } catch (err) {
+      closeCall(call.id, 'connect_failed');
+      console.error(`[call ${call.npc}] sideband connect failed:`, err.message);
+      reply.code(502).send({ error: 'The call didn’t connect. Try again.' });
+    }
+  });
+
+  // What was said on an in-app call goes into the shared memory (so other characters know). Retries are deduped by
+  // item id. A player line may earn a disclosure: the notes go back to the phone, which tells the character.
   app.post('/api/p/:token/call/transcript', async (req, reply) => {
     const p = requirePlayer(req, reply); if (!p) return;
-    const { character, speaker, text } = req.body || {};
+    const { callId, character, speaker, text, itemId } = req.body || {};
+    const call = getCall(p.token, callId);
+    if (call) return reply.send(await callTranscript(call, p, speaker, text, { itemId }));
+    // Older pages (no call id): the original behavior.
     const c = CHARACTERS[character];
     const clean = String(text || '').trim().slice(0, 1000);
     if (!c || !clean) return reply.send({ ok: true });
-    remember({ player: p.name, character: c.name, speaker: speaker === 'player' ? 'player' : 'character', text: clean });
+    remember({ player: p.name, pid: p.pid, npc: character, character: c.name, speaker: speaker === 'player' ? 'player' : 'character', text: clean, channel: 'call' });
     if (speaker === 'player') await unlockMentions(p, clean);
     else if (c.textable) await onCharacterSaid(p, character, clean);
     reply.send({ ok: true });
+  });
+
+  // Usage the phone saw on its data channel (response.done, transcription). Deduplicated by response id.
+  app.post('/api/p/:token/call/usage', (req, reply) => {
+    const p = requirePlayer(req, reply); if (!p) return;
+    const call = getCall(p.token, req.body?.callId);
+    const records = Array.isArray(req.body?.records) ? req.body.records.slice(0, 20) : [];
+    if (!call) return reply.send({ recorded: 0 });
+    reply.send({ recorded: records.filter((r) => callUsage(call, r, 'client')).length });
+  });
+
+  // The character asked to open up about a guarded topic: the engine decides.
+  app.post('/api/p/:token/call/disclose', (req, reply) => {
+    const p = requirePlayer(req, reply); if (!p) return;
+    const call = getCall(p.token, req.body?.callId);
+    if (!call) return reply.send({ decision: 'stay_guarded', note: 'Stay in character.' });
+    reply.send(callDisclose(call, p, req.body?.topic, req.body?.recent));
   });
 
   app.post('/api/p/:token/call/end', async (req, reply) => {
     const p = requirePlayer(req, reply); if (!p) return;
     const c = CHARACTERS[req.body?.character];
     const secs = Math.max(0, Math.min(3600, Number(req.body?.seconds) || 0));
-    if (c) {
+    const reason = String(req.body?.reason || 'player_hung_up').slice(0, 40);
+    if (req.body?.callId) {
+      const call = getCall(p.token, req.body.callId);
+      if (call) closeCall(call.id, reason, { seconds: Math.round(secs) });
+    } else if (req.body?.mode === 'recording') {
+      ledger.event('call_ended', { session: p.pid, npc: req.body?.character, transport: 'recording', seconds: Math.round(secs), reason });
+    }
+    if (c && reason !== 'connect_failed') {
       const who = req.body.character.startsWith('caretaker') ? 'BLACKWOOD MANOR' : c.name;
       await deliver({ token: p.token, thread: 'unknown', from: 'system', kind: 'calllog',
         text: `${who} · ${Math.floor(secs / 60)}:${String(Math.floor(secs % 60)).padStart(2, '0')}` });
@@ -275,12 +350,19 @@ export function registerWeb(app) {
   app.post('/admin/reset', (req, reply) => {
     if (!requireAdmin(req, reply)) return;
     resetGame();
-    fs.rmSync(path.resolve('data/memory.json'), { force: true });
+    resetMemory();
     reply.send({ ok: true });
   });
 
+  // Cost report from the usage ledger (no dialogue in it).
+  app.get('/admin/usage', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    await ledger.flush();
+    reply.send(buildReport(readLedgerFile(ledger.file)));
+  });
+
   // ---------- scheduler: fires due beats every 15 seconds ----------
-  setInterval(async () => {
+  const scheduler = setInterval(async () => {
     const now = Date.now();
     for (const s of scheduled()) {
       if (!s.done && Date.parse(s.at) <= now) {
@@ -289,4 +371,6 @@ export function registerWeb(app) {
       }
     }
   }, 15_000);
+  scheduler.unref?.();
+  app.addHook('onClose', async () => clearInterval(scheduler));
 }

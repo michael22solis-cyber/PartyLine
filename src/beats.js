@@ -5,6 +5,7 @@ import { deliver } from './live.js';
 import { callPlayer, ringInApp, unlock, unlockMentions, unlockAll, audioIf } from './progress.js';
 import { getDb } from './store.js';
 import { summary } from './memory.js';
+import { ledger } from './ai/ledger.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const everyone = () => players();
@@ -164,6 +165,7 @@ export const BEATS = {
       : !accompliceName || tally.accomplice === accompliceName
         ? 'Detectives win. Ruth Calloway is caught, and so is her accomplice.'
         : `Split win: you caught Ruth, but the accomplice walks. It was ${accompliceName}.`;
+    ledger.event('game_completed', { players: everyone().length, votes: tally.votes });
     await toAll('line',
       `CASE CLOSED.\n\nThe killer was Ruth Calloway, the night nurse. In 1996 Elias caught her stealing, died in the struggle, and she buried him under the cellar. Dana was about to dig it up.\n\n${outcome}${accompliceName ? `\n\nThe accomplice was ${accompliceName}.` : ''}\n\nThanks for playing. Happy Halloween.`,
       'reveal');

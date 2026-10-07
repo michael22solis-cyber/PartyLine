@@ -3,7 +3,10 @@
 // crash, phone line and dial tone are generated here, then everything is mixed with ffmpeg.
 //   npm run evidence            -> public/audio/memo.mp3, call911.mp3, ruth-voicemail.mp3
 //   npm run evidence -- --fake  -> same files with beeps instead of voices (to test without a key)
-//   npm run evidence -- --only=memo   (or call911, voicemail) -> remake just one recording
+//   npm run evidence -- --only=memo   (or call911, voicemail, reveal) -> remake just one recording
+//   npm run evidence -- --force       -> ignore the cache and regenerate every voice line
+// Voice lines are cached by content (model + voice + text + acting notes) in audio-src/.tts-cache.json, so re-running
+// only pays for lines you changed. Each generated line is recorded in the usage ledger as one-time asset spend.
 //
 // EDITING: change any line's words, voice or acting notes ("how") in LINES below.
 // Voices: alloy, ash, ballad, coral, echo, fable, nova, onyx, sage, shimmer, verse.
@@ -14,9 +17,12 @@ import 'dotenv/config';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import ffmpeg from 'ffmpeg-static';
+import { ledger } from '../src/ai/ledger.js';
 
 const FAKE = process.argv.includes('--fake');
+const FORCE = process.argv.includes('--force');
 const { OPENAI_API_KEY, OPENAI_BASE_URL = 'https://api.openai.com/v1', OPENAI_TTS_MODEL = 'gpt-4o-mini-tts' } = process.env;
 if (!FAKE && !OPENAI_API_KEY) { console.error('Add OPENAI_API_KEY to .env first (or run with --fake).'); process.exit(1); }
 
@@ -43,6 +49,10 @@ const LINES = {
     how: 'A flat automated voicemail system voice.' },
   ruth: { voice: 'sage', text: "Sweetheart, it's Ruth. I heard you've been asking about the cellar. Some doors in that house are better left closed. You get some rest now. God bless.",
     how: 'A sweet elderly woman leaving a voicemail, warm and grandmotherly on the surface, with something cold and threatening underneath. Slow.' },
+  // The midnight reveal is fully scripted, so every player hears a recording instead of a live model call.
+  // Tip: drop the intro narrator's version in audio-src/custom/caretakerReveal.mp3 to match the intro's voice.
+  caretakerReveal: { voice: 'cedar', fallbackVoice: 'onyx', text: "Thirty years I've waited under that floor. ... She sang my wife to sleep, and then she buried me. ... Ruth Calloway. ... Dana was going to find me, so Ruth made sure she never reached the bottom of the stairs alive. ... Thank you for listening. ... Happy Halloween.",
+    how: 'A very old man, the ghost of the house, speaking slowly and quietly from far away on a bad phone line. Weary, then at peace. Long pauses.' },
 };
 
 const CUSTOM = path.join(WORK, 'custom');
@@ -54,17 +64,34 @@ function custom(name) {
   return null;
 }
 
-async function tts(name, { voice, text, how }) {
+const CACHE_FILE = path.join(WORK, '.tts-cache.json');
+const cache = (() => { try { return JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')); } catch { return {}; } })();
+const keyOf = (model, voice, text, how) => crypto.createHash('sha256').update(JSON.stringify([model, voice, text, how])).digest('hex').slice(0, 16);
+
+async function tts(name, { voice, fallbackVoice, text, how }) {
   const own = custom(name); if (own) return own;
   const file = path.join(WORK, `${name}.wav`);
   if (FAKE) { writeWav(file, tone(1.2 + text.length / 22, 300 + name.length * 40)); return file; }
-  for (const model of [OPENAI_TTS_MODEL, 'tts-1']) {
+  const hit = cache[name];
+  if (!FORCE && hit && fs.existsSync(file) && hit.key === keyOf(hit.model, hit.voice, text, how)) { console.log(`voice: ${name} (cached, no API call)`); return file; }
+  for (const [model, v] of [[OPENAI_TTS_MODEL, voice], [OPENAI_TTS_MODEL, fallbackVoice], ['tts-1', fallbackVoice || voice]]) {
+    if (!v) continue;
     const res = await fetch(`${OPENAI_BASE_URL}/audio/speech`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, voice, input: text, response_format: 'wav', ...(model === 'tts-1' ? {} : { instructions: how }) }),
+      body: JSON.stringify({ model, voice: v, input: text, response_format: 'wav', ...(model === 'tts-1' ? {} : { instructions: how }) }),
     });
-    if (res.ok) { fs.writeFileSync(file, Buffer.from(await res.arrayBuffer())); console.log(`voice: ${name}`); return file; }
+    if (res.ok) {
+      fs.writeFileSync(file, Buffer.from(await res.arrayBuffer()));
+      cache[name] = { key: keyOf(model, v, text, how), model, voice: v };
+      fs.writeFileSync(CACHE_FILE, JSON.stringify(cache, null, 2));
+      // One-time asset spend, estimated from the audio length (the speech endpoint returns no usage block).
+      const secs = seconds(file);
+      ledger.record({ responseId: res.headers.get('x-request-id') || undefined, model, capability: 'tts', purpose: `asset:${name}`, source: 'script',
+        usage: { textIn: Math.ceil((text.length + how.length) / 4), audioOut: Math.round(secs * 20.8) } });
+      console.log(`voice: ${name}`);
+      return file;
+    }
     const body = await res.text();
     if (res.status === 401) throw new Error('OpenAI 401: check OPENAI_API_KEY in .env');
     if (![400, 404].includes(res.status)) throw new Error(`OpenAI ${res.status}: ${body.slice(0, 200)}`);
@@ -163,12 +190,12 @@ const sfx = (name, samples) => custom(name) || writeWav(path.join(WORK, `${name}
 const PHONE = 'highpass=f=320,lowpass=f=3300,acompressor=threshold=-20dB:ratio=4,volume=1.4';
 const MEMO_ROOM = 'aecho=0.8:0.6:35|70:0.25|0.15';
 
-const NEEDS = { memo: ['dana1', 'dana2'], call911: ['dispatch1', 'lily', 'dispatch2'], voicemail: ['vmIntro', 'ruth'] };
+const NEEDS = { memo: ['dana1', 'dana2'], call911: ['dispatch1', 'lily', 'dispatch2'], voicemail: ['vmIntro', 'ruth'], reveal: ['caretakerReveal'] };
 const want = (k) => !ONLY || ONLY === k;
 fs.mkdirSync(CUSTOM, { recursive: true });
 const v = {};
 for (const [name, line] of Object.entries(LINES)) {
-  const OUTS = { memo: 'memo-final.mp3', call911: 'call911-final.mp3', voicemail: 'ruth-voicemail-final.mp3' };
+  const OUTS = { memo: 'memo-final.mp3', call911: 'call911-final.mp3', voicemail: 'ruth-voicemail-final.mp3', reveal: 'caretaker-reveal-final.mp3' };
   if (Object.entries(NEEDS).some(([k, names]) => want(k) && !fs.existsSync(path.join(CUSTOM, OUTS[k])) && names.includes(name))) v[name] = await tts(name, line);
 }
 
@@ -229,4 +256,15 @@ if (want('voicemail') && !finished('ruth-voicemail.mp3')) {
   ], total);
 }
 
-console.log('\nDone. Restart the server; the memo, 911 call and voicemail now play in the app.');
+// 4) The Caretaker's midnight reveal (played as a recorded call; see CHARACTERS.caretaker_reveal.recording)
+if (want('reveal') && !finished('caretaker-reveal.mp3')) {
+  const r = seconds(v.caretakerReveal);
+  const total = 0.8 + r + 1.6;
+  mix('caretaker-reveal.mp3', [
+    { file: sfx('rline', roomTone(total + 1, 0.02)), at: 0, filter: PHONE },
+    { file: v.caretakerReveal, at: 0.8, filter: `${PHONE},aecho=0.8:0.7:60:0.25,volume=0.95` },
+  ], total);
+}
+
+await ledger.close();
+console.log('\nDone. Restart the server; the memo, 911 call, voicemail and midnight reveal now play in the app.');

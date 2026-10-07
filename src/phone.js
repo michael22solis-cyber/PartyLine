@@ -11,12 +11,12 @@ const getClient = () => {
   return client;
 };
 
-export async function callPhone(to, playerName, character = 'caretaker') {
+export async function callPhone(to, playerName, character = 'caretaker', pid = null) {
   if (!/^\+\d{10,15}$/.test(to || '')) throw new Error(`Bad phone number: ${to}`);
   const call = await getClient().calls.create({
     to,
     from: CARETAKER_NUMBER,
-    twiml: streamTwiml(PUBLIC_HOST, character, playerName, 'outbound'),
+    twiml: streamTwiml(PUBLIC_HOST, character, playerName, 'outbound', pid),
     timeLimit: Number(MAX_CALL_SECONDS), // hard cap
   });
   return call.sid;
