@@ -746,9 +746,66 @@ function incoming({ character, from }) {
 // The call logic (usage, heard-only transcripts, guarded topics, wrap-up, hang-up) is the same module the server uses.
 let call = null;
 const callName = (character) => (character.startsWith('caretaker') ? 'UNKNOWN' : state.threads.find((t) => t.key === character)?.name || 'UNKNOWN');
+// ============ call captions (optional, ⋮ menu) ============
+// The character's words appear in step with their voice: a line is revealed while its audio plays, never ahead of it.
+const captionsOn = () => store.get('bw-captions', '0') === '1';
+const captions = (() => {
+  const itemOf = new Map(); // response id -> item id
+  const textOf = new Map(); // item id -> transcript
+  const startedAt = new Map(); // response id -> when its audio started playing
+  let words = [];
+  let shown = 0;
+  let timer = null;
+  const box = () => $('#callCaptions');
+  const show = () => { box().textContent = words.slice(Math.max(0, shown - 16), shown).join(' '); };
+  function stop() { clearTimeout(timer); timer = null; }
+  function play(text, durMs, alreadyMs = 0) {
+    stop();
+    words = String(text || '').split(/\s+/).filter(Boolean);
+    if (!words.length) return;
+    const per = Math.max(180, Math.min(700, (durMs || words.length * 370) / words.length));
+    shown = Math.min(words.length, Math.floor(alreadyMs / per));
+    const step = () => { shown += 1; show(); if (shown < words.length) timer = setTimeout(step, per); };
+    step();
+  }
+  function maybeStart(rid) {
+    const item = itemOf.get(rid);
+    if (!startedAt.has(rid) || !item || !textOf.has(item)) return;
+    play(textOf.get(item), null, Date.now() - startedAt.get(rid));
+  }
+  return {
+    reset() { stop(); itemOf.clear(); textOf.clear(); startedAt.clear(); words = []; box().textContent = ''; box().hidden = !captionsOn(); },
+    event(evt) {
+      if (!captionsOn()) return;
+      switch (evt.type) {
+        case 'response.output_item.added':
+          if (evt.item?.type === 'message') itemOf.set(evt.response_id, evt.item.id);
+          break;
+        case 'response.output_audio_transcript.done':
+        case 'response.audio_transcript.done':
+          textOf.set(evt.item_id, evt.transcript || '');
+          if (evt.response_id) { itemOf.set(evt.response_id, evt.item_id); maybeStart(evt.response_id); }
+          break;
+        case 'output_audio_buffer.started':
+          startedAt.set(evt.response_id, Date.now());
+          maybeStart(evt.response_id);
+          break;
+        case 'output_audio_buffer.cleared': // interrupted: the rest was never said
+          stop();
+          break;
+        default:
+          break;
+      }
+    },
+    line(text, durMs) { if (captionsOn()) { box().hidden = false; play(text, durMs); } }, // recorded calls
+    stop,
+  };
+})();
+
 let callAfterTimer = null;
 function callScreen(character) {
   clearTimeout(callAfterTimer);
+  captions.reset();
   $('#callName').textContent = callName(character);
   $('#callState').textContent = 'CALLING…';
   $('#callTime').textContent = '';
@@ -800,6 +857,7 @@ function playRecordingCall(character, info) {
   audio.srcObject = null;
   audio.src = info.audio;
   audio.onended = () => setTimeout(() => endCall('recording_ended'), 800);
+  audio.onloadedmetadata = () => { if (info.captions) captions.line(info.captions, audio.duration * 1000); };
   audio.play().catch(() => {});
   startClock(info.maxSeconds);
 }
@@ -846,8 +904,12 @@ async function startCall(character) {
         },
       });
       dc.onopen = () => call?.ctl?.start();
-      dc.onmessage = (e) => { let evt; try { evt = JSON.parse(e.data); } catch { return; } call?.ctl?.handle(evt); };
     }
+    dc.onmessage = (e) => {
+      let evt; try { evt = JSON.parse(e.data); } catch { return; }
+      captions.event(evt);
+      call?.ctl?.handle(evt);
+    };
     pc.onconnectionstatechange = () => { if (['failed', 'closed'].includes(pc.connectionState)) endCall('connection_lost'); };
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
@@ -869,6 +931,7 @@ function endCall(reason = 'player_hung_up') {
   if (!call) return;
   const c = call; call = null;
   clearInterval(c.timer); cancelAnimationFrame(meterRaf);
+  captions.stop();
   c.ctl?.end(reason); // saves what was heard so far and reports any outstanding usage
   c.mic?.getTracks().forEach((t) => t.stop());
   try { c.pc?.close(); } catch { /* already closed */ }
@@ -985,10 +1048,12 @@ function setupMenu() {
     $('#callsToggle').checked = !state.me.callsOff;
     $('#callsToggle').disabled = !state.me.hasPhone;
     $('#soundToggle').checked = store.get('bw-sound', '1') !== '0';
+    $('#captionsToggle').checked = captionsOn();
     menu.showModal();
   };
   $('#closeMenu').onclick = () => menu.close();
   $('#soundToggle').onchange = (e) => store.set('bw-sound', e.target.checked ? '1' : '0');
+  $('#captionsToggle').onchange = (e) => store.set('bw-captions', e.target.checked ? '1' : '0');
   $('#callsToggle').onchange = async (e) => {
     try {
       const r = await api('/settings', { method: 'POST', body: JSON.stringify({ callsOff: !e.target.checked }) });

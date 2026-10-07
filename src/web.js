@@ -175,7 +175,7 @@ export function registerWeb(app) {
       callCounts.set(p.token, n);
       ledger.event('call_started', { session: p.pid, npc: character, transport: 'recording' });
       if (c.revealText) remember({ player: p.name, pid: p.pid, npc: character, character: c.name, speaker: 'character', text: c.revealText, channel: 'call' });
-      return reply.send({ mode: 'recording', audio: recording, name: c.name, maxSeconds: timing.maxSeconds });
+      return reply.send({ mode: 'recording', audio: recording, name: c.name, maxSeconds: timing.maxSeconds, captions: c.revealText || null });
     }
 
     if (!OPENAI_API_KEY) return reply.code(500).send({ error: 'Calls are not set up on this server.' });

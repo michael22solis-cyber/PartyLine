@@ -57,11 +57,12 @@ if (chromium) {
     window.__emit = (evt) => window.__dc.onmessage({ data: JSON.stringify(evt) });
   };
 
-  async function openPhone(p) {
+  async function openPhone(p, { captions = false } = {}) {
     const page = await browser.newPage();
     page.on('pageerror', (e) => console.error('page error:', e.message));
     await page.addInitScript(FAKE_WEBRTC);
     await page.addInitScript((token) => localStorage.setItem(`bw-on-${token}`, '1'), p.token);
+    if (captions) await page.addInitScript(() => localStorage.setItem('bw-captions', '1'));
     await page.goto(`${base}/p/${p.token}`);
     return page;
   }
@@ -70,7 +71,7 @@ if (chromium) {
   test('answering a call in the browser: controller runs, usage + heard transcripts + disclosures reach the server', async () => {
     const p = addPlayer({ name: 'Bri' });
     await ringInApp(p, 'lily', {});
-    const page = await openPhone(p);
+    const page = await openPhone(p, { captions: true });
     await page.click('#ringAnswer', { timeout: 10_000 });
     await page.waitForFunction(() => window.__sent?.some((e) => e.type === 'response.create'), null, { timeout: 10_000 });
     const opening = await page.evaluate(() => window.__sent[0]);
@@ -87,6 +88,8 @@ if (chromium) {
       window.__emit({ type: 'response.done', response: { id: 'resp_1', status: 'completed', output: [{ type: 'message', id: 'item_1' }], usage: u } });
       window.__emit({ type: 'output_audio_buffer.stopped', response_id: 'resp_1' });
     }, usageBlock);
+    // Captions follow the voice.
+    await page.waitForFunction(() => document.querySelector('#callCaptions').textContent.includes('who is this?'), null, { timeout: 5000 });
     await until(() => usage(p.pid).some((r) => r.responseId === 'resp_1'));
     assert.equal(usage(p.pid).find((r) => r.responseId === 'resp_1').source, 'client');
     await until(() => allLines().some((l) => l.pid === p.pid && l.text === '...who is this?'));
@@ -128,6 +131,8 @@ if (chromium) {
       window.__emit({ type: 'conversation.item.truncated', item_id: 'item_3', audio_end_ms: 600 });
     });
     await until(() => allLines().some((l) => l.pid === p.pid && /^okay\./.test(l.text)));
+    await new Promise((r) => setTimeout(r, 1200));
+    assert.doesNotMatch(await page.textContent('#callCaptions'), /already dead/, 'captions stop where the voice was cut off');
     const heard = allLines().find((l) => l.pid === p.pid && /^okay\./.test(l.text)).text;
     assert.equal(heard, 'okay.—');
     assert.doesNotMatch(heard, /it was me|already dead/, 'the unheard words are not remembered');
@@ -167,12 +172,13 @@ if (chromium) {
     try {
       const p = addPlayer({ name: 'Mid' });
       await ringInApp(p, 'caretaker_reveal', {});
-      const page = await openPhone(p);
+      const page = await openPhone(p, { captions: true });
       const secrets0 = mock.log.clientSecrets.length;
       await page.click('#ringAnswer', { timeout: 10_000 });
       await until(() => ledger.records().some((r) => r.type === 'call_ended' && r.session === p.pid && r.transport === 'recording'), 8000);
       assert.equal(mock.log.clientSecrets.length, secrets0, 'no live model session');
       assert.equal(await page.textContent('#callState'), 'THE LINE WENT DEAD');
+      assert.match(await page.textContent('#callCaptions'), /^Thirty years/, 'the recorded reveal is captioned');
       await page.waitForSelector('#callScreen', { state: 'hidden', timeout: 5000 });
       await page.close();
     } finally {

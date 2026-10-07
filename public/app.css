@@ -318,6 +318,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .call-viz i:nth-child(2) { transform: scale(calc(0.62 + var(--lvl) * 0.42)); opacity: calc(0.15 + var(--lvl) * 0.5); }
 .call-viz i:nth-child(3) { transform: scale(calc(0.8 + var(--lvl) * 0.25)); opacity: calc(0.08 + var(--lvl) * 0.35); }
 .call-fine { max-width: 260px; margin-top: 22px; }
+.call-captions { font-family: var(--type); font-size: 17px; line-height: 1.35; color: var(--ink); max-width: 320px; min-height: 2.7em; margin: 0 0 14px; text-shadow: 0 0 12px rgba(159,224,160,0.25); overflow-wrap: anywhere; }
 .callscr.ended .call-state { color: var(--ember); animation: callFade 2.6s ease-out forwards; }
 .callscr.ended .call-viz { opacity: 0.25; filter: grayscale(1); }
 @keyframes callFade { 0% { opacity: 0; letter-spacing: 0.6em; } 15% { opacity: 1; letter-spacing: 0.3em; } 100% { opacity: 0.85; } }
