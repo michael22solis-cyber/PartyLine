@@ -208,7 +208,7 @@ async function refresh() {
       btns.append(share);
     }
     row.append(name, btns,
-      el('div', 'meta', `${p.phone ? 'phone on file' : 'app only'} · ${p.contacts} contacts · ${p.found} secrets found${p.callsOff ? ' · calls off' : ''}`),
+      el('div', 'meta', `${p.phone ? 'phone on file' : 'app only'} · ${p.contacts} contacts · ${p.found} secrets found · ${p.callMinutes ?? 0} call min${p.callsOff ? ' · calls off' : ''}`),
       el('div', 'link', p.link));
     box.append(row);
   });

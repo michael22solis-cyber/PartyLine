@@ -903,16 +903,81 @@ function startClock(maxSeconds, onTick) {
     if (secs > maxSeconds) endCall('max_duration');
   }, 500);
 }
-// A scripted call (the midnight reveal): a finished recording plays through the call screen.
-function playRecordingCall(character, info) {
-  const audio = $('#callAudio');
-  call.mode = 'recording';
-  audio.srcObject = null;
-  audio.src = info.audio;
-  audio.onended = () => setTimeout(() => endCall('recording_ended'), 800);
-  audio.onloadedmetadata = () => { if (info.captions) captions.line(info.captions, audio.duration * 1000); };
-  audio.play().catch(() => {});
+// ============ phone-line sound (on by default, ⋮ menu) ============
+// The character's voice goes through a telephone band (about 300-3,400 Hz) with a faint line hiss, like a real call
+// on an old landline, instead of studio-clean audio. If the browser can't do it, the voice plays unprocessed.
+const phoneLineOn = () => store.get('bw-phoneline', '1') === '1';
+function phoneChain(ctx) {
+  const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 320;
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3300;
+  const presence = ctx.createBiquadFilter(); presence.type = 'peaking'; presence.frequency.value = 1700; presence.Q.value = 0.9; presence.gain.value = 4;
+  const out = ctx.createGain(); out.gain.value = 1.6; // the band filter takes some loudness away
+  hp.connect(lp).connect(presence).connect(out).connect(ctx.destination);
+  const noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  const noise = ctx.createBufferSource(); noise.buffer = noiseBuf; noise.loop = true;
+  const nf = ctx.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = 1400; nf.Q.value = 0.6;
+  const ng = ctx.createGain(); ng.gain.value = 0.006;
+  noise.connect(nf).connect(ng).connect(ctx.destination);
+  noise.start();
+  const nodes = [hp, lp, presence, out, noise, nf, ng];
+  return { input: hp, stop: () => { try { noise.stop(); } catch { /* stopped */ } nodes.forEach((n) => { try { n.disconnect(); } catch { /* gone */ } }); } };
+}
+// Live call: route the remote stream through the line. Returns a teardown, or null to play it as is.
+function phoneLineStream(stream) {
+  if (!phoneLineOn()) return null;
+  try {
+    const ctx = sfx.unlock(); if (!ctx) return null;
+    const chain = phoneChain(ctx);
+    const src = ctx.createMediaStreamSource(stream);
+    src.connect(chain.input);
+    return () => { try { src.disconnect(); } catch { /* gone */ } chain.stop(); };
+  } catch { return null; }
+}
+
+// A scripted call (the Caretaker, the midnight reveal): finished recordings play through the call screen, one after
+// another with a short pause, captions in step.
+async function playRecordingCall(character, info) {
+  const c = call;
+  c.mode = 'recording';
+  const parts = [].concat(info.audio);
+  const lines = [].concat(info.captions || []);
+  const finish = () => setTimeout(() => { if (call === c) endCall('recording_ended'); }, 800);
   startClock(info.maxSeconds);
+  const ctx = phoneLineOn() ? sfx.unlock() : null;
+  if (ctx) {
+    try {
+      const buffers = await Promise.all(parts.map((u) => fetch(u).then((r) => r.arrayBuffer()).then((b) => ctx.decodeAudioData(b))));
+      if (call !== c) return;
+      const chain = phoneChain(ctx);
+      let src = null;
+      c.stopLine = () => { try { src?.stop(); } catch { /* done */ } chain.stop(); };
+      for (const [i, buf] of buffers.entries()) {
+        if (call !== c) return;
+        src = ctx.createBufferSource(); src.buffer = buf; src.connect(chain.input);
+        if (lines[i]) captions.line(lines[i], buf.duration * 1000);
+        await new Promise((done) => { src.onended = done; src.start(); });
+        await new Promise((done) => setTimeout(done, 650));
+      }
+      finish();
+      return;
+    } catch { if (call !== c) return; c.stopLine?.(); c.stopLine = null; }
+  }
+  // Plain playback (no phone-line sound, or the browser couldn't decode it).
+  const audio = $('#callAudio');
+  audio.srcObject = null;
+  let i = 0;
+  const next = () => {
+    if (call !== c) return;
+    if (i >= parts.length) { finish(); return; }
+    const at = i++;
+    audio.src = parts[at];
+    audio.onloadedmetadata = () => { if (lines[at]) captions.line(lines[at], audio.duration * 1000); };
+    audio.onended = () => setTimeout(next, 650);
+    audio.play().catch(() => {});
+  };
+  next();
 }
 async function startCall(character) {
   if (call) return;
@@ -926,8 +991,9 @@ async function startCall(character) {
     return navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
   };
   try {
-    // Microphone first (the short-lived call key is only minted once we can use it). The scripted reveal needs none.
-    let mic = character === 'caretaker_reveal' ? null : await getMic();
+    // Microphone first (the short-lived call key is only minted once we can use it). The Caretaker's recorded calls need
+    // none (if his call turns out to be live, the microphone is requested below).
+    let mic = character.startsWith('caretaker') ? null : await getMic();
     call.mic = mic;
     if (!call) { mic?.getTracks().forEach((t) => t.stop()); return; }
     const info = await api('/call', { method: 'POST', body: JSON.stringify({ character }) });
@@ -937,7 +1003,15 @@ async function startCall(character) {
     if (!mic) { mic = await getMic(); call.mic = mic; }
     const pc = new RTCPeerConnection();
     call.pc = pc;
-    pc.ontrack = (e) => { audio.srcObject = e.streams[0]; audio.play().catch(() => {}); meter(e.streams[0]); };
+    pc.ontrack = (e) => {
+      audio.srcObject = e.streams[0];
+      // The element keeps the stream flowing (some browsers need it); with the phone-line sound on, it's muted and the
+      // voice is heard through the filter instead.
+      const stop = call ? phoneLineStream(e.streams[0]) : null;
+      if (stop) { audio.muted = true; call.stopLine = stop; }
+      audio.play().catch(() => {});
+      meter(e.streams[0]);
+    };
     mic.getTracks().forEach((t) => pc.addTrack(t, mic));
     const dc = pc.createDataChannel('oai-events');
     const callId = info.callId;
@@ -974,7 +1048,8 @@ async function startCall(character) {
     if (!call) return;
     startClock(info.maxSeconds, () => call?.ctl?.tick());
   } catch (ex) {
-    $('#callState').textContent = ex.name === 'NotAllowedError' ? 'MICROPHONE BLOCKED' : /busy/i.test(ex.message) ? 'LINE BUSY' : 'CALL FAILED';
+    $('#callState').textContent = ex.name === 'NotAllowedError' ? 'MICROPHONE BLOCKED' : /busy/i.test(ex.message) ? 'LINE BUSY'
+      : /picking up/i.test(ex.message) ? 'NO ANSWER' : /line is dead/i.test(ex.message) ? 'NO SIGNAL' : 'CALL FAILED';
     $('#callTime').textContent = ex.name === 'NotAllowedError' ? 'Allow the microphone to talk to them.'
       : ex instanceof TypeError ? 'The line dropped. Try again.' : ex.message;
     setTimeout(() => endCall('connect_failed'), 3200);
@@ -988,8 +1063,9 @@ function endCall(reason = 'player_hung_up') {
   c.ctl?.end(reason); // saves what was heard so far and reports any outstanding usage
   c.mic?.getTracks().forEach((t) => t.stop());
   try { c.pc?.close(); } catch { /* already closed */ }
+  c.stopLine?.();
   const audio = $('#callAudio');
-  audio.pause(); audio.onended = null; audio.srcObject = null; audio.removeAttribute('src');
+  audio.pause(); audio.onended = null; audio.onloadedmetadata = null; audio.srcObject = null; audio.removeAttribute('src'); audio.muted = false;
   showCallEnded(c, reason);
   if (c.started || c.callId) {
     api('/call/end', { method: 'POST', body: JSON.stringify({ callId: c.callId, character: c.character, mode: c.mode, reason, seconds: c.started ? (Date.now() - c.started) / 1000 : 0 }) }).catch(() => {});
@@ -1113,11 +1189,13 @@ function setupMenu() {
     $('#callsToggle').disabled = !state.me.hasPhone;
     $('#soundToggle').checked = store.get('bw-sound', '1') !== '0';
     $('#captionsToggle').checked = captionsOn();
+    $('#phoneLineToggle').checked = phoneLineOn();
     menu.showModal();
   };
   $('#closeMenu').onclick = () => menu.close();
   $('#soundToggle').onchange = (e) => store.set('bw-sound', e.target.checked ? '1' : '0');
   $('#captionsToggle').onchange = (e) => store.set('bw-captions', e.target.checked ? '1' : '0');
+  $('#phoneLineToggle').onchange = (e) => store.set('bw-phoneline', e.target.checked ? '1' : '0');
   $('#callsToggle').onchange = async (e) => {
     try {
       const r = await api('/settings', { method: 'POST', body: JSON.stringify({ callsOff: !e.target.checked }) });

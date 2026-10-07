@@ -27,6 +27,8 @@ import { callTiming, openingItem, realtimeModel } from './voice/session.js';
 import { mintClientSecret, createSidebandCall } from './voice/realtime-api.js';
 import { attachSideband } from './voice/sideband.js';
 import { openCall, getCall, closeCall, callTranscript, callUsage, callDisclose } from './voice/calls.js';
+import { checkCall, chargeCall, resetAllowances } from './voice/allowance.js';
+import { recordedCall, servedFile as caretakerClip } from './voice/caretaker.js';
 
 const {
   ADMIN_KEY, PUBLIC_HOST, OPENAI_API_KEY,
@@ -156,6 +158,12 @@ export function registerWeb(app) {
     reply.type('application/javascript').header('Cache-Control', 'no-cache')
       .send(fs.readFileSync(path.join(SHARED_DIR, 'call-controller.js'), 'utf8'));
   });
+  // The Caretaker's generated lines (cached on the data volume; file names are content hashes).
+  app.get('/assets/voice/:file', (req, reply) => {
+    const file = caretakerClip(req.params.file);
+    if (!file) return reply.code(404).send({ error: 'Not found' });
+    reply.type('audio/mpeg').header('Cache-Control', 'public, max-age=31536000, immutable').send(fs.createReadStream(file));
+  });
   app.addContentTypeParser('application/sdp', { parseAs: 'string' }, (_req, body, done) => done(null, body));
 
   // Start a call. Default transport: a short-lived key so the phone talks to OpenAI directly (the permanent key stays
@@ -170,7 +178,28 @@ export function registerWeb(app) {
     if (!answering && !(c.textable && isUnlocked(p, character))) return reply.code(403).send({ error: 'This number cannot be reached.' });
     const n = (callCounts.get(p.token) || 0) + 1;
     if (n > Number(MAX_CALLS_PER_PLAYER)) return reply.code(429).send({ error: 'The line is dead for tonight.' });
-    const timing = callTiming(character);
+    let timing = callTiming(character);
+    // Calls the player starts come out of their minutes and respect cooldowns; calls the house places never do.
+    if (!answering) {
+      const allowed = checkCall(p, character, c.name, timing);
+      if (!allowed.ok) {
+        ledger.event('call_refused', { session: p.pid, npc: character, reason: allowed.reason });
+        return reply.code(allowed.status).send({ error: allowed.error, reason: allowed.reason, retryAfter: allowed.retryAfter });
+      }
+      timing = allowed.timing;
+    }
+
+    // The Caretaker speaks in the intro narrator's ElevenLabs voice: his calls play recordings (see voice/caretaker.js).
+    const scripted = character.startsWith('caretaker') && !(character === 'caretaker_reveal' && process.env.REVEAL_MODE === 'live')
+      ? await recordedCall(character, p, character === 'caretaker' ? p.caretakerCalls || 0 : 0) : null;
+    if (scripted) {
+      if (answering) answerRing(p.token);
+      callCounts.set(p.token, n);
+      if (character === 'caretaker') updatePlayer(p.token, { caretakerCalls: (p.caretakerCalls || 0) + 1 });
+      ledger.event('call_started', { session: p.pid, npc: character, transport: 'recording' });
+      remember({ player: p.name, pid: p.pid, npc: character, character: c.name, speaker: 'character', text: scripted.captions.join(' '), channel: 'call' });
+      return reply.send({ mode: 'recording', audio: scripted.audio, captions: scripted.captions, name: c.name, maxSeconds: timing.maxSeconds });
+    }
 
     // Scripted calls (the midnight reveal) play a finished recording: no live model, no cost.
     const recording = c.recording && process.env.REVEAL_MODE !== 'live' ? audioIf(c.recording) : null;
@@ -194,6 +223,7 @@ export function registerWeb(app) {
       if (err instanceof BusyError) return reply.code(503).send({ error: err.message });
       throw err;
     }
+    if (!answering) call.onClose.push(() => chargeCall(p.token, character, (Date.now() - call.startedAt) / 1000));
     try {
       const base = { callId: call.id, transport, opening: opening.text, openingRole: opening.role, name: c.name, maxSeconds: timing.maxSeconds, timing };
       let out;
@@ -327,6 +357,7 @@ export function registerWeb(app) {
       players: players().map((p) => ({
         name: p.name, role: p.role, phone: Boolean(p.phone), callsOff: p.callsOff, link: linkFor(p.token),
         voted: Boolean(votes()[p.token]), found: (p.found || []).length, contacts: (p.unlocked || []).length,
+        callMinutes: Math.round((p.callSeconds || 0) / 6) / 10,
       })),
       revealed: getDb().revealed,
       game: getGame() ? { ...lobbyView(null), invite: getGame().status === 'lobby' ? `https://${PUBLIC_HOST || 'localhost:5050'}/join/${getGame().code}` : null } : null,
@@ -405,6 +436,7 @@ export function registerWeb(app) {
   app.post('/admin/reset', (req, reply) => {
     if (!requireAdmin(req, reply)) return;
     resetGame();
+    resetAllowances();
     resetMemory();
     reply.send({ ok: true });
   });

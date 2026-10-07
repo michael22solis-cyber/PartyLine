@@ -3,7 +3,9 @@
 // only after the game engine approves a disclosure for a specific player (see ../disclosure.js).
 // The full case file (caseFile.js) stays the single source of truth for authors and tests; it is never sent whole.
 
-// Voice names are OpenAI Realtime built-in voices; change freely.
+// Voice names are OpenAI Realtime built-in voices; change freely. marin and cedar are the most natural-sounding ones.
+// A character heard in a recording too (Ruth's voicemail, Lily on the 911 call) uses the same voice in
+// scripts/evidence-audio.js, so keep the two in step.
 // textable: shows up as a chat thread in the burner-phone app.
 // call: wrapUpAt = seconds into a call when the character is told to wrap up; maxSeconds = hard hang-up.
 export const CHARACTERS = {
@@ -83,7 +85,7 @@ Dana had a crew booked to start on the cellar floor on November 2. You think the
 
   lily: {
     name: 'Lily Blackwood',
-    voice: 'shimmer',
+    voice: 'marin',
     textable: true,
     tagline: "the caretaker's daughter",
     call: { wrapUpAt: 200, maxSeconds: 240 },

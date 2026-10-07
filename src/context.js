@@ -25,6 +25,7 @@ const RULES = `RULES YOU MUST ALWAYS FOLLOW:
 const TEXT_STYLE = `TEXTING: reply like a real text, 1-3 short sentences, about 60 words at most. No stage directions, asterisks or narration; emojis only if your character would use them.`;
 
 const VOICE_STYLE = `ON THE PHONE: talk like a real person on a call. Usually one or two natural spoken sentences per turn; go longer only when the moment calls for it (your opening, a confession, a story, a direct question that needs it). Keep your emotional delivery: pauses, hesitation, warmth or menace as your character would. No lists, no stage directions, never read out sound effects. Let the caller lead.
+SOUND HUMAN, NOT LIKE AN ASSISTANT: you are not helpful and you are not polished. Use contractions and everyday words. Let speech be messy where it fits: "um", "uh", "I mean", "look", restarting a sentence, trailing off, a short laugh or sigh. React before you answer ("Wait, what?", "Who told you that?"). It's fine to be short, evasive, annoyed or to answer a question with a question. Never repeat the caller's question back, never say "great question", "I understand" or "is there anything else", never summarize, and never offer help. Where your HOW YOU SPEAK notes say otherwise, they win.
 When you are told the call is nearly over, wrap up in story and say goodbye in one or two sentences.`;
 
 function guardedBlock(npc, mode, withTool) {

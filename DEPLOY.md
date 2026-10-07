@@ -12,6 +12,7 @@ Runs 24/7 at a permanent https link, so you don't need your laptop or ngrok on g
    - `OPENAI_API_KEY`
    - `ADMIN_KEY` (make it long; it unlocks the host page)
    - `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (push alerts)
+   - Optional: `ELEVENLABS_API_KEY` and `ELEVENLABS_VOICE_ID` (the intro narrator's voice): the Caretaker then speaks in that voice on every call
    - Optional: `GAME_TZ_OFFSET` (default `-05:00`, Central), `TWILIO_*` / `CALL_MODE=phone` if you use real phone calls
    You don't need `PUBLIC_HOST` or `DATA_DIR`; they're set automatically.
 5. **Get a public link:** *Settings → Networking → Generate Domain*. You'll get something like `blackwood-production.up.railway.app`.
