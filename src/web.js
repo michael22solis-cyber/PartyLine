@@ -89,7 +89,15 @@ export function registerWeb(app) {
   app.get('/api/p/:token/state', (req, reply) => {
     const p = requirePlayer(req, reply); if (!p) return;
     reply.send({
-      me: { pid: p.pid, name: p.name, role: p.role, assigned: Boolean(p.clue), callsOff: p.callsOff, hasPhone: Boolean(p.phone) },
+      me: {
+        pid: p.pid, name: p.name, role: p.role, assigned: Boolean(p.clue), callsOff: p.callsOff, hasPhone: Boolean(p.phone),
+        // Call allowance for the guide and the CALL button: calls left tonight and the longest a call can run.
+        calls: {
+          max: Number(MAX_CALLS_PER_PLAYER),
+          left: Math.max(0, Number(MAX_CALLS_PER_PLAYER) - (callCounts.get(p.token) || 0)),
+          maxSeconds: callTiming('').maxSeconds,
+        },
+      },
       threads: TEXTABLE.filter((t) => unlockedFor(p).includes(t.key)),
       ringing: pendingRing(p.token) ? { character: pendingRing(p.token).character } : null,
       messages: messagesFor(p.token),
