@@ -153,7 +153,7 @@ export function buildNudgePrompt({ npc, player, direction }) {
   const mem = memoryNotes({ npc, pid: player.pid, playerName: player.name, budgetTokens: 140 });
   return [
     { role: 'system', content: stableBlock(npc, 'text') },
-    { role: 'system', content: dynamicBlock({ player, npc, notes: mem.notes }) },
+    { role: 'system', content: dynamicBlock({ player, npc, notes: mem.notes, mode: 'text' }) },
     { role: 'user', content: direction },
   ];
 }

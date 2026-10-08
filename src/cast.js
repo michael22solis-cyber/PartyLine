@@ -35,6 +35,22 @@ const STATUS = {
 };
 export const statusOf = (npc, p = phase()) => STATUS[npc]?.[p] || '';
 
+// Busy means busy: when their status says they're occupied, the first call goes unanswered and they text why (no AI
+// cost); try again in two minutes and they pick up. Their texts come a little late too.
+const BUSY = {
+  teddy: { early: 'live', deep: 'live' },
+  marcus: { deep: 'driving' },
+  lily: { early: 'shift' },
+};
+const EXCUSE = {
+  live: 'LIVE rn!! 🔴 call me back in 2 min 👻',
+  driving: 'Driving. Give me two minutes, then call.',
+  shift: 'on shift. call me in 2 min.',
+};
+export const busyAs = (npc, p = phase()) => BUSY[npc]?.[p] || null;
+export const excuseFor = (why) => EXCUSE[why] || 'Can’t talk right now. Try me in a couple minutes.';
+export const busyReplyDelayMs = (npc) => (busyAs(npc) ? 25_000 + Math.random() * 30_000 : 0);
+
 // How each of them types: ms per character, the longest they'll "type" for, and whether they stop and start again.
 const TYPING = {
   ruth: { perChar: 55, max: 7000, hesitate: true },   // slow, careful, proper punctuation

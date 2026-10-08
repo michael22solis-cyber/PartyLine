@@ -27,9 +27,12 @@ import { callTiming, openingItem, realtimeModel } from './voice/session.js';
 import { mintClientSecret, createSidebandCall } from './voice/realtime-api.js';
 import { attachSideband } from './voice/sideband.js';
 import { openCall, getCall, closeCall, callTranscript, callUsage, callDisclose } from './voice/calls.js';
-import { checkCall, chargeCall, resetAllowances, callAllowance } from './voice/allowance.js';
+import { checkCall, chargeCall, resetAllowances, callAllowance, holdOff } from './voice/allowance.js';
+import { resetInitiative } from './initiative.js';
+import { liveView } from './hostview.js';
+import { sendHint, nextHint } from './hints.js';
 import { recordedCall, servedFile as caretakerClip, voiceStatus as caretakerVoice, warmUp as warmCaretaker } from './voice/caretaker.js';
-import { statusOf, phase } from './cast.js';
+import { statusOf, phase, busyAs, excuseFor } from './cast.js';
 import { trackUrls, bedUrls, servedFile as musicFile, musicStatus, warmUp as warmMusic } from './music.js';
 import { SECRETS } from './secrets.js';
 
@@ -39,6 +42,7 @@ const {
   MAX_CALLS_PER_PLAYER = 30,
 } = process.env;
 const callCounts = new Map();
+const excused = new Set(); // `${token}:${npc}:${phase}`: the busy excuse is given once per stretch of the night
 const SHARED_DIR = path.resolve('src/shared');
 const PUBLIC_DIR = path.resolve('public');
 const APP_HTML = () => fs.readFileSync(path.join(PUBLIC_DIR, 'app.html'), 'utf8');
@@ -205,6 +209,17 @@ export function registerWeb(app) {
         return reply.code(allowed.status).send({ error: allowed.error, reason: allowed.reason, retryAfter: allowed.retryAfter });
       }
       timing = allowed.timing;
+      // Busy (Teddy live, Marcus driving, Lily on shift): the first try goes unanswered and they text why.
+      const why = busyAs(character);
+      const excusedKey = `${p.token}:${character}:${phase()}`;
+      if (why && !excused.has(excusedKey)) {
+        excused.add(excusedKey);
+        holdOff(p.token, character, 2 * 60_000);
+        ledger.event('call_refused', { session: p.pid, npc: character, reason: 'busy' });
+        const t = setTimeout(() => deliver({ token: p.token, thread: character, from: 'character', text: excuseFor(why) }).catch(() => {}), process.env.TEXT_FAST === '1' ? 0 : 4000);
+        t.unref?.();
+        return reply.code(409).send({ error: `No answer. ${c.name} can't talk right now.`, reason: 'busy' });
+      }
     }
 
     // The Caretaker speaks in the intro narrator's ElevenLabs voice: his calls play recordings (see voice/caretaker.js).
@@ -371,12 +386,14 @@ export function registerWeb(app) {
 
   app.get('/admin/status', (req, reply) => {
     if (!requireAdmin(req, reply)) return;
+    const live = liveView();
     reply.send({
       players: players().map((p) => ({
-        name: p.name, role: p.role, phone: Boolean(p.phone), callsOff: p.callsOff, link: linkFor(p.token),
+        name: p.name, role: p.role, pid: p.pid, phone: Boolean(p.phone), callsOff: p.callsOff, link: linkFor(p.token),
         voted: Boolean(votes()[p.token]), found: (p.found || []).length, contacts: (p.unlocked || []).length,
-        callMinutes: Math.round((p.callSeconds || 0) / 6) / 10,
+        callMinutes: Math.round((p.callSeconds || 0) / 6) / 10, ...live.players[p.token], hintLeft: Boolean(nextHint(p)),
       })),
+      spend: { usd: live.usd, since: live.since },
       revealed: getDb().revealed,
       caretakerVoice: caretakerVoice(),
       music: musicStatus(),
@@ -385,6 +402,16 @@ export function registerWeb(app) {
       schedule: scheduled(),
       beats: Object.keys(BEATS),
     });
+  });
+
+  // Nudge a stuck player: a hint on The Line about who to ask (never the answer).
+  app.post('/admin/hint/:pid', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    const p = players().find((x) => x.pid === req.params.pid);
+    if (!p) return reply.code(404).send({ error: 'No such player' });
+    const h = await sendHint(p.token);
+    if (!h) return reply.code(409).send({ error: `${p.name} has found or been pointed at everything already.` });
+    reply.send({ ok: true, about: h.who });
   });
 
   app.post('/admin/beat/:name', async (req, reply) => {
@@ -464,6 +491,8 @@ export function registerWeb(app) {
     if (!requireAdmin(req, reply)) return;
     resetGame();
     resetAllowances();
+    resetInitiative();
+    excused.clear();
     resetMemory();
     reply.send({ ok: true });
   });

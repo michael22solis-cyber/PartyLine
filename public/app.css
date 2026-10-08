@@ -561,3 +561,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 /* evidence heard on a call: worth more, and looks it */
 .card.oncall { box-shadow: 0 0 0 1px rgba(230,162,60,0.6), 0 0 18px rgba(230,162,60,0.25); }
 .card.oncall .tag { color: #a5640f; }
+.group-recap { list-style: none; padding: 0; margin: 6px 0 14px; display: grid; gap: 6px; font-size: 13.5px; }
+.group-recap li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,0.03); color: var(--dim); }
+.group-recap li b { color: var(--ink); font-weight: 600; }
+.group-recap li.you { box-shadow: inset 2px 0 0 var(--glow); }

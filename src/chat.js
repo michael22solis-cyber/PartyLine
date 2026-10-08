@@ -9,7 +9,8 @@ import { topicsFor } from './secrets.js';
 import { approveFromPlayerText, phoneOnlyRaised } from './disclosure.js';
 import { chatComplete } from './ai/openai.js';
 import { ledger } from './ai/ledger.js';
-import { typingPlan } from './cast.js';
+import { typingPlan, busyReplyDelayMs } from './cast.js';
+import { onAccusation } from './initiative.js';
 
 const { MAX_TEXTS_PER_PLAYER = 150 } = process.env;
 const env = process.env;
@@ -52,6 +53,7 @@ export async function handlePlayerText(player, thread, text, { clientId = null }
   if (mine.duplicate) return mine; // a retried send: already handled
   remember({ player: player.name, pid: player.pid, npc: thread, character: c.name, speaker: 'player', text: `(text) ${clean}`, channel: 'text' });
   unlockMentions(player, clean).catch(() => {});
+  if (tagLine({ speaker: 'player', text: clean, npc: thread }).includes('accusation')) onAccusation(player, thread, clean);
 
   if (CRISIS.test(clean)) {
     await deliver({
@@ -111,7 +113,7 @@ async function replyOnce(player, thread, s) {
   const c = CHARACTERS[thread];
   let approvedIds = [];
   try {
-    await delay(1200 + Math.random() * 1800); // "read" delay; texts that arrive meanwhile are answered together
+    await delay(1200 + Math.random() * 1800 + busyReplyDelayMs(thread)); // "read" delay (longer when they're busy); texts that arrive meanwhile are answered together
     read(player, thread);
     emit(player.token, 'typing', { thread, on: true });
     // Everything up to here is answered by this reply; only texts arriving from now on need a follow-up.
