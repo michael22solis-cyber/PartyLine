@@ -154,7 +154,7 @@ export const BEATS = {
     await unlock(target, 'ruth');
     await ringInApp(target, 'ruth', {
       opening: `You are calling ${target.name} late at night, uninvited. Speak first, sweetly but with an edge: say some doors in that house are better left closed, and that they should get some rest. Keep it short unless they push you.`,
-      voicemail: { text: 'Voicemail from Ruth Calloway: "Sweetheart, it’s Ruth. Some doors in that house are better left closed. Get some rest now."', audio: audioIf('ruth-voicemail.mp3') },
+      voicemail: { text: 'Voicemail from Ruth Calloway: "Hello, sweetheart! It’s Ruth. I heard you’ve been asking around about the cellar. Some doors in that house are better left closed, dear. Anyway! You get some rest now. God bless."', audio: audioIf('ruth-voicemail.mp3') },
     });
     return { target: target.name };
   },

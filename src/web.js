@@ -198,7 +198,7 @@ export function registerWeb(app) {
   // Make the missing evidence recordings, once (the host's button; about 1 cent of OpenAI text-to-speech).
   app.post('/admin/recordings/make', (req, reply) => {
     if (!requireAdmin(req, reply)) return;
-    makeRecordings().catch(() => {});
+    makeRecordings({ remake: req.body?.remake === true }).catch(() => {});
     reply.send({ recordings: recordingsStatus() });
   });
 
