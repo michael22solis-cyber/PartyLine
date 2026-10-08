@@ -13,6 +13,7 @@ import { prepare as prepareCaretaker } from './voice/caretaker.js';
 import { statusOf } from './cast.js';
 import { onSecretFound } from './initiative.js';
 import { checkAgenda } from './agenda.js';
+import { overBudget } from './budget.js';
 
 const { UNLOCK_ALL, CALL_MODE = 'app' } = process.env; // CALL_MODE=phone uses real Twilio calls when a player has a number
 
@@ -84,6 +85,14 @@ export const audioIf = (file) => (fs.existsSync(path.join(AUDIO_DIR, file)) ? `/
 export async function ringInApp(p, character, { opening, voicemail, onMissed } = {}) {
   const c = CHARACTERS[character];
   const from = character.startsWith('caretaker') ? 'BLACKWOOD MANOR' : c.name.toUpperCase();
+  // Over this game's budget (budget.js): suspects don't place live calls anymore; it goes straight to voicemail or a
+  // missed call, so nobody answers into a dead line. The Caretaker's calls are recordings and still ring.
+  if (!character.startsWith('caretaker') && overBudget()) {
+    if (voicemail) await deliver({ token: p.token, thread: 'unknown', from: 'character', kind: 'voicemail', text: voicemail.text, audio: voicemail.audio, npc: character });
+    else await deliver({ token: p.token, thread: 'unknown', from: 'system', kind: 'missed', text: `Missed call: ${from}`, npc: character });
+    if (onMissed) await onMissed().catch(() => {});
+    return;
+  }
   const ringMs = Number(process.env.RING_TIMEOUT_MS || 40_000);
   const r = { character, opening, until: Date.now() + ringMs };
   r.timer = setTimeout(async () => {

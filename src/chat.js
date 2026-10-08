@@ -146,7 +146,8 @@ async function replyOnce(player, thread, s) {
     emit(player.token, 'typing', { thread, on: false });
     const busy = err.code === 'busy';
     await deliver({ token: player.token, thread, from: 'system', kind: 'text',
-      text: busy ? 'Their phone is busy. Try again in a minute.' : 'Message failed to deliver. Try again. (Host: the server window says why.)' });
+      text: err.code === 'budget' ? 'No signal. The line has gone quiet for tonight.'
+        : busy ? 'Their phone is busy. Try again in a minute.' : 'Message failed to deliver. Try again. (Host: the server window says why.)' });
   }
 }
 

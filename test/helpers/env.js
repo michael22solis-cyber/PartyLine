@@ -16,6 +16,7 @@ delete process.env.VAPID_PRIVATE_KEY;
 process.env.ELEVENLABS_API_KEY = '';
 process.env.ELEVENLABS_VOICE_ID = '';
 process.env.INITIATIVE ??= 'off'; // characters texting first: tested on its own (test/initiative.test.js)
+process.env.CALL_POOL_MINUTES ??= '0'; // per-player minutes in the older tests; the shared pool is tested on its own
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export async function until(fn, ms = 3000, step = 10) {

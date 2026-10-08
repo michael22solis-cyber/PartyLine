@@ -115,7 +115,7 @@ h2 small button { padding: 6px 12px; font-size: 12px; }
       <div class="stat"><b id="sPlayers">0</b><span>players</span></div>
       <div class="stat"><b id="sVotes">0</b><span>votes in</span></div>
       <div class="stat"><b id="sNext">—</b><span id="sNextLabel">next beat</span></div>
-      <div class="stat"><b id="sSpend">$0</b><span>AI spend this game</span></div>
+      <div class="stat"><b id="sSpend">$0</b><span id="sSpendLabel">AI spend this game</span></div>
     </div>
     <p class="note" id="voiceNote"></p>
 
@@ -222,7 +222,8 @@ async function refresh() {
   const ps = status.players;
   $('sPlayers').textContent = ps.length;
   $('sVotes').textContent = `${status.tally.votes}/${ps.length}`;
-  $('sSpend').textContent = usd(status.spend?.usd);
+  $('sSpendLabel').textContent = status.budget?.over ? 'BUDGET REACHED: no live calls' : status.budget?.cap ? 'AI spend / game budget' : 'AI spend this game';
+  $('sSpend').textContent = status.budget?.cap ? `${usd(status.budget.usd)}/${status.budget.cap}` : usd(status.spend?.usd);
   const next = status.schedule.filter((s) => !s.done).sort((a, b) => a.at.localeCompare(b.at))[0];
   $('sNext').textContent = next ? next.beat : '—';
   $('sNextLabel').textContent = next ? fmt(next.at) : 'nothing scheduled';
@@ -255,6 +256,7 @@ async function refresh() {
         vn.append(d);
       }
     }
+    if (status.callPool) vn.append(el('div', null, `Group call time: ${status.callPool.minutesLeft} of ${status.callPool.minutesMax} min left (shared by everyone).`));
     if (status.dataSince) vn.append(el('div', null, `Saved audio kept since ${fmt(status.dataSince)}. If this resets after a deploy, the storage volume isn't attached and ElevenLabs remakes (and charges for) everything.`));
     if (status.voices) vn.append(el('div', null, `Call voices: ${Object.entries(status.voices).map(([n, x]) => `${n} ${x}`).join(' · ')} (change with VOICE_RUTH etc. in Railway).`));
     // Only offer a retry when something actually failed and nothing is being made right now (each retry costs credits).
