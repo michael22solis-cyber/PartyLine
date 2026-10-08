@@ -28,8 +28,9 @@ if (!FAKE && !OPENAI_API_KEY) { console.error('Add OPENAI_API_KEY to .env first 
 
 const ONLY = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7);
 const SR = 24000;
-const WORK = path.resolve('audio-src');
-const OUT = path.resolve('public/audio');
+// EVIDENCE_WORK / EVIDENCE_OUT: where the server's "Make the recordings" button works and saves (the data volume).
+const WORK = path.resolve(process.env.EVIDENCE_WORK || 'audio-src');
+const OUT = path.resolve(process.env.EVIDENCE_OUT || 'public/audio');
 fs.mkdirSync(WORK, { recursive: true });
 fs.mkdirSync(OUT, { recursive: true });
 
@@ -183,7 +184,7 @@ function mix(outName, parts, total, master = '') {
   const graph = `${chains.join(';')};${inputs}amix=inputs=${parts.length}:normalize=0:duration=longest,atrim=0:${total.toFixed(2)}${master ? `,${master}` : ''},afade=t=out:st=${(total - 0.4).toFixed(2)}:d=0.4,loudnorm=I=-18:TP=-1.5[out]`;
   args.push('-filter_complex', graph, '-map', '[out]', '-ac', '1', '-ar', '44100', '-b:a', '96k', path.join(OUT, outName));
   execFileSync(ffmpeg, args);
-  console.log(`made public/audio/${outName} (${total.toFixed(1)} s)`);
+  console.log(`made ${path.join(OUT, outName)} (${total.toFixed(1)} s)`);
 }
 
 const sfx = (name, samples) => custom(name) || writeWav(path.join(WORK, `${name}.wav`), samples);

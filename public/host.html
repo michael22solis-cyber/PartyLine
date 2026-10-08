@@ -258,6 +258,23 @@ async function refresh() {
         vn.append(d);
       }
     }
+    const rec = status.recordings;
+    if (rec) {
+      const names = { 'call911.mp3': 'the 911 call', 'ruth-voicemail.mp3': 'Ruth’s voicemail' };
+      const line = el('div');
+      line.append(`Recordings: ${rec.files.map((f) => `${names[f.name]} ${f.where ? '✓' : '(missing, text only)'}`).join(' · ')}${rec.working ? ' · recording…' : ''}${rec.error ? ` · last try failed: ${rec.error}` : ''}`);
+      if (rec.missing && rec.canMake && !rec.working) {
+        const b = el('button', null, 'Make the recordings (one time, about 1¢)');
+        b.style.marginLeft = '8px'; b.style.padding = '6px 12px'; b.style.fontSize = '12px';
+        b.onclick = async () => {
+          if (!confirm('This makes the missing recordings once with OpenAI voices (about 1 cent in total). Continue?')) return;
+          b.disabled = true; try { await api('POST', '/admin/recordings/make'); toast('Recording…'); } catch (e) { toast(e.message, true); } refresh();
+        };
+        line.append(b);
+      }
+      rec.files.filter((f) => f.where === 'made').forEach((f) => { const a = el('a', null, ` Download ${f.name}`); a.href = f.url; a.download = f.name; a.style.color = 'var(--glow)'; line.append(a); });
+      vn.append(line);
+    }
     if (status.callPool) vn.append(el('div', null, `Group call time: ${status.callPool.minutesLeft} of ${status.callPool.minutesMax} min left (shared by everyone).`));
     if (status.dataSince) vn.append(el('div', null, `Saved audio kept since ${fmt(status.dataSince)}. If this resets after a deploy, the storage volume isn't attached and ElevenLabs remakes (and charges for) everything.`));
     if (status.voices) vn.append(el('div', null, `Call voices: ${Object.entries(status.voices).map(([n, x]) => `${n} ${x}`).join(' · ')} (change with VOICE_RUTH etc. in Railway).`));
