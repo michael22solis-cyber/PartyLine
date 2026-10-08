@@ -35,6 +35,7 @@ import { liveView } from './hostview.js';
 import { overBudget, budgetView } from './budget.js';
 import { normalizePhone } from './phonenumber.js';
 import { dataSince } from './paths.js';
+import { elevenToday } from './eleven-guard.js';
 import { madeFile, makeRecordings, recordingsStatus } from './recordings.js';
 import { sendHint, nextHint } from './hints.js';
 import { agendaView, agendaSummary, checkAgendas } from './agenda.js';
@@ -433,6 +434,7 @@ export function registerWeb(app) {
       budget: budgetView(),
       callPool: poolView(),
       recordings: recordingsStatus(),
+      elevenToday: elevenToday(),
       paused: Boolean(pausedAt()),
       rejoins: pendingRejoins(),
       voices: Object.fromEntries(['ruth', 'marcus', 'lily', 'teddy'].map((k) => [CHARACTERS[k].name.split(' ')[0], voiceFor(k)])),
