@@ -264,8 +264,8 @@ function flashNote(text) {
 
 // ---- home: the lock screen of the burner phone ----
 const PHASE_LABEL = {
-  before: 'THE LINE OPENS TONIGHT', night1: 'NIGHT ONE', late: 'NIGHT ONE · AFTER DARK', between: 'BETWEEN NIGHTS',
-  night2: 'NIGHT TWO', final: 'VOTES ARE OPEN', after: 'CASE CLOSED',
+  before: 'THE LINE OPENS TONIGHT', early: 'THE LINE IS OPEN', late: 'AFTER DARK', deep: 'THE WITCHING HOUR',
+  final: 'VOTES ARE OPEN', after: 'CASE CLOSED',
 };
 const secretsFound = () => state.messages.filter((m) => m.kind === 'evidence' && /^SECRET UNCOVERED/.test(m.text)).length;
 
@@ -388,18 +388,12 @@ function lobbyPanel() {
   }
   if (L.organizer) {
     const err = el('p', 'note bad');
-    let date = null;
-    if (L.length === 'twonights') {
-      date = el('input', 'textin'); date.type = 'date';
-      const y = new Date().getFullYear(); date.value = `${y}-10-30`;
-      box.append(el('p', 'note', 'Night 1 date (8 pm start):'), date);
-    }
     const ready = L.joined.length >= L.minPlayers;
     const start = el('button', 'wide', ready ? 'START THE GAME' : `NEED ${L.minPlayers - L.joined.length} MORE`);
     start.disabled = !ready;
     start.onclick = async () => {
       start.disabled = true; sfx.creak();
-      try { await api('/start', { method: 'POST', body: JSON.stringify({ date: date?.value }) }); }
+      try { await api('/start', { method: 'POST', body: '{}' }); }
       catch (ex) { err.textContent = ex.message; start.disabled = false; }
     };
     box.append(start, err);

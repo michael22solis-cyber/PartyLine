@@ -29,7 +29,7 @@ export function tutorialStep(index, state) {
       points: [
         'Read clues, question the four suspects, and compare what you learn with the other players.',
         'Your private role card explains your goal. Keep it to yourself. You can read it again in MENU → My role.',
-        'The host releases the story over two nights. You can explore the phone at your own pace between updates.',
+        'The story unfolds over one night, about an hour. New texts, calls and evidence arrive as it goes; explore at your own pace in between.',
       ],
       tip: 'BACK returns to the previous app. The round HOME button opens your apps. MENU has sound, calls, call captions, and alerts. You can return to this guide at any time.',
       extra: 'To catch new messages, use MENU → Turn on alerts. On iPhone, first add Blackwood to your Home Screen. If alerts are unavailable, keep the page open during play.',
@@ -95,7 +95,7 @@ export function tutorialStep(index, state) {
       points: [
         'Choose a suspect, choose an accomplice from the other players, then tap LOCK IN VOTE. Watch for “Your vote” to confirm it saved.',
         'You can update a saved vote until voting closes. The game’s deadline is 11:30 pm on Night 2; watch The Line for the host’s reminders.',
-        'At the midnight reveal, The End unlocks with the result, your score, and the secrets you found.',
+        'At the final call, The End unlocks with the result, your score, and the secrets you found.',
       ],
       tip: state.revealed ? 'Your case is closed. The End is ready to open.'
         : state.vote ? 'You already have a saved vote. Review it as new evidence arrives.'

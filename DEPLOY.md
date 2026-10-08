@@ -23,7 +23,7 @@ Runs 24/7 at a permanent https link, so you don't need your laptop or ngrok on g
 
 - **Players:** add each friend, then *Copy link* / *Send*. Each link is that friend's private phone.
 - **setup** once everyone has joined (picks the accomplice, deals clues).
-- **Story beats:** tap once to arm, again to send. Or **Schedule Night 1 / Night 2** and it runs itself.
+- **Story beats:** tap once to arm, again to send. Or **Schedule** a start time and the whole night runs itself (~75 min).
 - **Votes** fill in live; **Show roles** reveals who the accomplice is (keep it hidden if you're playing).
 - **Reset** wipes everything (type RESET).
 

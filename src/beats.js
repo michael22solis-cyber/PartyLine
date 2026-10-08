@@ -1,4 +1,4 @@
-// The scripted moments of The Blackwood Line (2-night version).
+// The scripted moments of The Blackwood Line: one night, about 75 minutes (timetables in modes.js).
 // Fire them by hand during a playtest (`npm run admin -- beat <name>`) or schedule them.
 import { players, updatePlayer, votes, setRevealed, markBeat } from './store.js';
 import { deliver, emit } from './live.js';
@@ -66,7 +66,7 @@ export const BEATS = {
   },
 
   async welcome() {
-    await toAll('line', 'Tonight at 8, the Blackwood line opens. Keep this phone close. Every character you meet is an AI. Tap ⋮ to turn off calls anytime.');
+    await toAll('line', 'Tonight, the Blackwood line opens. Keep this phone close. Every character you meet is an AI. Tap ⋮ to turn off calls anytime.');
   },
 
   async accomplice() {
@@ -124,10 +124,6 @@ export const BEATS = {
     return { target: target.name };
   },
 
-  async closeNight1() {
-    await toAll('line', 'Someone in your group has been talking to the house. Votes are due tomorrow at 11:30 pm. At midnight, it calls everyone.');
-  },
-
   async twist() {
     await toAll('line',
       '911 CALL — Thursday, 11:12 pm. A woman, crying: "There’s someone at the bottom of the stairs at Blackwood... I think she’s dead." Then she hangs up.',
@@ -148,14 +144,14 @@ export const BEATS = {
   },
 
   async votesOpen() {
-    await toAll('line', 'One hour left. Open the VOTE tab and name the killer and the accomplice.');
+    await toAll('line', 'Votes are open. Open the VOTE tab and name the killer and the accomplice before the line goes dead.');
   },
 
   async lineRinging() {
     await toAll('line', 'The line is ringing.');
   },
 
-  // Midnight: everyone gets the Caretaker's reveal call, then the results.
+  // The final call: everyone gets the Caretaker's reveal, then the results.
   async reveal() {
     setRevealed();
     await callEach('caretaker_reveal', 0); // every phone rings at once

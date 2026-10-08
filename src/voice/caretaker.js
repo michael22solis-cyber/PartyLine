@@ -1,4 +1,4 @@
-// The Caretaker in one voice: the intro narrator's ElevenLabs voice, on every call and at the midnight reveal.
+// The Caretaker in one voice: the intro narrator's ElevenLabs voice, on every call and at the final reveal.
 // He only ever speaks his fixed riddles and hints, so his calls are recordings, not live sessions. Each line is
 // generated once (ELEVENLABS_API_KEY + ELEVENLABS_VOICE_ID, same as `npm run voice`), cached on the data volume, and
 // reused by every game; a player's name is a separate short clip, also cached. Without the keys, or if generation
@@ -23,7 +23,7 @@ export const LINES = {
     `${TAG} Ask my daughter... [pause] about the song.`,
     `${TAG} Ask who came home... with mud on her shoes.`,
   ],
-  fading: `${TAG} The line is fading... [long pause] Find me before midnight.`,
+  fading: `${TAG} The line is fading... [long pause] Find me before the line goes dead.`,
   reveal: `${TAG} Thirty years I've waited under that floor. [pause] She sang my wife to sleep... and then she buried me. [long pause] Ruth Calloway. [pause] Dana was going to find me... so Ruth made sure she never reached the bottom of the stairs alive. [long pause] Thank you for listening. [pause] Happy Halloween.`,
 };
 const greeting = (name) => `${TAG} ...${name}... [pause] are you there...?`;

@@ -87,7 +87,7 @@ test('with the narrator voice: his calls are recordings in that voice, generated
   assert.match(r2.body.captions[1], /voice in the walls/);
   assert.equal(playerByToken(a.token).caretakerCalls, 2);
 
-  // The midnight reveal is in the same voice.
+  // The final reveal is in the same voice.
   await ringInApp(a, 'caretaker_reveal', {});
   const rv = await post(a, '/call', { character: 'caretaker_reveal' });
   assert.equal(rv.body.mode, 'recording');

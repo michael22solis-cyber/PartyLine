@@ -203,7 +203,7 @@ if (chromium) {
     await page.close();
   });
 
-  test('the midnight reveal plays as a recorded call in the browser', async () => {
+  test('the final reveal plays as a recorded call in the browser', async () => {
     const file = path.resolve('public/audio/caretaker-reveal.mp3');
     const existed = fs.existsSync(file);
     if (!existed) execFileSync(ffmpeg, ['-loglevel', 'error', '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=mono', '-t', '1.2', '-b:a', '64k', file]);
@@ -242,7 +242,7 @@ if (chromium) {
       const secrets0 = mock.log.clientSecrets.length;
       await page.click('#ringAnswer', { timeout: 10_000 });
       await page.waitForFunction(() => /Twenty steps down/.test(document.querySelector('#callCaptions').textContent), null, { timeout: 8000 });
-      await page.waitForFunction(() => /Find me before midnight/.test(document.querySelector('#callCaptions').textContent), null, { timeout: 8000 });
+      await page.waitForFunction(() => /Find me before the line goes dead/.test(document.querySelector('#callCaptions').textContent), null, { timeout: 8000 });
       await until(() => ledger.records().some((r) => r.type === 'call_ended' && r.session === p.pid && r.transport === 'recording'), 8000);
       assert.equal(await page.textContent('#callState'), 'THE LINE WENT DEAD');
       assert.equal(mock.log.clientSecrets.length, secrets0, 'no live model session');

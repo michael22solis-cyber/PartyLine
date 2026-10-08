@@ -6,10 +6,9 @@ import { firedBeats } from './store.js';
 const PHASES = [
   ['after', ['reveal']],
   ['final', ['votesOpen', 'lineRinging']],
-  ['night2', ['twist', 'planted', 'caretakerHint']],
-  ['between', ['closeNight1']],
+  ['deep', ['twist', 'planted', 'caretakerHint']],
   ['late', ['memo', 'ruthWarning']],
-  ['night1', ['intro', 'calls', 'clues', 'cast']],
+  ['early', ['intro', 'calls', 'clues', 'cast']],
 ];
 export function phase(beats = firedBeats()) {
   for (const [name, triggers] of PHASES) if (triggers.some((b) => beats.includes(b))) return name;
@@ -18,20 +17,20 @@ export function phase(beats = firedBeats()) {
 
 const STATUS = {
   ruth: {
-    before: 'at evening prayers', night1: 'at home, knitting', late: "up late, can't sleep", between: 'at St. Agnes for morning mass',
-    night2: 'at home with the TV on', final: 'praying for poor Dana', after: 'unavailable',
+    before: 'at evening prayers', early: 'at home, knitting', late: "up late, can't sleep", deep: 'at home with the TV on',
+    final: 'praying for poor Dana', after: 'unavailable',
   },
   marcus: {
-    before: 'showing a property', night1: 'on another call', late: 'at the office, late', between: 'in meetings all day',
-    night2: 'driving', final: 'on the phone with his lawyer', after: 'offline',
+    before: 'showing a property', early: 'on another call', late: 'at the office, late', deep: 'driving',
+    final: 'on the phone with his lawyer', after: 'offline',
   },
   lily: {
-    before: "on shift at Rosie's", night1: "on shift at Rosie's", late: 'off shift', between: 'asleep',
-    night2: 'working a double at the diner', final: "can't sleep", after: 'offline',
+    before: "on shift at Rosie's", early: "on shift at Rosie's", late: 'off shift', deep: 'sitting in her car',
+    final: "can't sleep", after: 'offline',
   },
   teddy: {
-    before: 'prepping tonight’s tour', night1: '🔴 LIVE: Blackwood ghost tour', late: 'editing tonight’s stream', between: 'asleep (finally)',
-    night2: '🔴 LIVE: Halloween special', final: 'reading his comments', after: 'offline',
+    before: 'prepping tonight’s tour', early: '🔴 LIVE: Blackwood ghost tour', late: 'editing the stream', deep: '🔴 LIVE: Halloween special',
+    final: 'reading his comments', after: 'offline',
   },
 };
 export const statusOf = (npc, p = phase()) => STATUS[npc]?.[p] || '';
@@ -61,7 +60,7 @@ export const PHOTOS = {
   memo: { npc: 'marcus', image: '/assets/photos/marcus-listing.jpg',
     text: 'Listing photo from when it was on the market. It’s a cellar. Storage. That’s it, okay?',
     remember: 'sent the player the old listing photo of the manor’s cellar stairs' },
-  closeNight1: { npc: 'ruth', image: '/assets/photos/ruth-card.jpg',
+  ruthWarning: { npc: 'ruth', image: '/assets/photos/ruth-card.jpg',
     text: 'Sweetheart, I had these made for poor Dana. Keep her in your prayers tonight. God bless.',
     remember: 'sent the player a memorial prayer card you had printed for Dana' },
   twist: { npc: 'lily', image: '/assets/photos/lily-polaroid.jpg',

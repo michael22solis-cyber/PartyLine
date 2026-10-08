@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import fastifyStatic from '@fastify/static';
-import { scheduleNight } from './schedule.js';
+import { scheduleGame } from './schedule.js';
 import { createGame, join, startGame, lobbyView } from './lobby.js';
 import { getGame } from './store.js';
 import {
@@ -391,12 +391,12 @@ export function registerWeb(app) {
     reply.send(addScheduled(beat, new Date(at).toISOString()));
   });
 
-  app.post('/admin/night/:n', (req, reply) => {
+  // Schedule a whole game for later (one night; the length's timetable from modes.js).
+  app.post('/admin/schedule-game', (req, reply) => {
     if (!requireAdmin(req, reply)) return;
-    try { reply.send({ scheduled: scheduleNight(Number(req.params.n), req.body?.date) }); }
+    try { reply.send({ scheduled: scheduleGame(req.body?.at, req.body?.length) }); }
     catch (err) { reply.code(err.status || 500).send({ error: err.message }); }
   });
-
   app.post('/admin/schedule/clear', (req, reply) => {
     if (!requireAdmin(req, reply)) return;
     clearPendingSchedule();
@@ -413,7 +413,7 @@ export function registerWeb(app) {
   });
   app.post('/admin/start', async (req, reply) => {
     if (!requireAdmin(req, reply)) return;
-    try { reply.send(await startGame({ date: req.body?.date })); }
+    try { reply.send(await startGame()); }
     catch (err) { reply.code(err.status || 500).send({ error: err.message }); }
   });
   app.get('/join/:code', (req, reply) => {
@@ -428,7 +428,7 @@ export function registerWeb(app) {
   app.post('/api/p/:token/start', async (req, reply) => {
     const p = requirePlayer(req, reply); if (!p) return;
     if (!p.organizer) return reply.code(403).send({ error: 'Only the organizer can start the game.' });
-    try { reply.send(await startGame({ date: req.body?.date })); }
+    try { reply.send(await startGame()); }
     catch (err) { reply.code(err.status || 500).send({ error: err.message }); }
   });
 

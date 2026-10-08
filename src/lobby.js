@@ -4,7 +4,6 @@ import crypto from 'node:crypto';
 import { players, addPlayer, setGame, getGame, addScheduled, updatePlayer } from './store.js';
 import { emit } from './live.js';
 import { LENGTHS } from './modes.js';
-import { scheduleNight } from './schedule.js';
 import { runBeat } from './beats.js';
 
 export const MAX_PLAYERS = 8;
@@ -19,7 +18,7 @@ export function lobbyView(p) {
   const g = getGame();
   if (!g) return null;
   return {
-    mode: g.mode, length: g.length, lengthLabel: LENGTHS[g.length].label, status: g.status,
+    mode: g.mode, length: g.length, lengthLabel: (LENGTHS[g.length] || LENGTHS.quick).label, status: g.status,
     joined: players().map((x) => x.name), organizer: Boolean(p?.organizer), minPlayers: MIN_PLAYERS,
     invite: g.status === 'lobby' ? `/join/${g.code}` : null, startedAt: g.startedAt || null,
   };
@@ -40,22 +39,15 @@ export function join(code, name) {
   return p;
 }
 
-export async function startGame({ date } = {}) {
+export async function startGame() {
   const g = getGame();
   if (!g) throw Object.assign(new Error('No game to start.'), { status: 400 });
   if (g.status !== 'lobby') throw Object.assign(new Error('Already started.'), { status: 409 });
   if (players().length < MIN_PLAYERS) throw Object.assign(new Error(`Need at least ${MIN_PLAYERS} players.`), { status: 400 });
   const now = Date.now();
-  if (g.length === 'twonights') {
-    if (!date) throw Object.assign(new Error('Pick the date of Night 1.'), { status: 400 });
-    await runBeat('setup');
-    const n2 = new Date(`${date}T12:00:00Z`); n2.setUTCDate(n2.getUTCDate() + 1);
-    scheduleNight(1, date); scheduleNight(2, n2.toISOString().slice(0, 10));
-  } else {
-    for (const [beat, min] of LENGTHS[g.length].beats) {
-      if (beat === 'setup') await runBeat('setup');
-      else addScheduled(beat, new Date(now + min * 60_000).toISOString());
-    }
+  for (const [beat, min] of (LENGTHS[g.length] || LENGTHS.quick).beats) { // an old two-night game plays as one night
+    if (beat === 'setup') await runBeat('setup');
+    else addScheduled(beat, new Date(now + min * 60_000).toISOString());
   }
   setGame({ ...g, status: 'running', startedAt: new Date(now).toISOString() });
   broadcast();

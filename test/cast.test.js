@@ -20,14 +20,14 @@ after(async () => { await app.close(); await mock.close(); });
 
 test('status lines follow the story', () => {
   assert.equal(phase([]), 'before');
-  assert.equal(phase(['setup', 'intro']), 'night1');
+  assert.equal(phase(['setup', 'intro']), 'early');
   assert.equal(phase(['intro', 'memo']), 'late');
-  assert.equal(phase(['intro', 'memo', 'closeNight1', 'twist']), 'night2');
+  assert.equal(phase(['intro', 'memo', 'twist']), 'deep');
   assert.equal(phase(['twist', 'reveal']), 'after');
-  assert.match(statusOf('teddy', 'night1'), /LIVE/);
+  assert.match(statusOf('teddy', 'early'), /LIVE/);
   assert.equal(statusOf('ruth', 'after'), 'unavailable');
   for (const npc of ['ruth', 'marcus', 'lily', 'teddy']) {
-    for (const ph of ['before', 'night1', 'late', 'between', 'night2', 'final', 'after']) assert.ok(statusOf(npc, ph), `${npc} ${ph}`);
+    for (const ph of ['before', 'early', 'late', 'deep', 'final', 'after']) assert.ok(statusOf(npc, ph), `${npc} ${ph}`);
   }
 });
 
@@ -94,4 +94,18 @@ test('missed calls, voicemails and call logs know whose face to show', async () 
   assert.equal(messagesFor(q.token).find((m) => m.kind === 'voicemail').npc, 'ruth');
   await app.inject({ method: 'POST', url: `/api/p/${q.token}/call/end`, payload: { character: 'marcus', seconds: 30, reason: 'player_hung_up' } });
   assert.equal(messagesFor(q.token).find((m) => m.kind === 'calllog').npc, 'marcus');
+});
+
+test('one night: the host schedules the whole story from a start time', async () => {
+  const at = '2026-10-31T20:00:00-05:00';
+  const r = await app.inject({ method: 'POST', url: '/admin/schedule-game', headers: { 'x-admin-key': 'test-admin' }, payload: { at, length: 'quick' } });
+  assert.equal(r.statusCode, 200, r.body);
+  const beats = r.json().scheduled;
+  assert.equal(beats[0].beat, 'setup');
+  assert.equal(beats.at(-1).beat, 'reveal');
+  assert.equal((new Date(beats.at(-1).at) - new Date(at)) / 60_000, 75, 'the final call 75 minutes in');
+  assert.ok(!beats.some((b) => b.beat === 'closeNight1'));
+  const bad = await app.inject({ method: 'POST', url: '/admin/schedule-game', headers: { 'x-admin-key': 'test-admin' }, payload: { at, length: 'twonights' } });
+  assert.equal(bad.statusCode, 400);
+  await app.inject({ method: 'POST', url: '/admin/schedule/clear', headers: { 'x-admin-key': 'test-admin' } });
 });

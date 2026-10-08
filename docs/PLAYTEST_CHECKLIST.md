@@ -15,7 +15,7 @@ few minutes of setup makes it count.
    - With ngrok, `PUBLIC_HOST` and the Twilio webhook both need updating each time the URL changes (this was already
      true before).
 3. **`npm test`** should pass.
-4. **Optional: recorded midnight reveal** (about $0.01, once). Run `npm run evidence -- --only=reveal`, or drop your own
+4. **Optional: recorded final reveal** (about $0.01, once). Run `npm run evidence -- --only=reveal`, or drop your own
    recording in `audio-src/custom/caretakerReveal.mp3` first. Without the file, the reveal stays a live call.
 5. **Recommended: compare the voice models before players hear them** (about $0.10–$0.15).
    - Run `npm run eval:voice -- --live --budget 0.50`.

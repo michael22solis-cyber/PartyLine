@@ -86,14 +86,13 @@ h2 small { font-size: 15px; letter-spacing: 0.1em; }
       <p class="note" id="gameState">No game yet. Create one and send the invite link to your group: friends join themselves, the first to join is the organizer, and the story runs on its own once they tap Start.</p>
       <div class="row">
         <select id="len" style="flex:1;padding:10px;background:var(--bg);color:var(--ink);border:1px solid var(--line)">
-          <option value="quick">Play now · about 75 minutes</option>
-          <option value="evening">One evening · about 2 hours</option>
-          <option value="twonights">Two nights · Halloween event</option>
+          <option value="quick">One night · about 75 minutes</option>
+          <option value="evening">Slow burn · about 2 hours</option>
         </select>
         <button class="primary" id="newGame">New game</button>
       </div>
       <div class="row" id="inviteRow" style="margin-top:8px" hidden><input id="invite" readonly /><button id="copyInvite">Copy</button></div>
-      <div class="row" id="startRow" style="margin-top:8px" hidden><input id="startDate" type="date" hidden /><button id="startGame">Start now</button></div>
+      <div class="row" id="startRow" style="margin-top:8px" hidden><button id="startGame">Start now</button></div>
     </div>
 
     <h2>PLAYERS <small><button id="toggleRoles">Show roles</button></small></h2>
@@ -104,7 +103,7 @@ h2 small { font-size: 15px; letter-spacing: 0.1em; }
         <input id="pPhone" placeholder="+15555550123 (optional)" />
         <button class="primary" id="addP">Add</button>
       </div>
-      <p class="note">Send each friend their own link. Run <b>setup</b> once everyone is in, before Night 1.</p>
+      <p class="note">Send each friend their own link. Run <b>setup</b> once everyone is in, before the story starts (a scheduled game does this for you).</p>
     </div>
 
     <h2>STORY BEATS</h2>
@@ -113,8 +112,8 @@ h2 small { font-size: 15px; letter-spacing: 0.1em; }
 
     <h2>SCHEDULE</h2>
     <div class="card">
-      <div class="row"><input id="d1" type="date" /><button id="n1">Schedule Night 1</button></div>
-      <div class="row" style="margin-top:8px"><input id="d2" type="date" /><button id="n2">Schedule Night 2 + reveal</button></div>
+      <p class="note">Pick when the night starts; the whole story (setup to the final call) runs on its own from there.</p>
+      <div class="row"><input id="startAt" type="datetime-local" style="flex:1" /><select id="schedLen" style="padding:10px;background:var(--bg);color:var(--ink);border:1px solid var(--line)"><option value="quick">~75 min</option><option value="evening">~2 hrs</option></select><button id="schedGame">Schedule</button></div>
       <div class="sched" id="sched" style="margin-top:12px"></div>
       <button id="clearSched" style="margin-top:10px">Clear upcoming</button>
     </div>
@@ -133,11 +132,11 @@ h2 small { font-size: 15px; letter-spacing: 0.1em; }
 
 <script>
 const BEATS = [
-  ['Before the game', [
+  ['Before the story', [
     ['setup', 'Pick the accomplice and deal clues. Run once, after everyone joins.'],
-    ['welcome', 'Noon heads-up: the line opens tonight.'],
+    ['welcome', 'Heads-up: the line opens tonight.'],
   ]],
-  ['Night 1', [
+  ['The night', [
     ['accomplice', 'Secret orders to the accomplice.'],
     ['intro', 'The story arrives on The Line.'],
     ['calls', 'The Caretaker rings everyone, then each clue arrives.'],
@@ -145,15 +144,14 @@ const BEATS = [
     ['cast', 'Everyone gets every suspect’s number (backup).'],
     ['memo', 'Dana’s voice memo.'],
     ['ruthWarning', 'Ruth calls whoever dug into the cellar most.'],
-    ['closeNight1', 'Night 1 sign-off.'],
-  ]],
-  ['Night 2', [
     ['twist', 'The anonymous 911 call.'],
     ['planted', 'Planted evidence for the accomplice.'],
     ['caretakerHint', 'The Caretaker calls with hints.'],
+  ]],
+  ['The end', [
     ['votesOpen', 'Open the Vote app.'],
     ['lineRinging', '“The line is ringing.”'],
-    ['reveal', 'Midnight call, results and recap.'],
+    ['reveal', 'The final call, results and recap.'],
   ]],
 ];
 const $ = (id) => document.getElementById(id);
@@ -187,7 +185,6 @@ async function refresh() {
   const g = status.game;
   $('inviteRow').hidden = !g?.invite; $('startRow').hidden = !(g && g.status === 'lobby');
   if (g?.invite) $('invite').value = g.invite;
-  $('startDate').hidden = !(g && g.length === 'twonights');
   $('gameState').textContent = !g ? $('gameState').textContent
     : g.status === 'lobby' ? `Lobby open (${g.lengthLabel}). ${g.joined.length} joined. The organizer can start from their phone, or you can start it here.`
     : `Running since ${fmt(g.startedAt)} (${g.lengthLabel}). Beats are scheduled below.`;
@@ -214,7 +211,7 @@ async function refresh() {
   });
   const sched = $('sched'); sched.replaceChildren();
   const list = [...status.schedule].sort((a, b) => a.at.localeCompare(b.at));
-  if (!list.length) sched.append(el('p', 'note', 'Nothing scheduled. Fire beats by hand, or schedule both nights.'));
+  if (!list.length) sched.append(el('p', 'note', 'Nothing scheduled. Fire beats by hand, or schedule the night below.'));
   list.forEach((s) => { const d = el('div', s.done ? 'done' : ''); d.append(el('span', null, s.beat), el('span', null, fmt(s.at))); sched.append(d); });
   const t = $('tally'); t.replaceChildren();
   const tl = status.tally;
@@ -260,8 +257,10 @@ $('addP').onclick = async () => {
   try { await api('POST', '/admin/players', { name, phone: phone || undefined }); $('pName').value = ''; $('pPhone').value = ''; toast(`${name} added`); refresh(); }
   catch (e) { toast(e.message, true); }
 };
-$('n1').onclick = async () => { try { const r = await api('POST', '/admin/night/1', { date: $('d1').value }); toast(`Night 1: ${r.scheduled.length} beats scheduled`); refresh(); } catch (e) { toast(e.message, true); } };
-$('n2').onclick = async () => { try { const r = await api('POST', '/admin/night/2', { date: $('d2').value }); toast(`Night 2: ${r.scheduled.length} beats scheduled`); refresh(); } catch (e) { toast(e.message, true); } };
+$('schedGame').onclick = async () => {
+  if (!$('startAt').value) return toast('Pick a start time', true);
+  try { const r = await api('POST', '/admin/schedule-game', { at: new Date($('startAt').value).toISOString(), length: $('schedLen').value }); toast(`${r.scheduled.length} beats scheduled`); refresh(); } catch (e) { toast(e.message, true); }
+};
 $('clearSched').onclick = async () => { try { await api('POST', '/admin/schedule/clear'); toast('Upcoming beats cleared'); refresh(); } catch (e) { toast(e.message, true); } };
 $('reset').onclick = async () => {
   if ($('resetConfirm').value !== 'RESET') return toast('Type RESET to confirm', true);
@@ -274,11 +273,12 @@ $('newGame').onclick = async () => {
   catch (e) { toast(e.message, true); }
 };
 $('copyInvite').onclick = async () => { try { await navigator.clipboard.writeText($('invite').value); toast('Invite link copied'); } catch { $('invite').select(); } };
-$('startGame').onclick = async () => { try { await api('POST', '/admin/start', { date: $('startDate').value }); toast('The line is open'); refresh(); } catch (e) { toast(e.message, true); } };
+$('startGame').onclick = async () => { try { await api('POST', '/admin/start'); toast('The line is open'); refresh(); } catch (e) { toast(e.message, true); } };
 
-const y = new Date().getFullYear();
-$('startDate').value = `${y}-10-30`;
-$('d1').value = `${y}-10-30`; $('d2').value = `${y}-10-31`;
+{ // default start: tonight at 8 pm local time
+  const d = new Date(); d.setHours(20, 0, 0, 0);
+  $('startAt').value = new Date(d - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+}
 drawBeats();
 if (key) refresh(); else $('login').hidden = false;
 setInterval(() => { if (key && !document.hidden) refresh(); }, 10000);
