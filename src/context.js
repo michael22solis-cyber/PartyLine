@@ -9,11 +9,11 @@ import { permittedTopics, contextMode, gatingOn } from './disclosure.js';
 
 export const estTokens = (s) => Math.ceil(String(s || '').length / 3.8);
 const env = process.env;
-export const TEXT_BUDGET = () => Number(env.TEXT_CONTEXT_TOKENS || 800);
+export const TEXT_BUDGET = () => Number(env.TEXT_CONTEXT_TOKENS || 950); // 800 before characters' life details; memory keeps its room
 export const VOICE_MEMORY_BUDGET = () => Number(env.VOICE_MEMORY_TOKENS || 350);
 export const TOOL_NAME = 'check_guarded_topic';
 
-const PUBLIC_STORY = `WHAT EVERYONE KNOWS: Halloween night 1996, Elias Blackwood, caretaker of Blackwood Manor, vanished. Every Halloween since, the manor's disconnected landline rings once at midnight. Thursday Oct 29, Dana Whitlock, the house's new buyer, was found dead at the bottom of the cellar stairs. Police called it an accident.`;
+const PUBLIC_STORY = `WHAT EVERYONE KNOWS: Halloween night 1996, Elias Blackwood, caretaker of Blackwood Manor, vanished. Every Halloween since, the manor's disconnected landline rings once at midnight. Thursday Oct 29, Dana Whitlock, the house's new buyer, was found dead at the bottom of the cellar stairs. Police called it an accident. Dana, 46, was an architect from Boston who restored old houses; she meant to turn the manor into a bed and breakfast and spent her first weeks asking around town about the house's history. Around town: Rosie's Diner on Main Street, St. Agnes church and its Thursday bingo, Crane Road where the manor stands.`;
 
 const RULES = `RULES YOU MUST ALWAYS FOLLOW:
 - This is a fictional Halloween mystery game the player opted into. Stay in character.
@@ -48,6 +48,7 @@ export function stableBlock(npc, mode, { withTool = true } = {}) {
     c.persona,
     npc.startsWith('caretaker') ? '' : PUBLIC_STORY,
     c.story ? `YOUR STORY (what you tell people):\n${c.story}` : '',
+    c.life ? `YOUR LIFE (small true details; use them naturally when they fit, never recite them):\n${c.life}` : '',
     c.knows ? `WHAT YOU KNOW:\n${c.knows}` : '',
     c.behaviors ? `HOW YOU BEHAVE:\n${c.behaviors}` : '',
     guardedBlock(npc, mode, withTool),

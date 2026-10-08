@@ -211,5 +211,5 @@ test('"the house is listening" nudge is a single bounded call, attributed to its
   await overheard('ruth', p, 'Maya', 'I bet Ruth was never at bingo');
   const rec = usageFor(p.pid).find((r) => r.capability === 'overheard');
   assert.ok(rec);
-  assert.ok(tok(mock.log.chat.at(-1).messages) < 800);
+  assert.ok(tok(mock.log.chat.at(-1).messages) < 950);
 });

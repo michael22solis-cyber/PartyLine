@@ -115,7 +115,7 @@ test('long conversations stay within the text budget and keep accusations, lies 
   for (let k = 0; k < 150; k++) remember({ player: 'Noah', pid: noah.pid, npc: 'teddy', character: 'Teddy Fisk', speaker: 'player', text: `random chatter ${k} about ghosts and the tour schedule`, channel: 'text', at: at(i++) });
   const { messages, stats } = ctx.buildTextPrompt({ npc: 'ruth', player: playerByToken(p.token), thread: threadHistory(p.token, 'ruth', 30) });
   const total = messages.reduce((s, m) => s + tok(m.content) + 4, 0);
-  assert.ok(total <= 800, `text prompt ${total} tokens`);
+  assert.ok(total <= 950, `text prompt ${total} tokens`); // includes each character's life details (about 2 cents a game more)
   assert.ok(stats.historyKept >= 2);
   const mem = messages[1].content;
   assert.match(mem, /lying about bingo/, 'accusation retained');
@@ -124,7 +124,7 @@ test('long conversations stay within the text budget and keep accusations, lies 
   assert.doesNotMatch(mem, /random chatter/, 'unrelated chatter about another character is dropped');
   // The legacy prompt for the same state is much larger.
   const legacyTok = tok(buildLegacyInstructions('ruth', 'Iris', (await import('../src/memory.js')).summary(), 'text'));
-  assert.ok(legacyTok > total * 2, `legacy ${legacyTok} vs bounded ${total}`);
+  assert.ok(legacyTok > total * 1.8, `legacy ${legacyTok} vs bounded ${total}`); // still about half, with the characters' life details
 });
 
 test('voice instructions stay within budget; tools exist only for characters with guarded topics', () => {
