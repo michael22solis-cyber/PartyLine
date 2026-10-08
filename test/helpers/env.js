@@ -6,6 +6,9 @@ import path from 'node:path';
 
 export const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bw-test-'));
 process.env.BLACKWOOD_DATA_DIR = dataDir;
+// Built-in audio (music, the Caretaker's lines) lives in public/audio in the real game; tests get an empty private folder
+// so the host's real files never change what a test expects. Tests of built-in audio point this at their own folder.
+process.env.BUILTIN_AUDIO_DIR ??= path.join(dataDir, 'builtin-audio');
 process.env.OPENAI_API_KEY = 'sk-test-not-real';
 process.env.TEXT_FAST = '1';
 process.env.ADMIN_KEY = 'test-admin';
