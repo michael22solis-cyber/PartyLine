@@ -32,4 +32,9 @@ test('missing recordings are made once on request, served, and played by the sto
   }
   assert.match(audioIf('call911.mp3'), /^\/assets\/(made|audio)\/call911\.mp3$/);
   assert.equal((await app.inject({ url: '/assets/made/..%2Fgame.json' })).statusCode, 404, 'only the recordings are served');
+  // Remake: replaces what was made here.
+  assert.equal(after.made, 2);
+  await app.inject({ method: 'POST', url: '/admin/recordings/make', headers: admin, payload: { remake: true } });
+  await until(async () => (await status()).missing === 0 && !(await status()).working, 50_000, 200);
+  assert.equal((await status()).made, 2);
 });

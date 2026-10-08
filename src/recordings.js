@@ -31,7 +31,9 @@ function run(only) {
   });
 }
 
-export function makeRecordings() {
+// remake: replace recordings made here before (e.g. after the script's lines improved). Built-in files are never touched.
+export function makeRecordings({ remake = false } = {}) {
+  if (remake && !running) for (const file of Object.keys(PIECES)) { const f = madeFile(file); if (f) fs.rmSync(f); }
   running ||= (async () => {
     lastError = null;
     for (const [file, only] of Object.entries(PIECES)) {
@@ -44,5 +46,5 @@ export function makeRecordings() {
 
 export function recordingsStatus() {
   const files = Object.keys(PIECES).map((file) => ({ name: file, where: where(file), url: urlOf(file) }));
-  return { files, missing: files.filter((f) => !f.where).length, working: Boolean(running), error: lastError, canMake: Boolean(process.env.OPENAI_API_KEY) };
+  return { files, missing: files.filter((f) => !f.where).length, made: files.filter((f) => f.where === 'made').length, working: Boolean(running), error: lastError, canMake: Boolean(process.env.OPENAI_API_KEY) };
 }
