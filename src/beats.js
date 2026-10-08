@@ -51,7 +51,8 @@ export const BEATS = {
   // Assign the accomplice and starting clues. Run once, after everyone has joined.
   async setup() {
     const ps = everyone();
-    if (ps.length < 3) throw new Error('Need at least 3 players (4+ recommended).');
+    // A real game needs 3+ (auto mode enforces it); fewer is fine for the host testing on their own.
+    if (!ps.length) throw Object.assign(new Error('Add at least one player first.'), { status: 400 });
     const accomplice = ps[Math.floor(Math.random() * ps.length)];
     ps.forEach((p, i) => {
       updatePlayer(p.token, {
@@ -67,11 +68,12 @@ export const BEATS = {
       }
     }
     dealAgendas(); // everyone's secret and three goals (see agenda.js)
-    return { players: ps.length, accomplice: ps.length >= 4 ? accomplice.name : '(none, fewer than 4 players)' };
+    return { players: ps.length, accomplice: ps.length >= 4 ? accomplice.name : '(none, fewer than 4 players)', ...(ps.length < 3 ? { note: 'Fewer than 3 players: fine for testing, too few for a real game.' } : {}) };
   },
 
   // Everyone gets their secret agenda (sealed): a personal secret and three goals on top of solving the murder.
   async agendas() {
+    dealAgendas({ onlyMissing: true }); // anyone setup didn't deal in (joined late, or setup was skipped)
     await deliverAgendas();
   },
 

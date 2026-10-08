@@ -74,11 +74,12 @@ export const GOALS = {
 const shuffle = (a) => { const b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
 
 // Deal everyone's agenda (run by the setup beat, after roles are assigned).
-export function dealAgendas() {
+export function dealAgendas({ onlyMissing = false } = {}) {
   const cases = shuffle(Object.keys(GOALS).filter((k) => k.startsWith('case_')));
   const socials = shuffle(Object.keys(GOALS).filter((k) => k.startsWith('soc_')));
   const secrets = shuffle(SECRETS.map((s) => s.id));
   players().forEach((p, i) => {
+    if (onlyMissing && p.agenda) return;
     const goals = p.role === 'accomplice' ? ['acc_misdirect', 'acc_plant', 'personal'] : [cases[i % cases.length], socials[i % socials.length], 'personal'];
     updatePlayer(p.token, { agenda: { secret: secrets[i % secrets.length], goals }, agendaDone: [], leaked: false });
   });

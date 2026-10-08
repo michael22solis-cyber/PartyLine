@@ -971,9 +971,11 @@ function showRing(sub, note, { id = 'UNKNOWN', answer = null } = {}) {
   clearTimeout(ringTimeout); ringTimeout = setTimeout(hideRing, 40_000);
 }
 function hideRing() { $('#ring').hidden = true; sfx.stopRing(); clearTimeout(ringTimeout); ringFor = null; setFace($('#ringFace'), null); setTimeout(() => music.sync(), 0); }
-$('#ringDismiss').onclick = hideRing;
+let declined = null; // the ring the player turned down, so catching up doesn't bring it back
+$('#ringDismiss').onclick = () => { declined = ringFor; hideRing(); };
 $('#ringAnswer').onclick = () => { const c = ringFor; hideRing(); if (c) startCall(c); };
 function incoming({ character, from }) {
+  declined = null;
   const ghost = character.startsWith('caretaker');
   const t = state.threads.find((x) => x.key === character);
   showRing(ghost ? 'BLACKWOOD MANOR' : (t?.tagline || 'MOBILE').toUpperCase(),
@@ -1485,7 +1487,11 @@ function connect() {
     const { thread, on, who } = JSON.parse(e.data);
     state.typing[thread] = on ? (who || true) : false; render();
   });
-  es.onerror = () => { /* EventSource reconnects on its own */ };
+  // EventSource reconnects on its own after a drop (switching apps, a network blip), but anything sent while it was
+  // down is lost: catch up as soon as it's back.
+  let opened = false;
+  es.addEventListener('open', () => { if (opened) refresh(); opened = true; });
+  es.onerror = () => { /* reconnects on its own; 'open' catches up */ };
 }
 
 // ============ settings, alerts, install ============
@@ -1680,11 +1686,15 @@ async function refresh() {
     state.phase = fresh.phase; state.music = fresh.music; state.callBeds = fresh.callBeds;
     state.revealed = fresh.revealed; state.vote = fresh.vote; state.players = fresh.players; state.peers = fresh.peers; state.groups = fresh.groups; state.lobby = fresh.lobby; state.agenda = fresh.agenda;
     if (state.revealed && !state.recap) loadRecap();
+    // A call that started ringing while this screen wasn't listening.
+    if (fresh.ringing && $('#ring').hidden && !call && declined !== fresh.ringing.character) incoming({ character: fresh.ringing.character, from: '' });
     render();
     if ($('#power').hidden && !roleSeen() && state.me.assigned) showRole();
   } catch { /* offline: try again next time */ }
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
+// Safety net: if live updates quietly stall (some networks hold them back), check in every 20 seconds anyway.
+setInterval(() => { if (document.visibilityState === 'visible' && token) refresh(); }, 20_000);
 
 // ============ boot ============
 async function boot() {
