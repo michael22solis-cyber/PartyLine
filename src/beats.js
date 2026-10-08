@@ -8,6 +8,7 @@ import { summary, remember } from './memory.js';
 import { PHOTOS, statusOf, phase } from './cast.js';
 import { TEXTABLE } from './characters/index.js';
 import { ledger } from './ai/ledger.js';
+import { holdOff } from './voice/allowance.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const everyone = () => players();
@@ -137,6 +138,22 @@ export const BEATS = {
       token: p.token, thread: 'line', from: 'character', kind: 'secret',
       text: 'PLANTED EVIDENCE (forward it if you like): "Lily Blackwood’s car, parked at the manor, Thursday 11:02 pm." It’s true. It’s just not the whole truth. Push them toward Lily or Teddy.',
     });
+  },
+
+  // Lily calls everyone herself: she wants to talk about Thursday night, but only on the phone and only now. Answer and
+  // ask her about it, and she tells you; miss it and she shuts down ("nvm") and won't pick up for 10 minutes.
+  async lilyCalls() {
+    await Promise.all(everyone().map(async (p, i) => {
+      await sleep(i * 20_000);
+      await unlock(p, 'lily');
+      await ringInApp(p, 'lily', {
+        opening: `You are calling ${p.name} yourself, late at night, nervous. Speak first, quietly: you can't keep something in anymore and you want to tell someone, but only on the phone, and only now, because your shift starts in a few minutes. Do not say what it is yet. Wait for them to ask about Thursday night or the 911 call.`,
+        onMissed: async () => {
+          await deliver({ token: p.token, thread: 'lily', from: 'character', text: 'nvm. forget i called.' });
+          holdOff(p.token, 'lily', 10 * 60_000);
+        },
+      });
+    }));
   },
 
   async caretakerHint() {

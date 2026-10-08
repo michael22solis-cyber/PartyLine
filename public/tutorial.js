@@ -53,6 +53,7 @@ export function tutorialStep(index, state) {
       visual: { type: 'calls', left: calls.minutesLeft, max: calls.minutesMax, maxSeconds: calls.maxSeconds },
       points: [
         'Suspects hear what the group tells them. Catch them contradicting each other.',
+        'Some secrets only come out on a call, and evidence heard on a call scores more. If a suspect says “call me,” do it.',
       ],
       tip: contacts ? 'You have a contact ready. Pick a suspect and ask your first question.'
         : 'No contacts yet. Your first clue unlocks them, and more appear as names come up.',

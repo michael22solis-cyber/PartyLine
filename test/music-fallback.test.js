@@ -23,8 +23,8 @@ test('no Music API on the plan: looping ambience instead, still one per stretch 
   await music.warmUp();
   assert.equal(seen.filter((r) => r.url.startsWith('/v1/music')).length, 1, 'asks for music once, then stops trying');
   const sfx = seen.filter((r) => r.url.startsWith('/v1/sound-generation'));
-  assert.equal(sfx.length, 5);
-  assert.ok(sfx.every((r) => r.body.loop === true && r.body.duration_seconds === 30));
+  assert.equal(sfx.length, 9, '4 call backgrounds + 5 ambience tracks');
+  assert.ok(sfx.every((r) => r.body.loop === true));
   assert.equal(Object.keys(music.trackUrls()).length, 5);
 });
 

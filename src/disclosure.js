@@ -29,10 +29,18 @@ function grant(p, npc, topics, via) {
 }
 
 // A player's message to `npc`: approve every guarded topic their own words raise. Returns newly approved topics.
+// Phone-only topics are never approved in writing (texts, group chats): see phoneOnlyRaised.
 export function approveFromPlayerText(p, npc, text, via = 'text') {
   if (!gatingOn()) return [];
   const t = String(text || '');
-  return grant(p, npc, topicsFor(npc).filter((s) => s.ask.test(t)), via);
+  const written = via === 'text' || via === 'group';
+  return grant(p, npc, topicsFor(npc).filter((s) => s.ask.test(t) && !(written && s.phoneOnly)), via);
+}
+
+// Phone-only topics a written message raises: the character won't put it in writing and asks the player to call.
+export function phoneOnlyRaised(npc, text) {
+  if (!gatingOn()) return [];
+  return topicsFor(npc).filter((s) => s.phoneOnly && s.ask.test(String(text || '')));
 }
 
 // The character asked to open up about a topic (voice tool call). Approved only when the player's recent words
@@ -58,7 +66,9 @@ export function shareApprovals(ps, npc, ids, via = 'group') {
 }
 
 // Should this line by the character count as the secret being uncovered by this player?
-export function mayAward(p, npc, secretId, approvedNow = []) {
+// Phone-only secrets count only when heard on a call.
+export function mayAward(p, npc, secretId, approvedNow = [], channel = null) {
   if (!gatingOn()) return true;
+  if (channel && channel !== 'call' && topicsFor(npc).find((t) => t.id === secretId)?.phoneOnly) return false;
   return approvedNow.includes(secretId) || permittedIds(p, npc).includes(secretId);
 }

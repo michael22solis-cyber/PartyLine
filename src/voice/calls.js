@@ -82,7 +82,7 @@ export async function callTranscript(call, player, speaker, text, { itemId = nul
     const approved = approveFromPlayerText(player, call.npc, clean, 'call');
     return { notes: approved.map((t) => approvalNote(player, t)) };
   }
-  if (c.textable) await onCharacterSaid(player, call.npc, clean);
+  if (c.textable) await onCharacterSaid(player, call.npc, clean, { channel: 'call' });
   return { notes: [] };
 }
 

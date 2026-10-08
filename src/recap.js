@@ -12,12 +12,14 @@ const FOUND = SECRETS.map((x) => ({ ...x, test: { test: x.test } }));
 
 export function recapFor(player) {
   const heard = []; // { who, text } things characters said to this player (texts + calls)
-  for (const m of messagesFor(player.token)) if (m.from === 'character') heard.push({ who: m.thread, text: m.text });
+  for (const m of messagesFor(player.token)) if (m.from === 'character') heard.push({ who: m.thread, text: m.text, channel: 'text' });
   for (const l of allLines()) {
-    if ((l.pid ? l.pid === player.pid : l.player === player.name) && l.speaker === 'character') heard.push({ who: l.npc || KEY_BY_NAME[l.character], text: l.text });
+    if ((l.pid ? l.pid === player.pid : l.player === player.name) && l.speaker === 'character') heard.push({ who: l.npc || KEY_BY_NAME[l.character], text: l.text, channel: l.channel });
   }
   const found = FOUND.filter((f) => (player.found || []).includes(f.id)
-    || (heard.some((h) => h.who === f.who && f.test.test(h.text)) && mayAward(player, f.who, f.id)));
+    || heard.some((h) => h.who === f.who && f.test.test(h.text) && mayAward(player, f.who, f.id, [], h.channel)));
+  const onCall = found.filter((f) => (player.foundOnCall || []).includes(f.id)
+    || heard.some((h) => h.channel === 'call' && h.who === f.who && f.test.test(h.text)));
   const asked = messagesFor(player.token).filter((m) => m.from === 'player').length;
 
   const v = votes()[player.token] || null;
@@ -38,7 +40,7 @@ export function recapFor(player) {
     score = (groupCaughtRuth ? 0 : 60) + (groupCaughtAccomplice ? 0 : 20) + Math.min(20, asked);
   } else {
     score = (v?.killer === TRUTH.killer ? 45 : 0) + (v?.accomplice === accomplice || !accomplice ? 20 : 0)
-      + Math.min(35, found.length * 6) ;
+      + Math.min(35, found.length * 5 + onCall.length * 3); // secrets heard on a call count for more
   }
   score = Math.min(100, score);
   const rank = isAccomplice
@@ -49,7 +51,7 @@ export function recapFor(player) {
     name: player.name, role: player.role, score, rank, outcome,
     killerTruth: TRUTH.killer, accomplice,
     myVote: v, groupVote: { killer: tally.killer, accomplice: tally.accomplice },
-    found: found.map((f) => f.label), missed: FOUND.filter((f) => !found.includes(f)).map((f) => f.label),
+    found: found.map((f) => (onCall.includes(f) ? `${f.label} ☎` : f.label)), heardOnCalls: onCall.length, missed: FOUND.filter((f) => !found.includes(f)).map((f) => f.label),
     totalClues: FOUND.length, textsSent: asked,
   };
 }

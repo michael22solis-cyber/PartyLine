@@ -47,6 +47,9 @@ export function chargeCall(token, npc, seconds, now = Date.now()) {
 
 export function resetAllowances() { cooldowns.clear(); }
 
+// A character won't pick up for this player for a while (e.g. after they ignored her call).
+export function holdOff(token, npc, ms) { cooldowns.set(`${token}:${npc}`, Date.now() + ms); }
+
 // What the phone shows: minutes of calls left (null when unlimited) and the longest one call can run.
 export function callAllowance(player) {
   const budget = budgetSeconds();

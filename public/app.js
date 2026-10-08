@@ -610,7 +610,7 @@ function messageNode(m) {
     node.onclick = () => { node.classList.add('open'); sfx.creak(); };
   } else if (EVIDENCE_KINDS.has(m.kind)) {
     node = el('div', `card ${m.kind}`);
-    const tag = m.kind === 'evidence' && /^SECRET UNCOVERED/.test(m.text) ? 'NEW EVIDENCE' : { clue: 'YOUR CLUE', memo: 'VOICE MEMO', evidence: 'EVIDENCE', reveal: 'CASE CLOSED' }[m.kind];
+    const tag = m.kind === 'evidence' && /^SECRET UNCOVERED · HEARD ON A CALL/.test(m.text) ? '☎ HEARD ON A CALL' : m.kind === 'evidence' && /^SECRET UNCOVERED/.test(m.text) ? 'NEW EVIDENCE' : { clue: 'YOUR CLUE', memo: 'VOICE MEMO', evidence: 'EVIDENCE', reveal: 'CASE CLOSED' }[m.kind];
     node.append(el('span', 'tag', tag));
     if (m.audio) node.append(audioPlayer(m));
     else if (m.kind === 'memo') {
@@ -620,6 +620,7 @@ function messageNode(m) {
     }
     node.append(document.createTextNode(m.text));
     if (m.kind === 'evidence' && /^SECRET UNCOVERED/.test(m.text)) node.classList.add('found');
+    if (m.kind === 'evidence' && /HEARD ON A CALL/.test(m.text.split('\n')[0])) node.classList.add('oncall');
   } else if (m.kind === 'voicemail') {
     node = el('div', 'card voicemail');
     node.append(el('span', 'tag', 'VOICEMAIL'));
@@ -1142,6 +1143,25 @@ function phoneChain(ctx) {
   const nodes = [hp, lp, presence, out, noise, nf, ng];
   return { input: hp, stop: () => { try { noise.stop(); } catch { /* stopped */ } nodes.forEach((n) => { try { n.disconnect(); } catch { /* gone */ } }); } };
 }
+// What you hear behind a character on a call (their room, their car, their stream), quietly under their voice and through
+// the same telephone band. Ruth's room has someone humming. Returns a teardown, or null.
+async function callBed(character) {
+  const url = state.callBeds?.[character];
+  const ctx = url && sfx.unlock();
+  if (!ctx) return null;
+  try {
+    const buf = await fetch(url).then((r) => r.arrayBuffer()).then((b) => ctx.decodeAudioData(b));
+    const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 300;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3400;
+    const g = ctx.createGain(); g.gain.value = 0;
+    src.connect(hp).connect(lp).connect(g).connect(ctx.destination);
+    src.start(0, Math.random() * Math.max(0, buf.duration - 1));
+    g.gain.setTargetAtTime(0.09, ctx.currentTime, 0.8);
+    return () => { g.gain.setTargetAtTime(0, ctx.currentTime, 0.2); setTimeout(() => { try { src.stop(); } catch { /* done */ } g.disconnect(); }, 800); };
+  } catch { return null; }
+}
+
 // Live call: route the remote stream through the line. Returns a teardown, or null to play it as is.
 function phoneLineStream(stream) {
   if (!phoneLineOn()) return null;
@@ -1268,6 +1288,8 @@ async function startCall(character) {
     await pc.setRemoteDescription({ type: 'answer', sdp: await r.text() });
     if (!call) return;
     startClock(info.maxSeconds, () => call?.ctl?.tick());
+    const c0 = call;
+    callBed(character).then((stop) => { if (stop && call === c0) c0.stopBed = stop; else stop?.(); });
   } catch (ex) {
     $('#callState').textContent = ex.name === 'NotAllowedError' ? 'MICROPHONE BLOCKED' : /busy/i.test(ex.message) ? 'LINE BUSY'
       : /picking up/i.test(ex.message) ? 'NO ANSWER' : /line is dead/i.test(ex.message) ? 'NO SIGNAL' : 'CALL FAILED';
@@ -1285,7 +1307,7 @@ function endCall(reason = 'player_hung_up') {
   c.ctl?.end(reason); // saves what was heard so far and reports any outstanding usage
   c.mic?.getTracks().forEach((t) => t.stop());
   try { c.pc?.close(); } catch { /* already closed */ }
-  c.stopLine?.();
+  c.stopLine?.(); c.stopBed?.();
   const audio = $('#callAudio');
   audio.pause(); audio.onended = null; audio.onloadedmetadata = null; audio.srcObject = null; audio.removeAttribute('src'); audio.muted = false;
   showCallEnded(c, reason);
@@ -1606,7 +1628,7 @@ async function refresh() {
     fresh.messages.filter((m) => !known.has(m.id)).forEach((m) => state.messages.push(m));
     Object.assign(state.me, fresh.me);
     state.threads = fresh.threads;
-    state.phase = fresh.phase; state.music = fresh.music;
+    state.phase = fresh.phase; state.music = fresh.music; state.callBeds = fresh.callBeds;
     state.revealed = fresh.revealed; state.vote = fresh.vote; state.players = fresh.players; state.peers = fresh.peers; state.groups = fresh.groups; state.lobby = fresh.lobby;
     if (state.revealed && !state.recap) loadRecap();
     render();

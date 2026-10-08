@@ -91,7 +91,7 @@ npm run admin -- night 2026-10-31T20:00-05:00          # ~75 min; add `evening` 
 npm run admin -- status              # players, roles, votes, schedule
 ```
 
-All beats: `setup, welcome, accomplice, intro, calls, clues, cast, memo, ruthWarning, twist, planted, caretakerHint, votesOpen, lineRinging, reveal`. Use `clues` instead of `calls` to test without phones.
+All beats: `setup, welcome, accomplice, intro, calls, clues, cast, memo, ruthWarning, twist, planted, lilyCalls, caretakerHint, votesOpen, lineRinging, reveal`. Use `clues` instead of `calls` to test without phones.
 
 Tell iPhone players to tap **Share → Add to Home Screen**, open Blackwood from there, and turn on alerts (⋮ menu). Android and desktop can turn on alerts directly.
 

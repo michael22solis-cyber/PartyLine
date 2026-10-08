@@ -4,8 +4,9 @@ import { remember, tagLine } from './memory.js';
 import { threadHistory, countPlayerMessages, markRead } from './store.js';
 import { deliver, emit } from './live.js';
 import { isUnlocked, onCharacterSaid, unlockMentions } from './progress.js';
-import { buildTextPrompt, buildNudgePrompt } from './context.js';
-import { approveFromPlayerText } from './disclosure.js';
+import { buildTextPrompt, buildNudgePrompt, callMeNote } from './context.js';
+import { topicsFor } from './secrets.js';
+import { approveFromPlayerText, phoneOnlyRaised } from './disclosure.js';
 import { chatComplete } from './ai/openai.js';
 import { ledger } from './ai/ledger.js';
 import { typingPlan } from './cast.js';
@@ -64,20 +65,22 @@ export async function handlePlayerText(player, thread, text, { clientId = null }
 
   // The engine, not the model, decides whether this message earns a disclosure.
   const approved = approveFromPlayerText(player, thread, clean, 'text');
+  const callOnly = phoneOnlyRaised(thread, clean); // things they'll only say on a call
   const key = `${player.token}:${thread}`;
   const state = pending.get(key);
   if (state) {
     approved.forEach((t) => state.approved.add(t.id));
+    callOnly.forEach((t) => state.callOnly.add(t.id));
     state.followUp = true;
     return mine;
   }
-  if (!approved.length && isAckOnly(clean, before)) {
+  if (!approved.length && !callOnly.length && isAckOnly(clean, before)) {
     ledger.event('text_skipped', { session: player.pid, npc: thread, reason: 'acknowledgement' });
     // No reply, like a real person: but they did see it.
     delay(1500 + Math.random() * 2500).then(() => read(player, thread)).catch(() => {});
     return mine;
   }
-  const s = { approved: new Set(approved.map((t) => t.id)), followUp: false };
+  const s = { approved: new Set(approved.map((t) => t.id)), callOnly: new Set(callOnly.map((t) => t.id)), followUp: false };
   pending.set(key, s);
   // Reply in the background so the app feels like real texting.
   (async () => {
@@ -115,10 +118,12 @@ async function replyOnce(player, thread, s) {
     s.followUp = false;
     approvedIds = [...s.approved];
     s.approved.clear();
+    const callOnly = topicsFor(thread).filter((t) => s.callOnly.has(t.id));
+    s.callOnly.clear();
     const history = threadHistory(player.token, thread, 30);
     const lastPlayer = [...history].reverse().find((m) => m.from === 'player');
     const approvedNow = approvedIds.map((id) => ({ id }));
-    const { messages } = buildTextPrompt({ npc: thread, player, thread: history, approvedNow });
+    const { messages } = buildTextPrompt({ npc: thread, player, thread: history, approvedNow, extra: callMeNote(callOnly) });
     const { model, purpose } = route(lastPlayer?.text || '');
     const { text: reply } = await chatComplete(messages, {
       model, meta: { session: player.pid, npc: thread, capability: 'text', purpose, turn: countPlayerMessages(player.token) },
@@ -133,7 +138,7 @@ async function replyOnce(player, thread, s) {
     emit(player.token, 'typing', { thread, on: false });
     await deliver({ token: player.token, thread, from: 'character', text: reply });
     remember({ player: player.name, pid: player.pid, npc: thread, character: c.name, speaker: 'character', text: `(text) ${reply}`, channel: 'text' });
-    await onCharacterSaid(player, thread, reply, { approved: approvedIds });
+    await onCharacterSaid(player, thread, reply, { approved: approvedIds, channel: 'text' });
   } catch (err) {
     console.error(`[${thread}] text reply failed:`, err.message);
     emit(player.token, 'typing', { thread, on: false });

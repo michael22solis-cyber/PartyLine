@@ -52,9 +52,9 @@ test('legacy prompts (the rollback path) still carry the full case file, as befo
 });
 
 test('an approval is scoped to one player and one character (no cross-player or cross-character leakage)', () => {
-  const approved = approveFromPlayerText(maya, 'lily', 'Lily, did you make the anonymous 911 call?');
-  assert.deepEqual(approved.map((t) => t.id), ['call911']);
-  const fact = topicsFor('lily').find((t) => t.id === 'call911').fact;
+  const approved = approveFromPlayerText(maya, 'lily', 'Lily, who used to sing that lullaby?');
+  assert.deepEqual(approved.map((t) => t.id), ['lullaby']);
+  const fact = topicsFor('lily').find((t) => t.id === 'lullaby').fact;
   const now = ctx.buildTextPrompt({ npc: 'lily', player: playerByToken(maya.token), thread: [], approvedNow: approved });
   assert.match(allText(now.messages), /YOU MAY NOW ADMIT THIS TO MAYA/);
   assert.ok(allText(now.messages).includes(fact));
@@ -65,7 +65,20 @@ test('an approval is scoped to one player and one character (no cross-player or 
   assert.ok(!Object.values(promptsFor('lily', noah)).some((p) => p.includes(fact)));
   for (const npc of NPCS.filter((n) => n !== 'lily')) assert.ok(!Object.values(promptsFor(npc, maya)).some((p) => p.includes(fact)), npc);
   // Approving twice changes nothing.
-  assert.deepEqual(approveFromPlayerText(maya, 'lily', 'about that 911 call again'), []);
+  assert.deepEqual(approveFromPlayerText(maya, 'lily', 'about that lullaby again'), []);
+});
+
+test('phone-only secrets: never approved or written in a text; told on a call, the text prompt only says so', () => {
+  const p = addPlayer({ name: 'Pia' });
+  assert.deepEqual(approveFromPlayerText(p, 'lily', 'Lily, did you make the anonymous 911 call?', 'text'), [], 'not over text');
+  const fact = topicsFor('lily').find((t) => t.id === 'call911').fact;
+  const asked = allText(ctx.buildTextPrompt({ npc: 'lily', player: playerByToken(p.token), thread: [], extra: ctx.callMeNote(topicsFor('lily').filter((t) => t.id === 'call911')) }).messages);
+  assert.match(asked, /tell them to call you/);
+  assert.ok(!asked.includes(fact));
+  assert.deepEqual(approveFromPlayerText(p, 'lily', 'Lily, did you make the anonymous 911 call?', 'call').map((t) => t.id), ['call911']);
+  const later = allText(ctx.buildTextPrompt({ npc: 'lily', player: playerByToken(p.token), thread: [] }).messages);
+  assert.match(later, /ON THE PHONE YOU TOLD PIA/);
+  assert.ok(!later.includes(fact), 'the fact itself never goes into a written reply');
 });
 
 test('stable blocks are identical for every player (cacheable); only the dynamic block differs', () => {
