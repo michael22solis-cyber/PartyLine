@@ -97,7 +97,7 @@ test('with the narrator voice: his calls are recordings in that voice, generated
   assert.equal((await app.inject({ method: 'GET', url: '/assets/voice/game.json' })).statusCode, 404, 'only generated clips are served');
 });
 
-test('if ElevenLabs fails, the call still connects (live)', async () => {
+test('if ElevenLabs fails, the call still connects: his recorded lines, minus the new name', async () => {
   withEleven();
   eleven.fail = true;
   const p = addPlayer({ name: 'Zed' });
@@ -105,8 +105,8 @@ test('if ElevenLabs fails, the call still connects (live)', async () => {
   const r = await post(p, '/call', { character: 'caretaker' });
   eleven.fail = false;
   assert.equal(r.status, 200);
-  assert.notEqual(r.body.mode, 'recording');
-  await post(p, '/call/end', { callId: r.body.callId, character: 'caretaker', seconds: 5 });
+  assert.equal(r.body.mode, 'recording', 'the riddle and hints were already recorded');
+  assert.ok(!r.body.captions.some((c) => /Zed/.test(c)));
 });
 
 test('call minutes: a call never runs past what is left, and the line goes dead when they are used up', () => {
@@ -201,6 +201,19 @@ test('music: five tracks composed once by ElevenLabs Music, each creepier, serve
   assert.deepEqual(rest, { mode: 'on', ready: 9, total: 9, error: null, working: false, generations: 9, canMake: true });
   assert.deepEqual(files.map((f) => f.name).sort(), ['after.mp3', 'bed-lily.mp3', 'bed-marcus.mp3', 'bed-ruth.mp3', 'bed-teddy.mp3', 'deep.mp3', 'early.mp3', 'final.mp3', 'late.mp3'],
     'downloadable, named the way public/audio/music/ expects');
+});
+
+test('out of ElevenLabs credits: a new player still gets his recorded lines, just without their name (never a live voice)', async () => {
+  withEleven();
+  eleven.status = 401; eleven.body = { detail: { status: 'quota_exceeded', message: 'This request exceeds your quota.' } };
+  try {
+    const p = addPlayer({ name: 'Quinn' });
+    await ringInApp(p, 'caretaker', {});
+    const r = await post(p, '/call', { character: 'caretaker' });
+    assert.equal(r.body.mode, 'recording', 'his recorded lines, not a paid live call');
+    assert.equal(r.body.audio.length, 3, 'riddle, first hint, fading: the name is skipped');
+    assert.match(r.body.captions[0], /^Twenty steps down/);
+  } finally { eleven.status = 0; eleven.body = null; }
 });
 
 test('when ElevenLabs refuses, the host page says exactly why, and pasted spaces/quotes in the variables are fine', async () => {

@@ -85,8 +85,15 @@ export function script(callIndex, name) {
 // The recorded call for this player, or null (then the call goes live). `character` is caretaker or caretaker_reveal.
 export async function recordedCall(character, player, callIndex = 0) {
   if (!enabled()) return null;
-  const lines = character === 'caretaker_reveal' ? [LINES.reveal] : script(callIndex, player.name);
+  let lines = character === 'caretaker_reveal' ? [LINES.reveal] : script(callIndex, player.name);
   try {
+    // The player's name is the only line made on the fly. If it can't be made (no credits left, a hiccup), he skips
+    // it and plays his recorded lines anyway, rather than switching to a different (paid, live) voice.
+    const named = lines[0] === greeting(player.name);
+    if (named) {
+      const hello = await clip(lines[0]).catch((err) => { console.warn('[caretaker] name clip unavailable, skipping it:', err.message); return null; });
+      if (!hello) lines = lines.slice(1);
+    }
     const audio = await Promise.all(lines.map(clip));
     return { audio, captions: lines.map(spoken) };
   } catch (err) {
