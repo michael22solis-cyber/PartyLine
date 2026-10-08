@@ -75,6 +75,7 @@ async function post(url, body) {
 
 let musicApi = true; // flips off after the music API refuses (plan), so the rest use the sound-effects fallback
 async function make(name) {
+  spend();
   let audio;
   if (musicApi) {
     try {
@@ -92,20 +93,38 @@ async function make(name) {
   ledger.event('music_generated', { provider: 'elevenlabs', track: name, kind: musicApi ? 'music' : 'sound_effect' });
 }
 
+// Credits guard: one warm-up at a time (a second request joins the one already running, so tapping "Try again" or a
+// restart mid-run never generates the same track twice), and at most MUSIC_MAX_GENERATIONS (default 12: one full set
+// of 9 plus a few retries) paid generations per server start. Finished files are cached on the data volume and never
+// regenerated unless their prompt changes.
+let running = null;
+let generations = 0;
+const maxGenerations = () => Number(env.MUSIC_MAX_GENERATIONS ?? 12);
+function spend() {
+  if (generations >= maxGenerations()) throw Object.assign(new Error(`stopped after ${generations} generations this run (MUSIC_MAX_GENERATIONS), to protect your credits`), { capped: true });
+  generations++;
+}
+export const warming = () => Boolean(running);
+
 // Make any missing tracks, one at a time, in story order (so the opening track is ready first).
-export async function warmUp() {
-  if (!enabled()) return;
+export function warmUp() {
+  if (!enabled()) return Promise.resolve();
+  running ||= warmAll().finally(() => { running = null; });
+  return running;
+}
+async function warmAll() {
   await warmUpBeds(); // the call backgrounds first: small, and heard from the first call
   for (const name of Object.keys(TRACKS)) {
     if (fs.existsSync(pathFor(name))) continue;
     for (let attempt = 1; attempt <= 2; attempt++) {
       try { await make(name); lastError = null; console.log(`[music] ${name} track ready`); break; }
-      catch (err) { lastError = err.message; console.error(`[music] ${name} track failed (${err.message}), attempt ${attempt} of 2`); }
+      catch (err) { lastError = err.message; console.error(`[music] ${name} track failed (${err.message}), attempt ${attempt} of 2`); if (err.capped || [401, 402, 403].includes(err.status)) return; }
     }
   }
 }
 
 async function makeBed(npc) {
+  spend();
   const audio = await post(`${BASE()}/v1/sound-generation?output_format=mp3_44100_128`, { text: BEDS[npc], duration_seconds: 20, loop: true, prompt_influence: 0.6 });
   fs.mkdirSync(DIR, { recursive: true });
   fs.writeFileSync(path.join(DIR, `${bedFile(npc)}.tmp`), audio);
@@ -117,11 +136,11 @@ export async function warmUpBeds() {
   for (const npc of Object.keys(BEDS)) {
     if (fs.existsSync(path.join(DIR, bedFile(npc)))) continue;
     try { await makeBed(npc); lastError = null; console.log(`[music] ${npc} call background ready`); }
-    catch (err) { lastError = err.message; console.error(`[music] ${npc} call background failed (${err.message})`); }
+    catch (err) { lastError = err.message; console.error(`[music] ${npc} call background failed (${err.message})`); if (err.capped || [401, 402, 403].includes(err.status)) return; }
   }
 }
 
 export function musicStatus() {
   if (!enabled()) return { mode: 'off', reason: env.MUSIC === 'off' ? 'MUSIC=off' : 'ElevenLabs key not set' };
-  return { mode: 'on', ready: Object.keys(trackUrls()).length + Object.keys(bedUrls()).length, total: Object.keys(TRACKS).length + Object.keys(BEDS).length, error: lastError };
+  return { mode: 'on', ready: Object.keys(trackUrls()).length + Object.keys(bedUrls()).length, total: Object.keys(TRACKS).length + Object.keys(BEDS).length, error: lastError, working: warming(), generations };
 }
