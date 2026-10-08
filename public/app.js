@@ -243,8 +243,11 @@ function render() {
 
 function appButton(name, label, view, count = 0, locked = false) {
   const b = el('button', `app${locked ? ' locked' : ''}`);
-  b.append(icon(name), el('span', null, label));
-  if (count > 0) b.append(el('i', 'badge', String(count)));
+  b.setAttribute('aria-label', `${label}${count > 0 ? `, ${count} new` : ''}${locked ? ', locked' : ''}`);
+  const tile = el('span', 'ico'); // the rounded app icon, like a real phone's home screen
+  tile.append(icon(name));
+  if (count > 0) tile.append(el('i', 'badge', String(count)));
+  b.append(tile, el('span', 'lbl', label));
   b.onclick = () => { if (locked) { sfx.creak(); flashNote('NOT YET.'); return; } go(view); };
   return b;
 }
@@ -301,12 +304,12 @@ function renderHome(screen) {
   const line = el('div', `home-note${note.hot && !noteOverride ? ' hot' : ''}${quiet ? ' quiet' : ''}`, noteOverride || (quiet ? PHASE_LABEL[state.phase] : note.text));
   const grid = el('div', 'grid');
   grid.append(
-    appButton('messages', 'MESSAGES', 'messages', unreadThreads()),
-    appButton('calls', 'CALLS', 'calls', unreadCalls()),
-    appButton('evidence', 'EVIDENCE', 'evidence', unreadEvidence()),
-    appButton('notes', 'NOTES', 'notes'),
-    appButton('vote', 'VOTE', 'vote'),
-    appButton('recap', 'THE END', 'recap', 0, !state.revealed),
+    appButton('messages', 'Messages', 'messages', unreadThreads()),
+    appButton('calls', 'Calls', 'calls', unreadCalls()),
+    appButton('evidence', 'Evidence', 'evidence', unreadEvidence()),
+    appButton('notes', 'Notes', 'notes'),
+    appButton('vote', 'Vote', 'vote'),
+    appButton('recap', 'The End', 'recap', 0, !state.revealed),
   );
   if (state.lobby?.status === 'lobby') home.append(clock, lobbyPanel(), grid);
   else home.append(clock, line, castStrip(), grid);

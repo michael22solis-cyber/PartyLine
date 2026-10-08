@@ -114,22 +114,28 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .home-note.hot { color: var(--ember); animation: blinkNote 1.4s steps(2) infinite; }
 @keyframes blinkNote { 50% { opacity: 0.35; } }
 
-.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; position: relative; z-index: 2; }
-.app {
-  position: relative; aspect-ratio: 1; display: grid; place-items: center; align-content: center; gap: 6px;
-  border: 1px solid var(--line); background: rgba(12,17,14,0.82); color: var(--glow);
-  transition: background 0.12s, border-color 0.12s;
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px 10px; position: relative; z-index: 2; padding: 0 8px; margin-top: 10px; }
+/* App icons like a real phone: a rounded tile with the glyph, the label underneath, no box around it. */
+.app { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 0; background: none; border: 0; color: var(--glow); -webkit-tap-highlight-color: transparent; }
+.app .ico {
+  position: relative; width: 62px; height: 62px; border-radius: 16px; display: grid; place-items: center;
+  background: linear-gradient(160deg, #18241d 0%, #0b120e 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -1px 0 rgba(0,0,0,0.6), 0 6px 14px rgba(0,0,0,0.55), 0 0 0 1px rgba(159,224,160,0.10);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
-.app svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: square; filter: drop-shadow(0 0 5px rgba(159,224,160,0.45)); }
-.app span { font-family: var(--lcd); font-size: 16px; letter-spacing: 0.14em; color: var(--ink); }
-.app:active { background: #16251c; border-color: var(--glow); }
+.app svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 5px rgba(159,224,160,0.45)); }
+.app .lbl { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; color: var(--ink); text-transform: none; }
+.app:active .ico { transform: scale(0.92); box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 2px 6px rgba(0,0,0,0.5), 0 0 0 1px rgba(159,224,160,0.35); }
+.app:focus-visible { outline: none; }
+.app:focus-visible .ico { box-shadow: 0 0 0 2px var(--amber); }
 .app.locked { color: var(--dim); }
-.app.locked svg { filter: none; opacity: 0.5; }
-.app.locked span { color: var(--dim); }
+.app.locked .ico { background: linear-gradient(160deg, #111814, #090d0b); }
+.app.locked svg { filter: none; opacity: 0.45; }
+.app.locked .lbl { color: var(--dim); }
 .app .badge {
-  position: absolute; top: 6px; right: 6px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px;
-  background: var(--ember); color: #fff; font-family: var(--lcd); font-size: 14px; line-height: 18px; text-align: center;
-  box-shadow: 0 0 10px rgba(208,65,46,0.7);
+  position: absolute; top: -6px; right: -7px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px;
+  background: var(--ember); color: #fff; font-family: var(--mono); font-style: normal; font-weight: 600; font-size: 11px; line-height: 20px; text-align: center;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 10px rgba(208,65,46,0.6);
 }
 .manor { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 44%; z-index: 1; pointer-events: none; opacity: 0.9; }
 .manor .win { animation: candle 3.1s infinite; fill: #e6a23c; }
@@ -484,6 +490,4 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 @keyframes typingGlow { 50% { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--glow), 0 0 4px rgba(159,224,160,0.2); } }
 .cast-chip.unknown { opacity: 0.35; }
 .cast-chip.unknown .avatar { border-style: dashed; }
-.home .app { aspect-ratio: auto; padding: 18px 0 16px; }
-.home .app svg { width: 26px; height: 26px; }
 @media (prefers-reduced-motion: reduce) { .cast-chip.typing .avatar { animation: none; } }
