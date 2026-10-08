@@ -31,7 +31,9 @@ const FALLBACK = { // sound-effects ambience if the music API isn't on the plan 
 };
 export const PHASE_TRACK = { before: 'early', early: 'early', late: 'late', deep: 'deep', final: 'final', after: 'after' };
 
-export const enabled = () => Boolean(env.ELEVENLABS_API_KEY && env.MUSIC !== 'off');
+const KEY = () => String(env.ELEVENLABS_API_KEY || '').trim().replace(/^['"]|['"]$/g, '').trim();
+export const enabled = () => Boolean(KEY() && env.MUSIC !== 'off');
+let lastError = null;
 const fileFor = (name) => `${name}-${crypto.createHash('sha256').update(JSON.stringify([TRACKS[name], LENGTH_MS])).digest('hex').slice(0, 12)}.mp3`;
 const pathFor = (name) => path.join(DIR, fileFor(name));
 export const servedFile = (file) => (/^[a-z]+-[0-9a-f]{12}\.mp3$/.test(file) && fs.existsSync(path.join(DIR, file)) ? path.join(DIR, file) : null);
@@ -45,11 +47,14 @@ export function trackUrls() {
 async function post(url, body) {
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'xi-api-key': env.ELEVENLABS_API_KEY, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
+    headers: { 'xi-api-key': KEY(), 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(180_000),
   });
-  if (!res.ok) throw Object.assign(new Error(`elevenlabs_${res.status}`), { status: res.status });
+  if (!res.ok) {
+    const detail = await res.json().then((j) => j.detail?.message || j.detail?.status || j.detail || j.message).catch(() => '');
+    throw Object.assign(new Error(`elevenlabs_${res.status}${detail ? `: ${String(detail).slice(0, 200)}` : ''}`), { status: res.status });
+  }
   return Buffer.from(await res.arrayBuffer());
 }
 
@@ -78,13 +83,13 @@ export async function warmUp() {
   for (const name of Object.keys(TRACKS)) {
     if (fs.existsSync(pathFor(name))) continue;
     for (let attempt = 1; attempt <= 2; attempt++) {
-      try { await make(name); console.log(`[music] ${name} track ready`); break; }
-      catch (err) { console.error(`[music] ${name} track failed (${err.message}), attempt ${attempt} of 2`); }
+      try { await make(name); lastError = null; console.log(`[music] ${name} track ready`); break; }
+      catch (err) { lastError = err.message; console.error(`[music] ${name} track failed (${err.message}), attempt ${attempt} of 2`); }
     }
   }
 }
 
 export function musicStatus() {
   if (!enabled()) return { mode: 'off', reason: env.MUSIC === 'off' ? 'MUSIC=off' : 'ElevenLabs key not set' };
-  return { mode: 'on', ready: Object.keys(trackUrls()).length, total: Object.keys(TRACKS).length };
+  return { mode: 'on', ready: Object.keys(trackUrls()).length, total: Object.keys(TRACKS).length, error: lastError };
 }

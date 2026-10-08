@@ -84,6 +84,7 @@ h2 small button { padding: 6px 12px; font-size: 12px; }
 .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 18px); transform: translateX(-50%); background: rgba(12,17,14,0.95); border: 1px solid var(--glow); border-radius: 14px; padding: 10px 16px; max-width: 90vw; font-size: 13px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
 .toast.bad { border-color: var(--ember); }
 .note { font-size: 12.5px; color: var(--dim); line-height: 1.5; }
+.note.bad { color: #ff8a78; }
 .tally div { display: flex; justify-content: space-between; padding: 5px 2px; }
 #login { max-width: 380px; margin: 18vh auto 0; }
 #login .card { margin-top: 14px; }
@@ -214,15 +215,24 @@ async function refresh() {
   const next = status.schedule.filter((s) => !s.done).sort((a, b) => a.at.localeCompare(b.at))[0];
   $('sNext').textContent = next ? next.beat : '—';
   $('sNextLabel').textContent = next ? fmt(next.at) : 'nothing scheduled';
-  const v = status.caretakerVoice;
-  $('voiceNote').textContent = !v ? ''
-    : v.mode === 'narrator'
-      ? (v.ready >= v.total ? `Caretaker voice: the intro narrator (ElevenLabs ${v.voice}), all ${v.total} lines ready.` : `Caretaker voice: the intro narrator (ElevenLabs ${v.voice}), preparing lines (${v.ready}/${v.total})…`)
-      : `Caretaker voice: OpenAI live voice (${v.reason}). Add ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID in Railway to use the intro narrator.`;
-  const mu = status.music;
-  if (mu) $('voiceNote').textContent += mu.mode === 'on'
-    ? (mu.ready >= mu.total ? ` Music: all ${mu.total} tracks ready.` : ` Music: composing tracks (${mu.ready}/${mu.total})…`)
-    : ` Music: off (${mu.reason}).`;
+  const v = status.caretakerVoice; const mu = status.music;
+  const vn = $('voiceNote'); vn.replaceChildren(); vn.className = 'note';
+  if (v) {
+    let text;
+    if (v.mode !== 'narrator') text = `Caretaker voice: OpenAI live voice (${v.reason}). Add ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID in Railway to use the intro narrator.`;
+    else if (v.ready >= v.total) text = `Caretaker voice: the intro narrator (ElevenLabs ${v.voice}), all ${v.total} lines ready.`;
+    else if (v.error) { text = `Caretaker voice NOT working: ElevenLabs said ${v.error.status}${v.error.message ? ` (“${v.error.message}”)` : ''}. ${v.error.hint} Until it's fixed he uses the OpenAI voice.`; vn.className = 'note bad'; }
+    else text = `Caretaker voice: the intro narrator (ElevenLabs ${v.voice}), preparing lines (${v.ready}/${v.total})…`;
+    vn.append(text);
+    if (mu) vn.append(mu.mode !== 'on' ? ` Music: off (${mu.reason}).` : mu.ready >= mu.total ? ` Music: all ${mu.total} tracks ready.`
+      : mu.error ? ` Music: not working yet (${mu.error}).` : ` Music: composing tracks (${mu.ready}/${mu.total})…`);
+    if (v.mode === 'narrator' && (v.ready < v.total || (mu?.mode === 'on' && mu.ready < mu.total))) {
+      const retry = el('button', null, 'Try again now');
+      retry.style.marginLeft = '8px'; retry.style.padding = '6px 12px'; retry.style.fontSize = '12px';
+      retry.onclick = async () => { retry.disabled = true; try { await api('POST', '/admin/voice/retry'); } catch (e) { toast(e.message, true); } refresh(); };
+      vn.append(retry);
+    }
+  }
   const g = status.game;
   $('inviteRow').hidden = !g?.invite; $('startRow').hidden = !(g && g.status === 'lobby');
   if (g?.invite) $('invite').value = g.invite;
