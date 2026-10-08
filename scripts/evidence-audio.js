@@ -41,7 +41,7 @@ const LINES = {
     how: 'Suddenly frightened, quiet, uncertain. Long pauses between each word, like she is peering down dark stairs.' },
   dispatch1: { voice: 'onyx', text: "Nine-one-one, what's the address of your emergency?",
     how: 'A calm, professional emergency dispatcher on a phone line.' },
-  lily: { voice: 'shimmer', text: "There's... there's someone at the bottom of the stairs. At Blackwood. The old manor on Crane Road. I think... I think she's dead.",
+  lily: { voice: 'marin', fallbackVoice: 'shimmer', text: "There's... there's someone at the bottom of the stairs. At Blackwood. The old manor on Crane Road. I think... I think she's dead.",
     how: 'A woman crying and panicking, whispering, breath shaking, trying not to be heard. Breaks off between phrases.' },
   dispatch2: { voice: 'onyx', text: "Ma'am, can I get your name? Ma'am? Are you still there?",
     how: 'A calm dispatcher becoming concerned as the caller goes silent.' },

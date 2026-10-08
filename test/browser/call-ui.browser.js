@@ -50,7 +50,13 @@ if (chromium) {
       addTrack() {}
       async createOffer() { return { type: 'offer', sdp: 'v=0 fake-offer' }; }
       async setLocalDescription() {}
-      async setRemoteDescription() { this.connectionState = 'connected'; }
+      async setRemoteDescription() {
+        this.connectionState = 'connected';
+        // The character's voice: a quiet tone, so the page's audio path (phone-line sound) really runs.
+        const ac = new AudioContext(); const dst = ac.createMediaStreamDestination(); const o = ac.createOscillator();
+        o.connect(dst); o.start();
+        setTimeout(() => this.ontrack?.({ streams: [dst.stream] }), 20);
+      }
       close() { this.connectionState = 'closed'; }
     }
     window.RTCPeerConnection = FakePC;
@@ -165,10 +171,17 @@ if (chromium) {
     const p = addPlayer({ name: 'Dro' });
     await ringInApp(p, 'teddy', {});
     const page = await openPhone(p);
+    // The caller's face: his moving portrait on the ring, his photo behind the call.
+    await page.waitForSelector('#ringFace video[src$="/assets/cast/teddy.mp4"]', { timeout: 10_000 });
     await page.click('#ringAnswer', { timeout: 10_000 });
+    await page.waitForSelector('#callFace img[src$="/assets/cast/teddy.jpg"]', { timeout: 5000 });
+    assert.equal(await page.evaluate(() => document.querySelector('#ringFace video')), null, 'the ring video is gone once answered');
     await page.waitForFunction(() => document.querySelector('#callState').textContent === 'ON THE LINE', null, { timeout: 10_000 });
+    // With the phone-line sound (on by default) the voice is heard through the filter, not the plain element.
+    await page.waitForFunction(() => document.querySelector('#callAudio').muted === true, null, { timeout: 3000 });
     await page.evaluate(() => { window.__pc.connectionState = 'failed'; window.__pc.onconnectionstatechange(); });
     await page.waitForFunction(() => document.querySelector('#callState').textContent === 'CALL DROPPED', null, { timeout: 3000 });
+    assert.equal(await page.evaluate(() => document.querySelector('#callAudio').muted), false, 'unmuted again after the call');
     assert.equal(await page.isVisible('#callBack'), true);
     const calls0 = ledger.records().filter((r) => r.type === 'call_started' && r.session === p.pid).length;
     await page.click('#callBack');
@@ -190,7 +203,7 @@ if (chromium) {
     await page.close();
   });
 
-  test('the midnight reveal plays as a recorded call in the browser', async () => {
+  test('the final reveal plays as a recorded call in the browser', async () => {
     const file = path.resolve('public/audio/caretaker-reveal.mp3');
     const existed = fs.existsSync(file);
     if (!existed) execFileSync(ffmpeg, ['-loglevel', 'error', '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=mono', '-t', '1.2', '-b:a', '64k', file]);
@@ -208,6 +221,36 @@ if (chromium) {
       await page.close();
     } finally {
       if (!existed) fs.rmSync(file);
+    }
+  });
+
+  test('the Caretaker in the narrator voice: his recorded lines play one after another, captioned, then the line dies', async () => {
+    const http = await import('node:http');
+    const os = await import('node:os');
+    const tone = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'bw-tone-')), 'line.mp3');
+    execFileSync(ffmpeg, ['-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=frequency=300:duration=0.5', '-b:a', '64k', tone]);
+    const mp3 = fs.readFileSync(tone);
+    const eleven = http.createServer((req, res) => { req.resume(); req.on('end', () => { res.writeHead(200, { 'Content-Type': 'audio/mpeg' }); res.end(mp3); }); });
+    await new Promise((r) => eleven.listen(0, '127.0.0.1', r));
+    Object.assign(process.env, { ELEVENLABS_API_KEY: 'xi-test', ELEVENLABS_VOICE_ID: 'narrator', ELEVENLABS_BASE_URL: `http://127.0.0.1:${eleven.address().port}` });
+    try {
+      const p = addPlayer({ name: 'Wren' });
+      await ringInApp(p, 'caretaker', {});
+      const page = await openPhone(p, { captions: true });
+      const errors = [];
+      page.on('pageerror', (e) => errors.push(e.message));
+      const secrets0 = mock.log.clientSecrets.length;
+      await page.click('#ringAnswer', { timeout: 10_000 });
+      await page.waitForFunction(() => /Twenty steps down/.test(document.querySelector('#callCaptions').textContent), null, { timeout: 8000 });
+      await page.waitForFunction(() => /Find me before the line goes dead/.test(document.querySelector('#callCaptions').textContent), null, { timeout: 8000 });
+      await until(() => ledger.records().some((r) => r.type === 'call_ended' && r.session === p.pid && r.transport === 'recording'), 8000);
+      assert.equal(await page.textContent('#callState'), 'THE LINE WENT DEAD');
+      assert.equal(mock.log.clientSecrets.length, secrets0, 'no live model session');
+      assert.deepEqual(errors, []);
+      await page.close();
+    } finally {
+      process.env.ELEVENLABS_API_KEY = ''; process.env.ELEVENLABS_VOICE_ID = '';
+      eleven.close();
     }
   });
 }

@@ -1,10 +1,12 @@
-// The scripted moments of The Blackwood Line (2-night version).
+// The scripted moments of The Blackwood Line: one night, about 75 minutes (timetables in modes.js).
 // Fire them by hand during a playtest (`npm run admin -- beat <name>`) or schedule them.
-import { players, updatePlayer, votes, setRevealed } from './store.js';
-import { deliver } from './live.js';
+import { players, updatePlayer, votes, setRevealed, markBeat } from './store.js';
+import { deliver, emit } from './live.js';
 import { callPlayer, ringInApp, unlock, unlockMentions, unlockAll, audioIf } from './progress.js';
 import { getDb } from './store.js';
-import { summary } from './memory.js';
+import { summary, remember } from './memory.js';
+import { PHOTOS, statusOf, phase } from './cast.js';
+import { TEXTABLE } from './characters/index.js';
 import { ledger } from './ai/ledger.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -64,7 +66,7 @@ export const BEATS = {
   },
 
   async welcome() {
-    await toAll('line', 'Tonight at 8, the Blackwood line opens. Keep this phone close. Every character you meet is an AI. Tap ⋮ to turn off calls anytime.');
+    await toAll('line', 'Tonight, the Blackwood line opens. Keep this phone close. Every character you meet is an AI. Tap ⋮ to turn off calls anytime.');
   },
 
   async accomplice() {
@@ -122,10 +124,6 @@ export const BEATS = {
     return { target: target.name };
   },
 
-  async closeNight1() {
-    await toAll('line', 'Someone in your group has been talking to the house. Votes are due tomorrow at 11:30 pm. At midnight, it calls everyone.');
-  },
-
   async twist() {
     await toAll('line',
       '911 CALL — Thursday, 11:12 pm. A woman, crying: "There’s someone at the bottom of the stairs at Blackwood... I think she’s dead." Then she hangs up.',
@@ -146,14 +144,14 @@ export const BEATS = {
   },
 
   async votesOpen() {
-    await toAll('line', 'One hour left. Open the VOTE tab and name the killer and the accomplice.');
+    await toAll('line', 'Votes are open. Open the VOTE tab and name the killer and the accomplice before the line goes dead.');
   },
 
   async lineRinging() {
     await toAll('line', 'The line is ringing.');
   },
 
-  // Midnight: everyone gets the Caretaker's reveal call, then the results.
+  // The final call: everyone gets the Caretaker's reveal, then the results.
   async reveal() {
     setRevealed();
     await callEach('caretaker_reveal', 0); // every phone rings at once
@@ -184,9 +182,26 @@ export function tallyVotes() {
   return { killer: top('killer'), accomplice: top('accomplice'), votes: v.length, players: getDb().players.length };
 }
 
+// A character texts everyone a photo (see cast.js). They're added to anyone's phone who didn't have them yet, and
+// they remember sending it.
+async function sendPhoto({ npc, image, text, remember: what }) {
+  const name = TEXTABLE.find((t) => t.key === npc)?.name || npc;
+  for (const p of everyone()) {
+    await unlock(p, npc);
+    await deliver({ token: p.token, thread: npc, from: 'character', kind: 'photo', image, text, npc });
+    remember({ player: p.name, pid: p.pid, npc, character: name, speaker: 'character', text: `(text) [you ${what}] ${text}`, channel: 'text' });
+  }
+}
+
 export async function runBeat(name) {
   const fn = BEATS[name];
   if (!fn) throw Object.assign(new Error(`Unknown beat "${name}". Options: ${Object.keys(BEATS).join(', ')}`), { status: 400 });
   console.log(`[beat] ${name}`);
-  return (await fn()) || { ok: true };
+  const result = (await fn()) || { ok: true };
+  markBeat(name);
+  // Characters' status lines follow the story.
+  const statuses = { ...Object.fromEntries(TEXTABLE.map((t) => [t.key, statusOf(t.key)])), phase: phase() };
+  everyone().forEach((p) => emit(p.token, 'status', statuses));
+  if (PHOTOS[name]) await sendPhoto(PHOTOS[name]);
+  return result;
 }

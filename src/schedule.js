@@ -1,23 +1,12 @@
-// The two-night timetable (times are local game time; GAME_TZ_OFFSET, default Central Daylight Time).
+// Schedule a whole game ahead of time: the chosen length's timetable (modes.js), starting at a given moment.
+// `setup` runs at the start, so everyone should have joined by then.
 import { addScheduled } from './store.js';
+import { LENGTHS } from './modes.js';
 
-export const NIGHT1 = [
-  ['welcome', '12:00'], ['accomplice', '19:55'], ['intro', '20:00'], ['calls', '20:05'],
-  ['cast', '21:15'], ['memo', '21:40'], ['ruthWarning', '22:30'], ['closeNight1', '23:00'],
-];
-export const NIGHT2 = [
-  ['twist', '19:00'], ['planted', '20:00'], ['caretakerHint', '21:00'], ['votesOpen', '22:30'], ['lineRinging', '23:59'],
-];
-
-export function scheduleNight(night, day, tz = process.env.GAME_TZ_OFFSET || '-05:00') {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(day || '')) throw Object.assign(new Error('Give a date like 2026-10-30'), { status: 400 });
-  const plan = night === 1 ? NIGHT1 : night === 2 ? NIGHT2 : null;
-  if (!plan) throw Object.assign(new Error('night must be 1 or 2'), { status: 400 });
-  const added = plan.map(([beat, time]) => addScheduled(beat, new Date(`${day}T${time}:00${tz}`).toISOString()));
-  if (night === 2) {
-    const next = new Date(`${day}T12:00:00${tz}`);
-    next.setUTCDate(next.getUTCDate() + 1);
-    added.push(addScheduled('reveal', new Date(`${next.toISOString().slice(0, 10)}T00:00:00${tz}`).toISOString()));
-  }
-  return added;
+export function scheduleGame(at, length = 'quick') {
+  const start = new Date(at || '');
+  if (Number.isNaN(start.getTime())) throw Object.assign(new Error('Give a start time, like 2026-10-31T20:00'), { status: 400 });
+  const plan = LENGTHS[length];
+  if (!plan) throw Object.assign(new Error(`Length must be one of: ${Object.keys(LENGTHS).join(', ')}`), { status: 400 });
+  return plan.beats.map(([beat, min]) => addScheduled(beat, new Date(start.getTime() + min * 60_000).toISOString()));
 }

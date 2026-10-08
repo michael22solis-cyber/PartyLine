@@ -33,9 +33,35 @@ let tutorial = readTutorialProgress(store.get(tutorialKey));
 const saveTutorial = () => store.set(tutorialKey, JSON.stringify(tutorial));
 
 const READONLY = { line: 'The Line', unknown: 'UNKNOWN' };
+
+// ============ the cast's faces (public/cast/) ============
+const CAST = { ruth: 'Ruth Calloway', marcus: 'Marcus Vane', lily: 'Lily Blackwood', teddy: 'Teddy Fisk' };
+const KEY_OF_NAME = Object.fromEntries(Object.entries(CAST).map(([k, n]) => [n.toUpperCase(), k]));
+const faceKey = (k) => (CAST[k] ? k : String(k || '').startsWith('caretaker') ? 'caretaker' : null);
+const keyOfName = (name) => KEY_OF_NAME[String(name || '').trim().toUpperCase()] || (/BLACKWOOD MANOR|UNKNOWN/i.test(name || '') ? 'caretaker' : null);
+function avatar(key, initial = '') {
+  const k = faceKey(key);
+  const a = el('span', `avatar ${k ? `av-${k}` : 'av-none'}`);
+  if (k && k !== 'caretaker') {
+    const img = el('img'); img.src = `/assets/cast/${k}-sm.jpg`; img.alt = ''; img.loading = 'lazy'; img.decoding = 'async';
+    a.append(img);
+  } else if (!k && initial) a.textContent = initial.slice(0, 1).toUpperCase();
+  return a;
+}
+// Online / last seen, from when they last wrote to you.
+function presence(thread) {
+  const last = [...state.messages].reverse().find((m) => m.thread === thread && m.from === 'character');
+  if (!last) return '';
+  const mins = (Date.now() - new Date(last.at)) / 60000;
+  if (mins < 5) return 'online';
+  if (mins < 60) return `last seen ${Math.round(mins)}m ago`;
+  if (mins < 24 * 60) return `last seen ${Math.round(mins / 60)}h ago`;
+  return 'last seen a while ago';
+}
+const statusOf = (thread) => state.threads.find((t) => t.key === thread)?.status || '';
 const EVIDENCE_KINDS = new Set(['clue', 'memo', 'evidence', 'reveal']);
 const CALL_KINDS = new Set(['call', 'calllog', 'missed', 'voicemail']);
-const SHARE_KINDS = new Set(['clue', 'evidence', 'memo', 'voicemail']);
+const SHARE_KINDS = new Set(['clue', 'evidence', 'memo', 'voicemail', 'photo']);
 
 // Start a group chat with any mix of players and suspects you have numbers for.
 function openNewGroup() {
@@ -157,14 +183,9 @@ const icon = (name) => {
   const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = ICONS[name]; return s;
 };
-const MANOR = `<svg class="manor" viewBox="0 0 400 180" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
-  <defs><linearGradient id="fog" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0c140f" stop-opacity="0"/><stop offset="1" stop-color="#0c140f"/></linearGradient></defs>
-  <path d="M0 180V150l40-8 30 10 22-12 30 8v-14l20-20 24-30 14-10 14 10 8-18 10 18 16-6 12 24 30 6 14 20v62z" fill="#0a0f0c" stroke="#1a231e"/>
-  <path d="M110 180v-60l30-34 30 34v60zM240 180v-54l40-30 40 30v54z" fill="#060908" stroke="#1a231e"/>
-  <rect class="win" x="134" y="128" width="9" height="13"/><rect class="win b" x="154" y="128" width="9" height="13"/>
-  <rect class="win b" x="266" y="124" width="9" height="13"/><rect class="win" x="292" y="124" width="9" height="13"/>
-  <path d="M0 150h400v30H0z" fill="url(#fog)"/>
-</svg>`;
+// The wallpaper: Blackwood Manor at night (from the intro), with drifting fog and lights that flicker. Its mood
+// follows the night (see the data-phase styles): warm at first, colder after dark, red near the end, grey at dawn.
+const WALL = '<div class="wall" aria-hidden="true"><i class="fog a"></i><i class="fog b"></i><i class="grain"></i></div>';
 
 // ============ navigation ============
 function go(view, open = null) {
@@ -217,8 +238,11 @@ function render() {
 
 function appButton(name, label, view, count = 0, locked = false) {
   const b = el('button', `app${locked ? ' locked' : ''}`);
-  b.append(icon(name), el('span', null, label));
-  if (count > 0) b.append(el('i', 'badge', String(count)));
+  b.setAttribute('aria-label', `${label}${count > 0 ? `, ${count} new` : ''}${locked ? ', locked' : ''}`);
+  const tile = el('span', 'ico'); // the rounded app icon, like a real phone's home screen
+  tile.append(icon(name));
+  if (count > 0) tile.append(el('i', 'badge', String(count)));
+  b.append(tile, el('span', 'lbl', label));
   b.onclick = () => { if (locked) { sfx.creak(); flashNote('NOT YET.'); return; } go(view); };
   return b;
 }
@@ -236,32 +260,64 @@ function flashNote(text) {
   setTimeout(() => { noteOverride = null; if (state.view === 'home') render(); }, 1400);
 }
 
+// ---- home: the lock screen of the burner phone ----
+const PHASE_LABEL = {
+  before: 'THE LINE OPENS TONIGHT', early: 'THE LINE IS OPEN', late: 'AFTER DARK', deep: 'THE WITCHING HOUR',
+  final: 'VOTES ARE OPEN', after: 'CASE CLOSED',
+};
+// The four suspects, at a glance: who's online, typing, live, or still a stranger.
+function castStrip() {
+  const row = el('div', 'cast-strip');
+  Object.keys(CAST).forEach((k) => {
+    const t = state.threads.find((x) => x.key === k);
+    const b = el('button', 'cast-chip');
+    if (!t) {
+      b.classList.add('unknown'); b.disabled = true; b.setAttribute('aria-label', 'Unknown number');
+      b.append(el('span', 'avatar av-none', '?'), el('span', 'nm', '???'));
+      row.append(b); return;
+    }
+    const live = /LIVE/.test(t.status || '');
+    if (state.typing[k]) b.classList.add('typing');
+    else if (live) b.classList.add('live');
+    else if (presence(k) === 'online') b.classList.add('online');
+    if (unread(k)) b.classList.add('unread');
+    b.setAttribute('aria-label', `${CAST[k]}${state.typing[k] ? ', typing' : live ? ', live' : ''}${unread(k) ? ', new message' : ''}`);
+    b.append(avatar(k), el('span', 'nm', CAST[k].split(' ')[0]));
+    b.onclick = () => { markSeen(k); go('messages', k); };
+    row.append(b);
+  });
+  return row;
+}
 function renderHome(screen) {
   const home = el('div', 'home');
   const clock = el('div', 'home-clock');
   clock.append(el('div', 'big', '--:--'), el('div', 'date', ''));
   clock.firstChild.id = 'bigClock'; clock.lastChild.id = 'bigDate';
+  // One line under the clock: what needs you (missed calls, new messages), otherwise where the story is.
   const note = homeNote();
-  const line = el('div', `home-note${note.hot && !noteOverride ? ' hot' : ''}`, noteOverride || note.text);
+  const quiet = !note.hot && !noteOverride && PHASE_LABEL[state.phase];
+  const line = el('div', `home-note${note.hot && !noteOverride ? ' hot' : ''}${quiet ? ' quiet' : ''}`, noteOverride || (quiet ? PHASE_LABEL[state.phase] : note.text));
   const grid = el('div', 'grid');
   grid.append(
-    appButton('messages', 'MESSAGES', 'messages', unreadThreads()),
-    appButton('calls', 'CALLS', 'calls', unreadCalls()),
-    appButton('evidence', 'EVIDENCE', 'evidence', unreadEvidence()),
-    appButton('notes', 'NOTES', 'notes'),
-    appButton('vote', 'VOTE', 'vote'),
-    appButton('recap', 'THE END', 'recap', 0, !state.revealed),
+    appButton('messages', 'Messages', 'messages', unreadThreads()),
+    appButton('calls', 'Calls', 'calls', unreadCalls()),
+    appButton('evidence', 'Evidence', 'evidence', unreadEvidence()),
+    appButton('notes', 'Notes', 'notes'),
+    appButton('vote', 'Vote', 'vote'),
+    appButton('recap', 'The End', 'recap', 0, !state.revealed),
   );
   if (state.lobby?.status === 'lobby') home.append(clock, lobbyPanel(), grid);
-  else home.append(clock, line, grid);
-  const guide = el('button', 'home-guide');
-  guide.append(el('span', null, 'FIELD GUIDE'), el('small', null,
-    tutorial.status === 'complete' ? 'How to play · revisit any time'
-      : tutorial.status === 'new' ? 'New here? Start the tutorial'
-        : `Resume tutorial · ${tutorial.step + 1} / ${TUTORIAL_TITLES.length}`));
-  guide.onclick = () => startTutorial();
-  home.append(guide);
-  home.insertAdjacentHTML('beforeend', MANOR);
+  else home.append(clock, line, castStrip(), grid);
+  // The field guide stays on the home screen until it's done; after that it lives in the ⋮ menu.
+  if (tutorial.status !== 'complete') {
+    const guide = el('button', 'home-guide');
+    guide.append(el('span', null, 'FIELD GUIDE'), el('small', null,
+      tutorial.status === 'new' ? 'New here? Start the tutorial' : `Resume tutorial · ${tutorial.step + 1} / ${TUTORIAL_TITLES.length}`));
+    guide.onclick = () => startTutorial();
+    home.append(guide);
+  }
+  home.dataset.phase = state.phase || 'before';
+  home.insertAdjacentHTML('afterbegin', WALL);
   screen.append(home);
 }
 
@@ -286,18 +342,12 @@ function lobbyPanel() {
   }
   if (L.organizer) {
     const err = el('p', 'note bad');
-    let date = null;
-    if (L.length === 'twonights') {
-      date = el('input', 'textin'); date.type = 'date';
-      const y = new Date().getFullYear(); date.value = `${y}-10-30`;
-      box.append(el('p', 'note', 'Night 1 date (8 pm start):'), date);
-    }
     const ready = L.joined.length >= L.minPlayers;
     const start = el('button', 'wide', ready ? 'START THE GAME' : `NEED ${L.minPlayers - L.joined.length} MORE`);
     start.disabled = !ready;
     start.onclick = async () => {
       start.disabled = true; sfx.creak();
-      try { await api('/start', { method: 'POST', body: JSON.stringify({ date: date?.value }) }); }
+      try { await api('/start', { method: 'POST', body: '{}' }); }
       catch (ex) { err.textContent = ex.message; start.disabled = false; }
     };
     box.append(start, err);
@@ -344,12 +394,12 @@ function tutorialVisual(v) {
   const fig = el('figure', `tv tv-${v.type}`);
   if (v.type === 'calls') {
     const segs = 10;
-    const lit = v.max ? Math.ceil((v.left / v.max) * segs) : 0;
+    const lit = v.max == null ? segs : v.max ? Math.ceil((v.left / v.max) * segs) : 0;
     const bar = el('div', 'tv-segs');
     for (let i = 0; i < segs; i++) bar.append(el('i', i < lit ? 'on' : ''));
     const row = (label, value) => { const r = el('div', 'tv-row'); r.append(el('span', null, label), el('b', null, value)); return r; };
-    fig.append(row('☎ CALLS LEFT', `${v.left} / ${v.max}`), bar, row('⏱ EACH CALL', `UP TO ${fmtSec(v.maxSeconds)}`),
-      el('figcaption', null, 'Out of calls? Texting always works.'));
+    fig.append(row('☎ CALL TIME LEFT', v.max == null ? 'UNLIMITED' : `${v.left} / ${v.max} MIN`), bar, row('⏱ EACH CALL', `UP TO ${fmtSec(v.maxSeconds)}`),
+      el('figcaption', null, 'Out of call time? Texting always works.'));
   } else if (v.type === 'share') {
     const card = el('div', 'tv-card'); card.append(el('small', null, 'CLUE'), el('span', null, '▤ ▤▤▤ ▤▤'), el('b', null, '↗ SHARE'));
     const chat = el('div', 'tv-chat'); chat.append(el('small', null, 'THE CREW'), el('span', 'tv-bubble', '↗ shared a clue'), el('span', 'tv-bubble them', 'that time is wrong…'));
@@ -363,12 +413,12 @@ function tutorialVisual(v) {
     fig.append(chips, el('figcaption', null, 'Tap a name on the suspect board to mark your theory.'));
   } else if (v.type === 'timeline') {
     const line = el('div', 'tv-line');
-    [['NOW', 'Vote or change it'], ['11:30 PM', 'Voting closes'], ['MIDNIGHT', 'The reveal']].forEach(([when, what], i) => {
+    [['NOW', 'Vote or change it'], ['VOTES OPEN', 'The Line tells you'], ['FINAL CALL', 'The reveal']].forEach(([when, what], i) => {
       const stop = el('div', `tv-stop${i === 2 ? ' end' : ''}`);
       stop.append(el('i'), el('b', null, when), el('span', null, what));
       line.append(stop);
     });
-    fig.append(el('small', 'tv-night', 'NIGHT 2'), line);
+    fig.append(el('small', 'tv-night', 'TONIGHT'), line);
   }
   return fig;
 }
@@ -431,13 +481,14 @@ function lastOf(thread) {
 const preview = (m) =>
   ((m.from === 'peer' || (m.from === 'character' && m.sender)) && !m.thread.startsWith('dm:') && m.sender ? `${m.sender.split(' ')[0]}: ` : '') +
   (m.forwarded ? '↗ shared ' : '') +
-  (m.kind === 'secret' ? 'Open this alone.' : m.kind === 'memo' ? '▶ Voice memo' : m.kind === 'voicemail' ? '▶ Voicemail'
+  (m.kind === 'secret' ? 'Open this alone.' : m.kind === 'memo' ? '▶ Voice memo' : m.kind === 'voicemail' ? '▶ Voicemail' : m.kind === 'photo' ? '📷 Photo'
     : m.text.replace(/\s+/g, ' '));
 
 function threadRow(thread, extraClass = '') {
   const li = el('li', unread(thread) ? 'unread' : '');
   const b = el('button');
   const last = lastOf(thread);
+  if (CAST[thread] || thread.startsWith('dm:')) { b.classList.add('has-av'); b.append(avatar(thread, titleOf(thread))); }
   b.append(
     el('span', `name ${extraClass}`, titleOf(thread)),
     el('span', 'time', last ? fmtTime(last.at) : ''),
@@ -487,8 +538,10 @@ function renderCalls(screen) {
     calls.forEach((m) => {
       if (m.kind === 'voicemail') { const li = el('li', 'vm-row'); li.append(messageNode(m)); ul.append(li); return; }
       const li = el('li', `call-row ${m.kind}`);
-      const b = el('button'); b.disabled = true;
+      const b = el('button', 'has-av'); b.disabled = true;
       const label = { call: '☎ incoming · real phone', calllog: '☎ call', missed: '✕ missed' }[m.kind];
+      const who = m.kind === 'missed' ? m.text.replace(/^Missed call: /, '') : m.kind === 'calllog' ? m.text.split(' · ')[0] : 'BLACKWOOD MANOR';
+      b.append(avatar(m.npc || keyOfName(who)));
       b.append(el('span', 'name', m.kind === 'missed' ? m.text.replace(/^Missed call: /, '') : m.kind === 'calllog' ? m.text.split(' · ')[0] : 'BLACKWOOD MANOR'),
         el('span', 'time', fmtTime(m.at)), el('span', 'preview', m.kind === 'calllog' ? `${label} · ${m.text.split(' · ')[1] || ''}` : label));
       li.append(b); ul.append(li);
@@ -499,8 +552,8 @@ function renderCalls(screen) {
     screen.append(el('div', 'section-label', 'CALL SOMEONE'));
     const ul2 = el('ul', 'list');
     state.threads.forEach((t) => {
-      const li = el('li'); const b = el('button');
-      b.append(el('span', 'name', t.name), el('span', 'time', '☎'), el('span', 'preview', t.tagline));
+      const li = el('li'); const b = el('button', 'has-av');
+      b.append(avatar(t.key), el('span', 'name', t.name), el('span', 'time', '☎'), el('span', 'preview', [t.tagline, t.status].filter(Boolean).join(' · ')));
       b.onclick = () => startCall(t.key);
       li.append(b); ul2.append(li);
     });
@@ -542,7 +595,14 @@ function audioPlayer(m) {
 
 function messageNode(m) {
   let node;
-  if (m.kind === 'secret') {
+  if (m.kind === 'photo') {
+    const who = m.from === 'player' ? 'me' : m.from === 'peer' ? 'them peer' : 'them';
+    node = el('div', `bubble ${who} photo`);
+    const img = el('img'); img.src = m.image; img.alt = m.text || 'Photo'; img.loading = 'lazy';
+    img.onclick = (e) => { e.stopPropagation(); openLightbox({ image: m.image, caption: m.text }); };
+    node.append(img);
+    if (m.text) node.append(el('span', 'cap', m.text));
+  } else if (m.kind === 'secret') {
     node = el('div', 'secret');
     node.append(el('span', 'tag', 'FOR YOUR EYES ONLY'), el('div', 'body', m.text), el('div', 'hint', 'Make sure no one is looking, then tap to read.'));
     node.onclick = () => { node.classList.add('open'); sfx.creak(); };
@@ -561,6 +621,7 @@ function messageNode(m) {
   } else if (m.kind === 'voicemail') {
     node = el('div', 'card voicemail');
     node.append(el('span', 'tag', 'VOICEMAIL'));
+    if (CAST[m.npc]) { const h = el('div', 'vm-head'); h.append(avatar(m.npc), el('b', null, CAST[m.npc].toUpperCase())); node.append(h); }
     if (m.audio) node.append(audioPlayer(m));
     node.append(document.createTextNode(m.text));
   } else if (m.kind === 'contact') {
@@ -592,7 +653,18 @@ function messageNode(m) {
 function renderConvo(screen, thread) {
   const head = el('div', 'convo-head');
   const info = el('div', 'who');
-  info.append(el('div', 'to', READONLY[thread] ? 'FROM' : 'TO'), el('div', 'title', titleOf(thread)), el('div', 'sub', subOf(thread)));
+  const sub = el('div', 'sub');
+  if (CAST[thread]) {
+    // What they're up to (follows the story) and when they were last on their phone.
+    const st = statusOf(thread);
+    const seen = presence(thread);
+    sub.append(el('span', /LIVE/.test(st) ? 'live' : null, st || subOf(thread)));
+    if (seen) sub.append(' · ', el('span', seen === 'online' ? 'on' : null, seen));
+    const face = avatar(thread);
+    face.onclick = () => openLightbox({ video: `/assets/cast/${thread}.mp4`, poster: `/assets/cast/${thread}.jpg`, caption: `${CAST[thread]} · ${subOf(thread)}` });
+    head.append(face);
+  } else sub.textContent = subOf(thread);
+  info.append(el('div', 'to', READONLY[thread] ? 'FROM' : 'TO'), el('div', 'title', titleOf(thread)), sub);
   head.append(info);
   if (!READONLY[thread] && !isPeerThread(thread)) {
     const call = el('button', 'callbtn', '☎ CALL');
@@ -600,7 +672,9 @@ function renderConvo(screen, thread) {
     const calls = state.me?.calls;
     if (calls) {
       const box = el('div', 'callbox');
-      box.append(call, el('div', `callsleft${calls.left ? '' : ' out'}`, calls.left ? `${calls.left} LEFT · ${fmtSec(calls.maxSeconds)} MAX` : 'NO CALLS LEFT'));
+      const out = calls.minutesLeft === 0;
+      box.append(call, el('div', `callsleft${out ? ' out' : ''}`, out ? 'NO CALL TIME LEFT'
+        : calls.minutesLeft == null ? `UP TO ${fmtSec(calls.maxSeconds)}` : `${calls.minutesLeft} MIN LEFT · ${fmtSec(calls.maxSeconds)} MAX`));
       head.append(box);
     } else head.append(call);
   }
@@ -676,7 +750,7 @@ function renderConvo(screen, thread) {
 function renderEvidence(screen) {
   markSeen('evidence');
   screen.append(el('div', 'app-title', 'CASE FILE'));
-  const items = state.messages.filter((m) => EVIDENCE_KINDS.has(m.kind));
+  const items = state.messages.filter((m) => EVIDENCE_KINDS.has(m.kind) || (m.kind === 'photo' && m.from === 'character'));
   if (!items.length) { screen.append(el('div', 'empty', 'Nothing yet.\n\nClues, recordings and evidence you receive will be kept here.')); return; }
   const wrap = el('div', 'bubbles');
   items.forEach((m) => { wrap.append(el('div', 'stamp', fmtTime(m.at))); wrap.append(messageNode(m)); });
@@ -703,7 +777,7 @@ function renderNotes(screen) {
   const ta = el('textarea'); ta.placeholder = 'Who lied? What doesn’t add up?'; ta.maxLength = 4000;
   ta.value = state.drafts.notes ?? store.get(notesKey, '');
   ta.oninput = () => { state.drafts.notes = ta.value; store.set(notesKey, ta.value); };
-  box.append(ta, el('p', 'fine', 'Only you can see this. It stays on this phone.'));
+  box.append(ta, el('p', 'fine', 'Notes stay private from the group.'));
   screen.append(box);
 }
 
@@ -818,9 +892,26 @@ async function shareCard(r) {
 // ============ incoming call overlay ============
 let ringTimeout = null;
 let ringFor = null; // character key when the call can be answered in the app
+// The caller's face fills the ring screen: their portrait moving, or for the house, a lit window through static.
+function setFace(box, key, { video = false } = {}) {
+  const k = faceKey(key);
+  box.querySelectorAll('video, img, i').forEach((n) => n.remove());
+  box.classList.toggle('on', Boolean(k));
+  box.classList.toggle('ghost', k === 'caretaker');
+  if (!k) return;
+  if (k === 'caretaker') { box.prepend(el('i')); return; }
+  if (video && !reduceMotion) {
+    const v = el('video'); v.muted = true; v.loop = true; v.autoplay = true; v.playsInline = true; v.setAttribute('playsinline', '');
+    v.poster = `/assets/cast/${k}.jpg`; v.src = `/assets/cast/${k}.mp4`;
+    box.prepend(v); v.play().catch(() => {});
+  } else {
+    const img = el('img'); img.src = `/assets/cast/${k}.jpg`; img.alt = ''; box.prepend(img);
+  }
+}
 function showRing(sub, note, { id = 'UNKNOWN', answer = null } = {}) {
   if (call) return; // already on a call
   closeCallScreen(); // a lingering "call ended" screen would sit on top of the ring
+  setFace($('#ringFace'), answer, { video: true });
   ringFor = answer;
   $('#ringId').textContent = id; $('#ringSub').textContent = sub; $('#ringNote').textContent = note;
   $('#ringAnswer').hidden = !answer;
@@ -828,7 +919,7 @@ function showRing(sub, note, { id = 'UNKNOWN', answer = null } = {}) {
   $('#ring').hidden = false; sfx.ring();
   clearTimeout(ringTimeout); ringTimeout = setTimeout(hideRing, 40_000);
 }
-function hideRing() { $('#ring').hidden = true; sfx.stopRing(); clearTimeout(ringTimeout); ringFor = null; }
+function hideRing() { $('#ring').hidden = true; sfx.stopRing(); clearTimeout(ringTimeout); ringFor = null; setFace($('#ringFace'), null); }
 $('#ringDismiss').onclick = hideRing;
 $('#ringAnswer').onclick = () => { const c = ringFor; hideRing(); if (c) startCall(c); };
 function incoming({ character, from }) {
@@ -903,6 +994,9 @@ function callScreen(character) {
   clearTimeout(callAfterTimer);
   captions.reset();
   $('#callName').textContent = callName(character);
+  setFace($('#callFace'), character);
+  $('#callScreen').classList.toggle('has-face', Boolean(CAST[character]));
+  $('#callScreen').style.setProperty('--lvl', '0');
   $('#callState').textContent = 'CALLING…';
   $('#callTime').textContent = '';
   $('#callMute').classList.remove('on');
@@ -946,16 +1040,82 @@ function startClock(maxSeconds, onTick) {
     if (secs > maxSeconds) endCall('max_duration');
   }, 500);
 }
-// A scripted call (the midnight reveal): a finished recording plays through the call screen.
-function playRecordingCall(character, info) {
-  const audio = $('#callAudio');
-  call.mode = 'recording';
-  audio.srcObject = null;
-  audio.src = info.audio;
-  audio.onended = () => setTimeout(() => endCall('recording_ended'), 800);
-  audio.onloadedmetadata = () => { if (info.captions) captions.line(info.captions, audio.duration * 1000); };
-  audio.play().catch(() => {});
+// ============ phone-line sound (on by default, ⋮ menu) ============
+// The character's voice goes through a telephone band (about 300-3,400 Hz) with a faint line hiss, like a real call
+// on an old landline, instead of studio-clean audio. If the browser can't do it, the voice plays unprocessed.
+const phoneLineOn = () => store.get('bw-phoneline', '1') === '1';
+function phoneChain(ctx) {
+  const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 320;
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3300;
+  const presence = ctx.createBiquadFilter(); presence.type = 'peaking'; presence.frequency.value = 1700; presence.Q.value = 0.9; presence.gain.value = 4;
+  const out = ctx.createGain(); out.gain.value = 1.6; // the band filter takes some loudness away
+  hp.connect(lp).connect(presence).connect(out).connect(ctx.destination);
+  const noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  const noise = ctx.createBufferSource(); noise.buffer = noiseBuf; noise.loop = true;
+  const nf = ctx.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = 1400; nf.Q.value = 0.6;
+  const ng = ctx.createGain(); ng.gain.value = 0.006;
+  noise.connect(nf).connect(ng).connect(ctx.destination);
+  noise.start();
+  const nodes = [hp, lp, presence, out, noise, nf, ng];
+  return { input: hp, stop: () => { try { noise.stop(); } catch { /* stopped */ } nodes.forEach((n) => { try { n.disconnect(); } catch { /* gone */ } }); } };
+}
+// Live call: route the remote stream through the line. Returns a teardown, or null to play it as is.
+function phoneLineStream(stream) {
+  if (!phoneLineOn()) return null;
+  try {
+    const ctx = sfx.unlock(); if (!ctx) return null;
+    const chain = phoneChain(ctx);
+    const src = ctx.createMediaStreamSource(stream);
+    src.connect(chain.input);
+    return () => { try { src.disconnect(); } catch { /* gone */ } chain.stop(); };
+  } catch { return null; }
+}
+
+// A scripted call (the Caretaker, the midnight reveal): finished recordings play through the call screen, one after
+// another with a short pause, captions in step.
+async function playRecordingCall(character, info) {
+  const c = call;
+  c.mode = 'recording';
+  const parts = [].concat(info.audio);
+  const lines = [].concat(info.captions || []);
+  const finish = () => setTimeout(() => { if (call === c) endCall('recording_ended'); }, 800);
   startClock(info.maxSeconds);
+  const ctx = phoneLineOn() ? sfx.unlock() : null;
+  if (ctx) {
+    try {
+      const buffers = await Promise.all(parts.map((u) => fetch(u).then((r) => r.arrayBuffer()).then((b) => ctx.decodeAudioData(b))));
+      if (call !== c) return;
+      const chain = phoneChain(ctx);
+      meter(chain.input); // the Caretaker's window (or face) pulses with his voice
+      let src = null;
+      c.stopLine = () => { try { src?.stop(); } catch { /* done */ } chain.stop(); };
+      for (const [i, buf] of buffers.entries()) {
+        if (call !== c) return;
+        src = ctx.createBufferSource(); src.buffer = buf; src.connect(chain.input);
+        if (lines[i]) captions.line(lines[i], buf.duration * 1000);
+        await new Promise((done) => { src.onended = done; src.start(); });
+        await new Promise((done) => setTimeout(done, 650));
+      }
+      finish();
+      return;
+    } catch { if (call !== c) return; c.stopLine?.(); c.stopLine = null; }
+  }
+  // Plain playback (no phone-line sound, or the browser couldn't decode it).
+  const audio = $('#callAudio');
+  audio.srcObject = null;
+  let i = 0;
+  const next = () => {
+    if (call !== c) return;
+    if (i >= parts.length) { finish(); return; }
+    const at = i++;
+    audio.src = parts[at];
+    audio.onloadedmetadata = () => { if (lines[at]) captions.line(lines[at], audio.duration * 1000); };
+    audio.onended = () => setTimeout(next, 650);
+    audio.play().catch(() => {});
+  };
+  next();
 }
 async function startCall(character) {
   if (call) return;
@@ -969,19 +1129,27 @@ async function startCall(character) {
     return navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
   };
   try {
-    // Microphone first (the short-lived call key is only minted once we can use it). The scripted reveal needs none.
-    let mic = character === 'caretaker_reveal' ? null : await getMic();
+    // Microphone first (the short-lived call key is only minted once we can use it). The Caretaker's recorded calls need
+    // none (if his call turns out to be live, the microphone is requested below).
+    let mic = character.startsWith('caretaker') ? null : await getMic();
     call.mic = mic;
     if (!call) { mic?.getTracks().forEach((t) => t.stop()); return; }
     const info = await api('/call', { method: 'POST', body: JSON.stringify({ character }) });
-    if (state.me?.calls) state.me.calls.left = Math.max(0, state.me.calls.left - 1);
     if (!call) { mic?.getTracks().forEach((t) => t.stop()); return; }
     call.callId = info.callId;
     if (info.mode === 'recording') { mic?.getTracks().forEach((t) => t.stop()); call.mic = null; playRecordingCall(character, info); return; }
     if (!mic) { mic = await getMic(); call.mic = mic; }
     const pc = new RTCPeerConnection();
     call.pc = pc;
-    pc.ontrack = (e) => { audio.srcObject = e.streams[0]; audio.play().catch(() => {}); meter(e.streams[0]); };
+    pc.ontrack = (e) => {
+      audio.srcObject = e.streams[0];
+      // The element keeps the stream flowing (some browsers need it); with the phone-line sound on, it's muted and the
+      // voice is heard through the filter instead.
+      const stop = call ? phoneLineStream(e.streams[0]) : null;
+      if (stop) { audio.muted = true; call.stopLine = stop; }
+      audio.play().catch(() => {});
+      meter(e.streams[0]);
+    };
     mic.getTracks().forEach((t) => pc.addTrack(t, mic));
     const dc = pc.createDataChannel('oai-events');
     const callId = info.callId;
@@ -1018,7 +1186,8 @@ async function startCall(character) {
     if (!call) return;
     startClock(info.maxSeconds, () => call?.ctl?.tick());
   } catch (ex) {
-    $('#callState').textContent = ex.name === 'NotAllowedError' ? 'MICROPHONE BLOCKED' : /busy/i.test(ex.message) ? 'LINE BUSY' : 'CALL FAILED';
+    $('#callState').textContent = ex.name === 'NotAllowedError' ? 'MICROPHONE BLOCKED' : /busy/i.test(ex.message) ? 'LINE BUSY'
+      : /picking up/i.test(ex.message) ? 'NO ANSWER' : /line is dead/i.test(ex.message) ? 'NO SIGNAL' : 'CALL FAILED';
     $('#callTime').textContent = ex.name === 'NotAllowedError' ? 'Allow the microphone to talk to them.'
       : ex instanceof TypeError ? 'The line dropped. Try again.' : ex.message;
     setTimeout(() => endCall('connect_failed'), 3200);
@@ -1027,16 +1196,18 @@ async function startCall(character) {
 function endCall(reason = 'player_hung_up') {
   if (!call) return;
   const c = call; call = null;
-  clearInterval(c.timer); cancelAnimationFrame(meterRaf);
+  clearInterval(c.timer); cancelAnimationFrame(meterRaf); $('#callScreen').style.setProperty('--lvl', '0');
   captions.stop();
   c.ctl?.end(reason); // saves what was heard so far and reports any outstanding usage
   c.mic?.getTracks().forEach((t) => t.stop());
   try { c.pc?.close(); } catch { /* already closed */ }
+  c.stopLine?.();
   const audio = $('#callAudio');
-  audio.pause(); audio.onended = null; audio.srcObject = null; audio.removeAttribute('src');
+  audio.pause(); audio.onended = null; audio.onloadedmetadata = null; audio.srcObject = null; audio.removeAttribute('src'); audio.muted = false;
   showCallEnded(c, reason);
   if (c.started || c.callId) {
-    api('/call/end', { method: 'POST', body: JSON.stringify({ callId: c.callId, character: c.character, mode: c.mode, reason, seconds: c.started ? (Date.now() - c.started) / 1000 : 0 }) }).catch(() => {});
+    api('/call/end', { method: 'POST', body: JSON.stringify({ callId: c.callId, character: c.character, mode: c.mode, reason, seconds: c.started ? (Date.now() - c.started) / 1000 : 0 }) })
+      .then(() => refresh()).catch(() => {}); // refresh: the call-time meter
   }
   sfx.creak();
 }
@@ -1048,22 +1219,34 @@ $('#callMute').onclick = () => {
 };
 // The rings pulse with the character's voice.
 let meterRaf = 0;
-function meter(stream) {
+function meter(source) {
   try {
     const ctx = sfx.unlock(); if (!ctx) return;
     const an = ctx.createAnalyser(); an.fftSize = 256;
-    ctx.createMediaStreamSource(stream).connect(an);
+    (source instanceof MediaStream ? ctx.createMediaStreamSource(source) : source).connect(an);
     const buf = new Uint8Array(an.frequencyBinCount);
-    const viz = $('#callViz');
+    const scr = $('#callScreen');
+    cancelAnimationFrame(meterRaf);
     const tickMeter = () => {
       an.getByteFrequencyData(buf);
       const level = buf.reduce((a, b) => a + b, 0) / buf.length / 255;
-      viz.style.setProperty('--lvl', Math.min(1, level * 3).toFixed(3));
+      scr.style.setProperty('--lvl', Math.min(1, level * 3).toFixed(3));
       meterRaf = requestAnimationFrame(tickMeter);
     };
     tickMeter();
   } catch { /* visual only */ }
 }
+
+// ============ photo / portrait viewer ============
+function openLightbox({ image, video, poster, caption }) {
+  const box = $('#lightbox'); const img = $('#lightboxImg'); const vid = $('#lightboxVid');
+  img.hidden = !image; vid.hidden = !video;
+  if (image) img.src = image;
+  if (video) { vid.poster = poster || ''; vid.src = video; if (!reduceMotion) vid.play().catch(() => {}); }
+  $('#lightboxCap').textContent = caption || '';
+  box.hidden = false;
+}
+$('#lightbox').onclick = () => { const v = $('#lightboxVid'); v.pause(); v.removeAttribute('src'); $('#lightbox').hidden = true; };
 
 // ============ toast ============
 let toastTimer = null;
@@ -1137,6 +1320,12 @@ function connect() {
     state.messages.forEach((m) => { if (m.thread === thread && m.from === 'player' && !m.readAt) m.readAt = at; });
     render();
   });
+  es.addEventListener('status', (e) => {
+    const statuses = JSON.parse(e.data);
+    state.threads.forEach((t) => { if (statuses[t.key] != null) t.status = statuses[t.key]; });
+    if (statuses.phase) state.phase = statuses.phase;
+    render();
+  });
   es.addEventListener('typing', (e) => {
     const { thread, on, who } = JSON.parse(e.data);
     state.typing[thread] = on ? (who || true) : false; render();
@@ -1157,11 +1346,13 @@ function setupMenu() {
     $('#callsToggle').disabled = !state.me.hasPhone;
     $('#soundToggle').checked = store.get('bw-sound', '1') !== '0';
     $('#captionsToggle').checked = captionsOn();
+    $('#phoneLineToggle').checked = phoneLineOn();
     menu.showModal();
   };
   $('#closeMenu').onclick = () => menu.close();
   $('#soundToggle').onchange = (e) => store.set('bw-sound', e.target.checked ? '1' : '0');
   $('#captionsToggle').onchange = (e) => store.set('bw-captions', e.target.checked ? '1' : '0');
+  $('#phoneLineToggle').onchange = (e) => store.set('bw-phoneline', e.target.checked ? '1' : '0');
   $('#callsToggle').onchange = async (e) => {
     try {
       const r = await api('/settings', { method: 'POST', body: JSON.stringify({ callsOff: !e.target.checked }) });
@@ -1329,6 +1520,7 @@ async function refresh() {
     fresh.messages.filter((m) => !known.has(m.id)).forEach((m) => state.messages.push(m));
     Object.assign(state.me, fresh.me);
     state.threads = fresh.threads;
+    state.phase = fresh.phase;
     state.revealed = fresh.revealed; state.vote = fresh.vote; state.players = fresh.players; state.peers = fresh.peers; state.groups = fresh.groups; state.lobby = fresh.lobby;
     if (state.revealed && !state.recap) loadRecap();
     render();

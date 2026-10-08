@@ -114,26 +114,29 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .home-note.hot { color: var(--ember); animation: blinkNote 1.4s steps(2) infinite; }
 @keyframes blinkNote { 50% { opacity: 0.35; } }
 
-.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; position: relative; z-index: 2; }
-.app {
-  position: relative; aspect-ratio: 1; display: grid; place-items: center; align-content: center; gap: 6px;
-  border: 1px solid var(--line); background: rgba(12,17,14,0.82); color: var(--glow);
-  transition: background 0.12s, border-color 0.12s;
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px 10px; position: relative; z-index: 2; padding: 0 8px; margin-top: 10px; }
+/* App icons like a real phone: a rounded tile with the glyph, the label underneath, no box around it. */
+.app { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 0; background: none; border: 0; color: var(--glow); -webkit-tap-highlight-color: transparent; }
+.app .ico {
+  position: relative; width: 62px; height: 62px; border-radius: 16px; display: grid; place-items: center;
+  background: linear-gradient(160deg, #18241d 0%, #0b120e 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -1px 0 rgba(0,0,0,0.6), 0 6px 14px rgba(0,0,0,0.55), 0 0 0 1px rgba(159,224,160,0.10);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
-.app svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: square; filter: drop-shadow(0 0 5px rgba(159,224,160,0.45)); }
-.app span { font-family: var(--lcd); font-size: 16px; letter-spacing: 0.14em; color: var(--ink); }
-.app:active { background: #16251c; border-color: var(--glow); }
+.app svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 5px rgba(159,224,160,0.45)); }
+.app .lbl { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; color: var(--ink); text-transform: none; }
+.app:active .ico { transform: scale(0.92); box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 2px 6px rgba(0,0,0,0.5), 0 0 0 1px rgba(159,224,160,0.35); }
+.app:focus-visible { outline: none; }
+.app:focus-visible .ico { box-shadow: 0 0 0 2px var(--amber); }
 .app.locked { color: var(--dim); }
-.app.locked svg { filter: none; opacity: 0.5; }
-.app.locked span { color: var(--dim); }
+.app.locked .ico { background: linear-gradient(160deg, #111814, #090d0b); }
+.app.locked svg { filter: none; opacity: 0.45; }
+.app.locked .lbl { color: var(--dim); }
 .app .badge {
-  position: absolute; top: 6px; right: 6px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px;
-  background: var(--ember); color: #fff; font-family: var(--lcd); font-size: 14px; line-height: 18px; text-align: center;
-  box-shadow: 0 0 10px rgba(208,65,46,0.7);
+  position: absolute; top: -6px; right: -7px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px;
+  background: var(--ember); color: #fff; font-family: var(--mono); font-style: normal; font-weight: 600; font-size: 11px; line-height: 20px; text-align: center;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 10px rgba(208,65,46,0.6);
 }
-.manor { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 44%; z-index: 1; pointer-events: none; opacity: 0.9; }
-.manor .win { animation: candle 3.1s infinite; fill: #e6a23c; }
-.manor .win.b { animation-delay: 1.3s; fill: #d0412e; }
 @keyframes candle { 0%,100% { opacity: 0.85; } 8% { opacity: 0.2; } 12% { opacity: 0.9; } 55% { opacity: 0.7; } 60% { opacity: 0.1; } 64% { opacity: 0.85; } }
 
 /* ============ new-player field guide ============ */
@@ -233,7 +236,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .convo-head { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 10px 16px; border-bottom: 1px solid var(--line); }
 .convo-head .to { font-family: var(--lcd); font-size: 14px; letter-spacing: 0.2em; color: var(--dim); }
 .convo-head .title { font-weight: 600; }
-.convo-head .sub { font-size: 11px; color: var(--dim); }
+.convo-head .sub { font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bubbles { padding: 14px 12px 18px; display: flex; flex-direction: column; gap: 8px; }
 .bubble { max-width: 82%; padding: 9px 12px; font-size: 14.5px; line-height: 1.45; white-space: pre-wrap; word-wrap: break-word; }
 .bubble.them { align-self: flex-start; background: var(--panel); border: 1px solid var(--line); border-left: 2px solid var(--glow); }
@@ -339,11 +342,11 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .round.on { background: var(--ink); color: var(--bg); }
 
 /* in-app call screen */
-.callscr { position: absolute; inset: 0; z-index: 36; background: radial-gradient(ellipse at 50% 40%, #0d1510, #020302 70%); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px 24px; text-align: center; }
+.callscr { --lvl: 0; position: absolute; inset: 0; z-index: 36; overflow: hidden; background: radial-gradient(ellipse at 50% 40%, #0d1510, #020302 70%); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px 24px; text-align: center; }
 .call-state { font-family: var(--lcd); font-size: 20px; letter-spacing: 0.3em; color: var(--glow); }
 .call-name { font-family: var(--type); font-size: 38px; margin-top: 12px; }
 .call-time { font-family: var(--lcd); font-size: 22px; color: var(--dim); margin-top: 6px; min-height: 26px; max-width: 300px; }
-.call-viz { --lvl: 0; position: relative; width: 170px; height: 170px; margin: 34px 0 10px; }
+.call-viz { position: relative; width: 170px; height: 170px; margin: 34px 0 10px; }
 .call-viz i { position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--glow); opacity: calc(0.25 + var(--lvl) * 0.75); transform: scale(calc(0.45 + var(--lvl) * 0.55)); transition: transform 0.08s linear, opacity 0.08s linear; box-shadow: 0 0 20px rgba(159,224,160,0.35); }
 .call-viz i:nth-child(2) { transform: scale(calc(0.62 + var(--lvl) * 0.42)); opacity: calc(0.15 + var(--lvl) * 0.5); }
 .call-viz i:nth-child(3) { transform: scale(calc(0.8 + var(--lvl) * 0.25)); opacity: calc(0.08 + var(--lvl) * 0.35); }
@@ -451,3 +454,106 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .lobby-names { margin: 10px 0 4px; font-size: 14px; }
 .lobby .wide { margin-top: 10px; }
 .lobby .note { margin: 8px 0 0; }
+
+/* ============ cast faces ============ */
+.avatar { flex: none; width: 40px; height: 40px; border-radius: 50%; overflow: hidden; background: #111a14; border: 1px solid var(--line); display: inline-grid; place-items: center; font-family: var(--lcd); font-size: 21px; color: var(--dim); position: relative; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; filter: sepia(0.25) saturate(0.8) contrast(1.05); }
+.avatar.av-caretaker { background: radial-gradient(circle at 50% 120%, #1b2a20, #050706 70%); }
+.avatar.av-caretaker::after { content: ''; width: 9px; height: 13px; background: var(--amber); opacity: 0.6; box-shadow: 0 0 9px var(--amber); animation: flick 3.2s steps(1) infinite; }
+@keyframes flick { 0%, 100% { opacity: 0.6; } 47% { opacity: 0.15; } 49% { opacity: 0.6; } 51% { opacity: 0.2; } 53% { opacity: 0.6; } }
+.list li button.has-av { grid-template-columns: 40px 1fr auto; gap: 2px 12px; }
+.list li button.has-av .avatar { grid-row: span 2; align-self: center; }
+.list li button.has-av .preview { grid-column: 2 / -1; }
+.convo-head .avatar { width: 42px; height: 42px; cursor: zoom-in; }
+.convo-head .sub .on { color: var(--glow); }
+.convo-head .sub .live { color: var(--ember); }
+
+/* the caller's face behind the incoming-call and call screens */
+.ring-face, .call-face { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.ring > :not(.ring-face), .callscr > :not(.call-face) { position: relative; z-index: 1; }
+.ring-face video, .ring-face img, .call-face img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 25%; }
+.ring-face video, .ring-face img { filter: sepia(0.3) contrast(1.1) brightness(0.5); }
+.ring-face::after, .call-face::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,0.35), rgba(0,0,0,0.05) 30%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.92) 85%); }
+.ring-face.on::before, .call-face.on::before { content: ''; position: absolute; inset: -50%; z-index: 1; opacity: 0.13; background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); animation: grain 0.6s steps(4) infinite; }
+@keyframes grain { 0% { transform: translate(0, 0); } 25% { transform: translate(-6%, 4%); } 50% { transform: translate(5%, -3%); } 75% { transform: translate(-3%, -6%); } 100% { transform: translate(0, 0); } }
+.ring:has(.ring-face.on) { animation: none; }
+.call-face img { filter: sepia(0.35) saturate(0.7) brightness(calc(0.38 + var(--lvl) * 0.5)); transform-origin: 50% 30%; animation: pushin 45s ease-out forwards; transition: filter 0.08s linear; }
+@keyframes pushin { from { transform: scale(1.03); } to { transform: scale(1.16); } }
+.call-face .glow { position: absolute; inset: 0; z-index: 2; background: radial-gradient(ellipse at 50% 32%, rgba(159,224,160,0.5), transparent 58%); opacity: calc(var(--lvl) * 0.55); mix-blend-mode: screen; }
+.callscr.has-face { justify-content: flex-end; padding-bottom: 40px; }
+.callscr.has-face .call-viz { width: 90px; height: 90px; margin: 14px 0 6px; }
+.callscr.ended .call-face img { filter: grayscale(1) brightness(0.22); transition: filter 1.2s; }
+/* the Caretaker has no face: a dark house with one lit window, through static */
+.ring-face.ghost, .call-face.ghost { background: radial-gradient(ellipse at 50% 30%, #101812, #020302 70%); }
+.ring-face.ghost::before, .call-face.ghost::before { opacity: 0.22; }
+.ring-face.ghost i, .call-face.ghost i { position: absolute; left: 50%; top: 9%; width: 26px; height: 38px; margin-left: -13px; background: linear-gradient(90deg, transparent 45%, #2a1a08 45% 55%, transparent 55%), linear-gradient(transparent 45%, #2a1a08 45% 55%, transparent 55%), var(--amber); opacity: 0.35; box-shadow: 0 0 40px 10px rgba(230,162,60,0.25); animation: flick 3.2s steps(1) infinite; }
+
+/* photos characters send */
+.bubble.photo { padding: 4px; width: 72%; max-width: 280px; }
+.bubble.photo img { display: block; width: 100%; border-radius: 3px; cursor: zoom-in; }
+.bubble.photo .cap { display: block; padding: 7px 8px 4px; }
+.lightbox { position: absolute; inset: 0; z-index: 60; background: rgba(0,0,0,0.94); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; cursor: zoom-out; }
+.lightbox img, .lightbox video { max-width: 100%; max-height: 78%; object-fit: contain; box-shadow: 0 0 40px rgba(0,0,0,0.8); }
+.lightbox p { color: var(--ink); font-size: 14px; max-width: 320px; text-align: center; margin-top: 14px; line-height: 1.45; }
+
+/* voicemail: who left it */
+.vm-head { display: flex; align-items: center; gap: 10px; margin: 2px 0 8px; }
+.vm-head .avatar { width: 34px; height: 34px; }
+.vm-head b { font-weight: 500; font-size: 13px; letter-spacing: 0.06em; }
+
+@media (prefers-reduced-motion: reduce) {
+  .call-face img, .ring-face.on::before, .call-face.on::before, .avatar.av-caretaker::after, .ring-face.ghost i, .call-face.ghost i { animation: none; }
+}
+
+/* ============ home: lock screen ============ */
+.home-note.quiet { color: var(--dim); font-size: 16px; letter-spacing: 0.3em; }
+.cast-strip { display: flex; justify-content: center; align-items: flex-start; gap: 18px; margin: 4px 0 18px; position: relative; z-index: 2; }
+.cast-chip { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 5px; padding: 0; }
+.cast-chip .avatar { width: 52px; height: 52px; transition: box-shadow 0.2s; }
+.cast-chip .nm { font-size: 11px; letter-spacing: 0.08em; color: var(--dim); }
+.cast-chip.unread .nm { color: var(--ink); }
+.cast-chip.unread::before { content: ''; position: absolute; top: 0; right: 0; width: 10px; height: 10px; border-radius: 50%; background: var(--ember); box-shadow: 0 0 0 2px var(--bg); z-index: 1; }
+.cast-chip.online .avatar { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--glow); }
+.cast-chip.live .avatar { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--ember); }
+.cast-chip.typing .avatar { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--glow), 0 0 14px rgba(159,224,160,0.6); animation: typingGlow 1.2s ease-in-out infinite; }
+@keyframes typingGlow { 50% { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--glow), 0 0 4px rgba(159,224,160,0.2); } }
+.cast-chip.unknown { opacity: 0.35; }
+.cast-chip.unknown .avatar { border-style: dashed; }
+@media (prefers-reduced-motion: reduce) { .cast-chip.typing .avatar { animation: none; } }
+
+/* ============ home wallpaper: the manor at night ============ */
+.home > :not(.wall) { position: relative; z-index: 2; }
+.wall { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; background: #050706; }
+.wall::before {
+  content: ''; position: absolute; left: -2%; right: -2%; top: 36%; bottom: -2%; background: url(/assets/img/manor-wall.jpg) center 30% / cover no-repeat;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 22%); mask-image: linear-gradient(to bottom, transparent 0%, #000 22%);
+  filter: brightness(0.85) saturate(0.7) sepia(0.12); animation: lamps 9s steps(1) infinite, drift 60s ease-in-out infinite alternate;
+  transition: filter 2s ease;
+}
+/* legibility: dark sky behind the clock, a soft dim band behind the faces and apps, ground fading into the phone */
+.wall::after {
+  content: ''; position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 120% 60% at 50% 100%, transparent 40%, rgba(5,7,6,0.6) 100%),
+    radial-gradient(ellipse 90% 35% at 50% 18%, rgba(30,48,38,0.35), transparent 70%),
+    linear-gradient(to bottom, rgba(5,7,6,0.2) 0%, rgba(5,7,6,0) 50%, rgba(5,7,6,0.25) 62%, rgba(5,7,6,0.05) 75%, rgba(5,7,6,0.75) 100%),
+    var(--tint, transparent);
+  transition: background 2s ease;
+}
+.wall .fog { position: absolute; left: -60%; width: 220%; height: 30%; bottom: 2%; background: radial-gradient(ellipse 30% 50% at 30% 60%, rgba(170,190,175,0.13), transparent 70%), radial-gradient(ellipse 25% 45% at 70% 50%, rgba(170,190,175,0.10), transparent 70%); filter: blur(6px); animation: fog 48s linear infinite; z-index: 1; }
+.wall .fog.b { bottom: 8%; height: 26%; opacity: 0.7; animation-duration: 75s; animation-direction: reverse; }
+.wall .grain { position: absolute; inset: -50%; z-index: 2; opacity: 0.07; background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); animation: grain 0.8s steps(4) infinite; }
+@keyframes fog { from { transform: translateX(0); } to { transform: translateX(27%); } }
+@keyframes drift { from { transform: scale(1.02) translateY(0); } to { transform: scale(1.06) translateY(-1%); } }
+/* the lights in the house stutter now and then */
+@keyframes lamps { 0%, 100% { opacity: 1; } 41% { opacity: 0.82; } 42% { opacity: 1; } 43.5% { opacity: 0.75; } 44.5% { opacity: 1; } 77% { opacity: 0.9; } 78% { opacity: 1; } }
+/* the mood follows the night */
+.home[data-phase="late"] .wall::before { filter: brightness(0.72) saturate(0.5) sepia(0.1) hue-rotate(-8deg); }
+.home[data-phase="deep"] .wall::before { filter: brightness(0.66) saturate(0.55) sepia(0.2); }
+.home[data-phase="deep"] .wall { --tint: linear-gradient(rgba(70,8,4,0.18), rgba(70,8,4,0.18)); }
+.home[data-phase="final"] .wall::before { filter: brightness(0.6) saturate(0.6) sepia(0.25); animation: lamps 4s steps(1) infinite, drift 60s ease-in-out infinite alternate; }
+.home[data-phase="final"] .wall { --tint: linear-gradient(rgba(90,10,6,0.2), rgba(90,10,6,0.2)); }
+.home[data-phase="after"] .wall::before { filter: brightness(0.9) saturate(0.15) contrast(0.9); animation: none; }
+.home[data-phase="after"] .wall { --tint: linear-gradient(rgba(120,130,140,0.12), rgba(120,130,140,0.12)); }
+.home .home-note, .home .cast-chip .nm, .home .app .lbl { text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
+@media (prefers-reduced-motion: reduce) { .wall::before, .wall .fog, .wall .grain { animation: none; } }

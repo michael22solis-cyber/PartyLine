@@ -21,7 +21,7 @@ export function tutorialStep(index, state) {
   const evidence = state.messages.some((m) => ['clue', 'memo', 'evidence'].includes(m.kind));
   const contacts = state.threads.length > 0;
   const crew = (state.peers || []).length > 0;
-  const calls = state.me.calls || { left: 30, max: 30, maxSeconds: 240 };
+  const calls = state.me.calls || { minutesLeft: 20, minutesMax: 20, maxSeconds: 240 };
   const steps = [
     {
       icon: 'messages', tag: 'BLACKWOOD MOBILE · FIELD GUIDE',
@@ -30,6 +30,7 @@ export function tutorialStep(index, state) {
       points: [
         'Read clues, question the four suspects, and compare notes with the other players.',
         'Your role card is private. Find it anytime in MENU → My role.',
+        'The story plays out over one night, about an hour.',
       ],
       tip: 'BACK returns to the last app. The round HOME button opens your apps. MENU has sound, calls, captions, alerts, and this guide.',
       extra: 'Turn on alerts in MENU so you catch new messages. On iPhone, add Blackwood to your Home Screen first.',
@@ -49,7 +50,7 @@ export function tutorialStep(index, state) {
       icon: 'calls', tag: '02 · ASK A QUESTION', title: TUTORIAL_TITLES[2],
       intro: 'Pick an unlocked suspect in Messages and text them a question, or tap ☎ CALL to talk out loud.',
       hint: { label: 'HOW TO ASK', text: 'Start broad. Then push on whatever doesn’t add up.' },
-      visual: { type: 'calls', left: calls.left, max: calls.max, maxSeconds: calls.maxSeconds },
+      visual: { type: 'calls', left: calls.minutesLeft, max: calls.minutesMax, maxSeconds: calls.maxSeconds },
       points: [
         'Suspects hear what the group tells them. Catch them contradicting each other.',
       ],
@@ -75,7 +76,7 @@ export function tutorialStep(index, state) {
     },
     {
       icon: 'notes', tag: '04 · FOLLOW THE THREAD', title: TUTORIAL_TITLES[4],
-      intro: 'Jot down facts and open questions. Notes stay private on this device.',
+      intro: 'Jot down facts and open questions. Notes stay private from the group.',
       visual: { type: 'board' },
       points: [],
       tip: 'Stuck? Re-read a clue and ask one sharp follow-up.',
