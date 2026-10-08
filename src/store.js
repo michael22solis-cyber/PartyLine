@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 import { dataFile } from './paths.js';
 
 const FILE = dataFile('game.json');
-const EMPTY = { players: [], messages: [], votes: {}, pushSubs: {}, schedule: [], revealed: false, groups: [], game: null, beats: [] };
+const EMPTY = { players: [], messages: [], votes: {}, pushSubs: {}, schedule: [], revealed: false, groups: [], game: null, beats: [], pausedAt: null };
 
 let db = load();
 db.players.forEach((p) => { p.pid ||= crypto.randomBytes(4).toString('hex'); p.permitted ||= {}; });
@@ -168,6 +168,18 @@ export function addGroup({ name, players: pids, ai, createdBy }) {
 }
 export const groupById = (id) => db.groups.find((g) => g.id === id) || null;
 export const groupsFor = (pid) => db.groups.filter((g) => g.players.includes(pid));
+
+// Pause the night: the scheduler holds still; on resume, every beat still to come moves later by the time paused.
+export const pausedAt = () => db.pausedAt || null;
+export function pauseSchedule(now = Date.now()) { if (!db.pausedAt) { db.pausedAt = new Date(now).toISOString(); save(); } }
+export function resumeSchedule(now = Date.now()) {
+  if (!db.pausedAt) return 0;
+  const ms = now - Date.parse(db.pausedAt);
+  for (const s of db.schedule) if (!s.done) s.at = new Date(Date.parse(s.at) + ms).toISOString();
+  db.pausedAt = null;
+  save();
+  return ms;
+}
 
 export function clearPendingSchedule() { db.schedule = db.schedule.filter((x) => x.done); save(); }
 

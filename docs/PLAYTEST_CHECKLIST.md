@@ -75,6 +75,12 @@ few minutes of setup makes it count.
 
 - **The host page (`/host`) is the live view:** each player's contacts, secrets (☎ = on a call), calls, call minutes
   and AI spend, plus the total spend this game. Anyone silent for 10+ minutes gets a yellow **QUIET** tag.
+- **Someone lost their link?** They open the invite link again: the same phone shows *Continue as …*; a new phone
+  lets them tap their name, and you tap **Let in** on `/host`.
+- **Need a break?** **Pause the night** on `/host` holds every beat (phones show it) and **Resume** moves the rest of
+  the night later by the time paused.
+- **On the phones:** a night clock (*Votes open in 18 min*), a *While you were away* summary after a few minutes
+  away, a text tone per suspect, and the votes counted out on every phone before the Caretaker's final call.
 - **Stuck players:** tap **Send hint** on their row. They get a whisper on The Line about who to ask and how (never the
   answer), starting with the call-only secrets. Anyone (but the accomplice) who has found nothing by the 911 twist gets
   one automatically.

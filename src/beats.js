@@ -211,6 +211,14 @@ export const BEATS = {
 
   // The final call: everyone gets the Caretaker's reveal, then the results.
   async reveal() {
+    // The votes first, counted out on every phone at once (anonymous: who got how many, not who voted for whom),
+    // then the Caretaker calls with the truth.
+    const counts = {};
+    Object.values(votes()).forEach((v) => { if (v.killer) counts[v.killer] = (counts[v.killer] || 0) + 1; });
+    const rows = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count }));
+    everyone().forEach((p) => emit(p.token, 'votes', { rows, total: Object.values(votes()).length }));
+    await toAll('line', `THE VOTES ARE IN\n${rows.length ? rows.map((r) => `${r.name}: ${r.count}`).join('\n') : 'Nobody voted.'}`, 'tally');
+    await sleep(4000 + rows.reduce((s, r) => s + r.count, 0) * 900);
     setRevealed();
     await callEach('caretaker_reveal', 0); // every phone rings at once
     await sleep(75_000);

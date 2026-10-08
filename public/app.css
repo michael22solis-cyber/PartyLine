@@ -583,3 +583,21 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .agenda li.st-locked { color: var(--dim); font-style: italic; } .agenda li.st-locked .box { border-style: dashed; font-size: 10px; }
 .agenda-secret.sealed div { color: var(--dim); font-style: italic; }
 .choice.locked, .board button.locked { opacity: 0.45; border-style: dashed; cursor: default; }
+/* night clock under the phase line */
+.night-clock { text-align: center; margin: -8px 0 12px; font-family: var(--lcd); font-size: 16px; letter-spacing: 0.22em; color: var(--dim); position: relative; z-index: 2; }
+.night-clock.paused { color: var(--amber); }
+/* the votes, counted out */
+.votes-overlay { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(0,0,0,0.96); animation: fadeIn 0.6s ease; }
+.votes-inner { width: min(340px, 86vw); text-align: center; }
+.votes-title { font-family: var(--lcd); font-size: 28px; letter-spacing: 0.3em; color: var(--ember); margin-bottom: 22px; }
+.votes-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); transition: opacity 0.5s; }
+.votes-row b { font-weight: 400; color: var(--ink); font-size: 16px; text-align: left; }
+.votes-row .dots { display: flex; gap: 6px; }
+.votes-row .dots i { width: 12px; height: 12px; border-radius: 50%; background: var(--glow); box-shadow: 0 0 10px rgba(159,224,160,0.6); animation: fadeIn 0.3s ease; }
+.votes-foot { margin-top: 22px; font-family: var(--lcd); font-size: 17px; letter-spacing: 0.2em; color: var(--dim); min-height: 20px; }
+/* while you were away */
+.catchup { position: fixed; inset: 0; z-index: 55; display: grid; place-items: end center; background: rgba(0,0,0,0.6); padding: 0 16px 24px; }
+.catchup-card { width: min(380px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 16px; display: grid; gap: 8px; }
+.catchup-title { font-family: var(--lcd); font-size: 18px; letter-spacing: 0.25em; color: var(--amber); margin-bottom: 4px; }
+.catchup-row { text-align: left; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: transparent; color: var(--ink); font-size: 14px; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }

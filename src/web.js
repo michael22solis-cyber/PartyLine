@@ -8,7 +8,9 @@ import { getGame } from './store.js';
 import {
   addPlayer, players, playerByToken, updatePlayer, messagesFor, castVote, votes,
   savePushSub, addScheduled, scheduled, markScheduledDone, getDb, resetGame, clearPendingSchedule,
+  pausedAt, pauseSchedule, resumeSchedule,
 } from './store.js';
+import { requestRejoin, rejoinStatus, decideRejoin, pendingRejoins, resetRejoins } from './rejoin.js';
 import { TEXTABLE, CHARACTERS } from './characters/index.js';
 import { remember, resetMemory } from './memory.js';
 import { unlockedFor, isUnlocked, answerRing, pendingRing, onCharacterSaid, unlockMentions, audioIf } from './progress.js';
@@ -16,7 +18,7 @@ import { deliver } from './live.js';
 import { sendPeer } from './crew.js';
 import { createGroup, groupsForPlayer } from './groups.js';
 import { handlePlayerText } from './chat.js';
-import { subscribe } from './live.js';
+import { subscribe, emit } from './live.js';
 import { vapidPublicKey } from './push.js';
 import { runBeat, SUSPECTS, tallyVotes, BEATS } from './beats.js';
 import { recapFor } from './recap.js';
@@ -46,6 +48,11 @@ const {
   MAX_CALLS_PER_PLAYER = 30,
 } = process.env;
 const callCounts = new Map();
+// The night clock on every phone: when votes open and when the final call comes (from the schedule), and if paused.
+function nightClock() {
+  const next = (beat) => scheduled().filter((x) => x.beat === beat && !x.done).map((x) => x.at).sort()[0] || null;
+  return { votesAt: next('votesOpen'), finalAt: next('reveal'), paused: pausedAt() };
+}
 const excused = new Set(); // `${token}:${npc}:${phase}`: the busy excuse is given once per stretch of the night
 const SHARED_DIR = path.resolve('src/shared');
 const PUBLIC_DIR = path.resolve('public');
@@ -114,6 +121,7 @@ export function registerWeb(app) {
       callBeds: bedUrls(), // what you hear behind each character on a call
       threads: TEXTABLE.filter((t) => unlockedFor(p).includes(t.key)).map((t) => ({ ...t, status: statusOf(t.key) })),
       ringing: pendingRing(p.token) ? { character: pendingRing(p.token).character } : null,
+      clock: nightClock(),
       messages: messagesFor(p.token),
       suspects: SUSPECTS,
       players: players().map((x) => x.name),
@@ -410,6 +418,8 @@ export function registerWeb(app) {
       spend: { usd: live.usd, since: live.since },
       budget: budgetView(),
       callPool: poolView(),
+      paused: Boolean(pausedAt()),
+      rejoins: pendingRejoins(),
       voices: Object.fromEntries(['ruth', 'marcus', 'lily', 'teddy'].map((k) => [CHARACTERS[k].name.split(' ')[0], voiceFor(k)])),
       revealed: getDb().revealed,
       caretakerVoice: caretakerVoice(),
@@ -494,6 +504,47 @@ export function registerWeb(app) {
     if (!g || g.code !== req.params.code) return reply.code(404).type('text/html').send('<h1 style="font-family:monospace">This invite has expired.</h1>');
     reply.type('text/html').header('Cache-Control', 'no-store').send(fs.readFileSync(path.join(PUBLIC_DIR, 'join.html'), 'utf8'));
   });
+  // The invite page: who's playing (to rejoin as), and whether the game has started.
+  app.get('/api/join/:code', (req, reply) => {
+    const g = getGame();
+    if (!g || g.code !== req.params.code) return reply.code(404).send({ error: 'This invite has expired.' });
+    reply.send({ status: g.status, players: players().map((x) => ({ pid: x.pid, name: x.name })) });
+  });
+  app.post('/api/join/:code/rejoin', (req, reply) => {
+    try { reply.send(requestRejoin(req.params.code, req.body?.pid)); }
+    catch (err) { reply.code(err.status || 500).send({ error: err.message }); }
+  });
+  app.get('/api/join/:code/rejoin/:rid', (req, reply) => {
+    try { reply.send(rejoinStatus(req.params.code, req.params.rid)); }
+    catch (err) { reply.code(err.status || 500).send({ error: err.message }); }
+  });
+  app.post('/admin/rejoin/:rid', (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    try { decideRejoin(req.params.rid, req.body?.approve !== false); reply.send({ ok: true }); }
+    catch (err) { reply.code(err.status || 500).send({ error: err.message }); }
+  });
+
+  // Pause the night (pizza, a break): beats hold still and every phone shows it; resume shifts the rest of the night.
+  app.post('/admin/pause', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    if (pausedAt()) return reply.send({ paused: true });
+    pauseSchedule();
+    for (const p of players()) {
+      emit(p.token, 'clock', nightClock());
+      await deliver({ token: p.token, thread: 'line', from: 'system', kind: 'text', text: '⏸ The host paused the night. Stay close to your phone.' });
+    }
+    reply.send({ paused: true });
+  });
+  app.post('/admin/resume', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    const ms = resumeSchedule();
+    for (const p of players()) {
+      emit(p.token, 'clock', nightClock());
+      if (ms) await deliver({ token: p.token, thread: 'line', from: 'system', kind: 'text', text: '▶ The line is open again.' });
+    }
+    reply.send({ paused: false, shiftedMinutes: Math.round(ms / 60_000) });
+  });
+
   app.post('/api/join/:code', (req, reply) => {
     try { const p = join(req.params.code, req.body?.name); reply.send({ link: `/p/${p.token}` }); }
     catch (err) { reply.code(err.status || 500).send({ error: err.message }); }
@@ -515,6 +566,7 @@ export function registerWeb(app) {
     resetGame();
     resetAllowances();
     resetInitiative();
+    resetRejoins();
     excused.clear();
     resetMemory();
     reply.send({ ok: true });
@@ -530,6 +582,7 @@ export function registerWeb(app) {
   // ---------- scheduler: fires due beats every 15 seconds ----------
   const scheduler = setInterval(async () => {
     checkAgendas().catch((err) => console.error('[agenda]', err.message));
+    if (pausedAt()) return; // the night is paused: nothing fires until the host resumes
     const now = Date.now();
     for (const s of scheduled()) {
       if (!s.done && Date.parse(s.at) <= now) {
