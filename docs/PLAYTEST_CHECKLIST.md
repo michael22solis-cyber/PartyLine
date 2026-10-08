@@ -51,6 +51,8 @@ few minutes of setup makes it count.
   uncover, something social (share clues, start a group chat, call three suspects, swing the vote), and *keep your
   secret: don't let anyone name you as the accomplice*. The accomplice gets misdirection goals. About 37 and 57 minutes
   in, Teddy leaks someone's secret to two other players (once with fewer than 5 players) and Ruth warns that player.
+  Missions and secrets about a suspect stay sealed (🔒) until the player has that suspect in their phone, then appear
+  with a heads-up on The Line.
   The end screen reveals every agenda, and whoever completed the most is **Puppet Master**.
 - **Characters text first.** Accuse someone and they come back to it a few minutes later; uncover a secret and they ask
   you to keep it quiet; word gets around and another suspect gossips to someone else. Capped at 2 per character and 5

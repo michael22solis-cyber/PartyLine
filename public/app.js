@@ -454,14 +454,13 @@ function renderTutorial(screen) {
     box.append(points);
   }
   const tip = el('div', 'tutorial-tip');
-  tip.append(el('b', null, 'YOUR NEXT MOVE'), el('p', null, step.tip));
+  tip.append(el('b', null, 'NEXT'), el('p', null, step.tip));
   box.append(tip);
   (step.actions || []).forEach((action, i) => {
     const button = el('button', i === 0 ? 'wide' : 'wide ghost', action.label);
     button.onclick = () => go(action.view, action.open);
     box.append(button);
   });
-  if (step.actions?.length) box.append(el('p', 'tutorial-return', 'Try it on your phone, then tap RETURN TO GUIDE to continue.'));
   if (step.extra) box.append(el('p', 'tutorial-extra', step.extra));
   const controls = el('div', 'tutorial-controls');
   const previous = el('button', 'wide ghost', 'PREVIOUS');
@@ -775,13 +774,14 @@ function renderNotes(screen) {
     markAgendaSeen();
     box.append(el('div', 'section-label', 'SECRET AGENDA'));
     const sec = el('div', `agenda-secret${ag.leaked ? ' leaked' : ''}`);
-    sec.append(el('span', 'tag', ag.leaked ? 'YOUR SECRET · PEOPLE ARE TALKING' : 'YOUR SECRET'), el('div', null, ag.secret));
+    sec.append(el('span', 'tag', ag.leaked ? 'YOUR SECRET · PEOPLE ARE TALKING' : 'YOUR SECRET'), el('div', null, ag.secret || '🔒 Sealed until you meet the person it’s about.'));
+    if (!ag.secret) sec.classList.add('sealed');
     box.append(sec);
     const ul = el('ul', 'agenda');
-    const MARK = { done: '✓', failed: '✗', vote: '⧗', open: '' };
+    const MARK = { done: '✓', failed: '✗', vote: '⧗', open: '', locked: '🔒' };
     ag.goals.forEach((g) => {
       const li = el('li', `st-${g.status}`);
-      li.append(el('span', 'box', MARK[g.status]), el('span', null, g.text));
+      li.append(el('span', 'box', MARK[g.status]), el('span', null, g.text || 'Sealed. Meet the right person to reveal it.'));
       if (g.status === 'vote') li.append(el('em', null, 'decided at the vote'));
       ul.append(li);
     });
