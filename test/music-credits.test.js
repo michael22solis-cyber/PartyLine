@@ -61,3 +61,11 @@ test('nothing is generated when the server starts unless MUSIC_AUTO=on', async (
   const src = fs.readFileSync(path.resolve('src/server.js'), 'utf8');
   assert.match(src, /MUSIC_AUTO === 'on' \? warmMusic\(\)/);
 });
+
+test('tracks uploaded straight into public/audio/ are picked up too', () => {
+  const file = path.resolve('public/audio/late.mp3');
+  const existed = fs.existsSync(file);
+  if (!existed) fs.writeFileSync(file, 'ID3fake');
+  try { assert.equal(music.trackUrls().late, '/assets/audio/late.mp3'); }
+  finally { if (!existed) fs.rmSync(file); }
+});
