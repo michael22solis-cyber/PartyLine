@@ -64,6 +64,8 @@ Then open **`/host`** on that link: add players and copy their links, fire or sc
 
 ## Run a playtest
 
+Running one with friends tonight? Follow **`docs/PLAYTEST_RUNBOOK.md`**: setup, a solo smoke test, the lobby, the 75-minute timeline, fixes for common problems, and the debrief.
+
 ### Helping new players
 
 The tutorial explains the one-night investigation, first clue, suspect questions and calls, sharing with the crew, private notes, voting, and the ending. It adapts its next step when the host has not assigned roles, no clue or contacts have arrived, other players have not joined, a vote is already saved, or the reveal has happened. It keeps roles and the solution private and opens voting for review without sending a vote or making a call.
