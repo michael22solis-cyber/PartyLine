@@ -896,7 +896,8 @@ function renderNotes(screen) {
     b.onclick = () => pick(k, known);
     lineup.append(b);
   });
-  // The lineup photo: all four against the height chart, one per quarter, left to right in cast order.
+  // The lineup photo: all four against the height chart, left to right in cast order (where each one stands, in % of width).
+  const LINEUP_SPOTS = [[2, 26.5], [26.5, 49.5], [49.5, 72.5], [72.5, 98]];
   // Hover (or tap) a suspect to learn more; anyone you haven't met stays in shadow. Falls back to the grid above.
   const photo = el('div', 'lineup-photo');
   const img = el('img'); img.alt = 'The four suspects in a police lineup';
@@ -908,7 +909,8 @@ function renderNotes(screen) {
     const known = met(CAST[k]);
     const s = known ? board[CAST[k]] || 0 : 0;
     const spot = el('button', `spot${known ? '' : ' hidden-suspect'}${state.lineupPick === k ? ' on' : ''}`);
-    spot.style.left = `${i * 25}%`;
+    const [x0, x1] = LINEUP_SPOTS[i] || [i * 25, i * 25 + 25];
+    spot.style.left = `${x0}%`; spot.style.width = `${x1 - x0}%`;
     spot.dataset.s = s;
     spot.setAttribute('aria-label', known ? `${i + 1}: ${CAST[k]}` : `${i + 1}: someone you haven't met`);
     if (!known) spot.append(el('span', 'q', '???'));
