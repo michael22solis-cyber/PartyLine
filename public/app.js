@@ -262,11 +262,76 @@ function flashNote(text) {
   setTimeout(() => { noteOverride = null; if (state.view === 'home') render(); }, 1400);
 }
 
+// ---- home: the lock screen of the burner phone ----
+const PHASE_LABEL = {
+  before: 'THE LINE OPENS TONIGHT', night1: 'NIGHT ONE', late: 'NIGHT ONE · AFTER DARK', between: 'BETWEEN NIGHTS',
+  night2: 'NIGHT TWO', final: 'VOTES ARE OPEN', after: 'CASE CLOSED',
+};
+const secretsFound = () => state.messages.filter((m) => m.kind === 'evidence' && /^SECRET UNCOVERED/.test(m.text)).length;
+
+// Unread things, newest first, like notifications on a lock screen.
+function homeNotifications() {
+  const threads = ['line', 'crew', ...(state.groups || []).map((g) => g.thread), ...(state.peers || []).map((x) => `dm:${x.pid}`), ...state.threads.map((t) => t.key)];
+  const items = threads.filter(unread).map((t) => ({ thread: t, m: lastOf(t) })).filter((x) => x.m);
+  state.messages.filter((m) => m.thread === 'unknown' && ['missed', 'voicemail'].includes(m.kind) && isNew(m, 'calls'))
+    .forEach((m) => items.push({ thread: 'unknown', m }));
+  return items.sort((a, b) => b.m.at.localeCompare(a.m.at)).slice(0, 3);
+}
+function notificationCard({ thread, m }) {
+  const b = el('button', 'notif');
+  const npc = thread === 'unknown' ? m.npc || keyOfName(m.text.replace(/^Missed call: /, '')) : CAST[thread] ? thread : null;
+  const who = thread === 'unknown' ? (npc && CAST[npc]) || 'Blackwood Manor' : titleOf(thread);
+  b.append(npc ? avatar(npc) : el('span', 'avatar av-none', thread === 'line' ? '☎' : who.slice(0, 1).toUpperCase()));
+  const body = el('span', 'body');
+  body.append(el('b', null, who), el('span', 'pv', thread === 'unknown' ? (m.kind === 'missed' ? 'Missed call' : '▶ Voicemail') : preview(m)));
+  b.append(body, el('span', 'tm', fmtTime(m.at)));
+  b.onclick = () => { if (thread === 'unknown') go('calls'); else { markSeen(thread); go('messages', thread); } };
+  return b;
+}
+// The four suspects, at a glance: who's online, typing, live, or still a stranger.
+function castStrip() {
+  const row = el('div', 'cast-strip');
+  Object.keys(CAST).forEach((k) => {
+    const t = state.threads.find((x) => x.key === k);
+    const b = el('button', 'cast-chip');
+    if (!t) {
+      b.classList.add('unknown'); b.disabled = true;
+      b.append(el('span', 'avatar av-none', '?'), el('span', 'nm', '???'), el('small', null, 'unknown number'));
+      row.append(b); return;
+    }
+    const seen = presence(k);
+    const live = /LIVE/.test(t.status || '');
+    const typing = state.typing[k];
+    if (typing) b.classList.add('typing');
+    if (unread(k)) b.classList.add('unread');
+    if (seen === 'online') b.classList.add('online');
+    b.append(avatar(k), el('span', 'nm', CAST[k].split(' ')[0]),
+      el('small', typing ? 'on' : live ? 'live' : seen === 'online' ? 'on' : null,
+        typing ? 'typing…' : live ? '● LIVE' : seen === 'online' ? 'online' : t.status || t.tagline));
+    b.onclick = () => { markSeen(k); go('messages', k); };
+    row.append(b);
+  });
+  return row;
+}
+function caseBar() {
+  const b = el('button', 'casebar');
+  const total = state.me.totalSecrets || 5;
+  const found = Math.max(secretsFound(), state.me.found || 0);
+  const pips = el('span', 'pips');
+  for (let i = 0; i < total; i++) pips.append(el('i', i < found ? 'got' : null));
+  const mid = el('span', 'mid'); mid.append(pips, el('span', 'txt', `${found}/${total} secrets found`));
+  b.append(el('span', 'lbl', 'CASE'), mid,
+    el('span', `vote${state.vote ? ' done' : ''}`, state.revealed ? 'CLOSED' : state.vote ? 'VOTE CAST' : 'NO VOTE YET'));
+  b.onclick = () => go(state.vote || state.revealed ? 'evidence' : found ? 'vote' : 'evidence');
+  return b;
+}
+
 function renderHome(screen) {
   const home = el('div', 'home');
   const clock = el('div', 'home-clock');
   clock.append(el('div', 'big', '--:--'), el('div', 'date', ''));
   clock.firstChild.id = 'bigClock'; clock.lastChild.id = 'bigDate';
+  const phase = el('div', 'home-phase', PHASE_LABEL[state.phase] || '');
   const note = homeNote();
   const line = el('div', `home-note${note.hot && !noteOverride ? ' hot' : ''}`, noteOverride || note.text);
   const grid = el('div', 'grid');
@@ -278,9 +343,20 @@ function renderHome(screen) {
     appButton('vote', 'VOTE', 'vote'),
     appButton('recap', 'THE END', 'recap', 0, !state.revealed),
   );
-  if (state.lobby?.status === 'lobby') home.append(clock, lobbyPanel(), grid);
-  else home.append(clock, line, grid);
-  const guide = el('button', 'home-guide');
+  if (state.lobby?.status === 'lobby') {
+    home.append(clock, lobbyPanel(), grid);
+  } else {
+    home.append(clock, phase, line);
+    const notes = homeNotifications();
+    if (notes.length) {
+      const stack = el('div', 'notifs');
+      notes.forEach((n) => stack.append(notificationCard(n)));
+      home.append(stack);
+    }
+    home.append(castStrip(), grid);
+    if (state.me.assigned) home.append(caseBar());
+  }
+  const guide = el('button', `home-guide${tutorial.status === 'complete' ? ' slim' : ''}`);
   guide.append(el('span', null, 'FIELD GUIDE'), el('small', null,
     tutorial.status === 'complete' ? 'How to play · revisit any time'
       : tutorial.status === 'new' ? 'New here? Start the tutorial'
@@ -1253,6 +1329,7 @@ function connect() {
   es.addEventListener('status', (e) => {
     const statuses = JSON.parse(e.data);
     state.threads.forEach((t) => { if (statuses[t.key] != null) t.status = statuses[t.key]; });
+    if (statuses.phase) state.phase = statuses.phase;
     render();
   });
   es.addEventListener('typing', (e) => {
@@ -1449,6 +1526,7 @@ async function refresh() {
     fresh.messages.filter((m) => !known.has(m.id)).forEach((m) => state.messages.push(m));
     Object.assign(state.me, fresh.me);
     state.threads = fresh.threads;
+    state.phase = fresh.phase;
     state.revealed = fresh.revealed; state.vote = fresh.vote; state.players = fresh.players; state.peers = fresh.peers; state.groups = fresh.groups; state.lobby = fresh.lobby;
     if (state.revealed && !state.recap) loadRecap();
     render();

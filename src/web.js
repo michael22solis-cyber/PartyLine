@@ -29,7 +29,8 @@ import { attachSideband } from './voice/sideband.js';
 import { openCall, getCall, closeCall, callTranscript, callUsage, callDisclose } from './voice/calls.js';
 import { checkCall, chargeCall, resetAllowances } from './voice/allowance.js';
 import { recordedCall, servedFile as caretakerClip } from './voice/caretaker.js';
-import { statusOf } from './cast.js';
+import { statusOf, phase } from './cast.js';
+import { SECRETS } from './secrets.js';
 
 const {
   ADMIN_KEY, PUBLIC_HOST, OPENAI_API_KEY,
@@ -92,7 +93,9 @@ export function registerWeb(app) {
   app.get('/api/p/:token/state', (req, reply) => {
     const p = requirePlayer(req, reply); if (!p) return;
     reply.send({
-      me: { pid: p.pid, name: p.name, role: p.role, assigned: Boolean(p.clue), callsOff: p.callsOff, hasPhone: Boolean(p.phone) },
+      me: { pid: p.pid, name: p.name, role: p.role, assigned: Boolean(p.clue), callsOff: p.callsOff, hasPhone: Boolean(p.phone),
+        found: (p.found || []).length, totalSecrets: SECRETS.length },
+      phase: phase(),
       threads: TEXTABLE.filter((t) => unlockedFor(p).includes(t.key)).map((t) => ({ ...t, status: statusOf(t.key) })),
       ringing: pendingRing(p.token) ? { character: pendingRing(p.token).character } : null,
       messages: messagesFor(p.token),

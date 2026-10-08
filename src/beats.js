@@ -5,7 +5,7 @@ import { deliver, emit } from './live.js';
 import { callPlayer, ringInApp, unlock, unlockMentions, unlockAll, audioIf } from './progress.js';
 import { getDb } from './store.js';
 import { summary, remember } from './memory.js';
-import { PHOTOS, statusOf } from './cast.js';
+import { PHOTOS, statusOf, phase } from './cast.js';
 import { TEXTABLE } from './characters/index.js';
 import { ledger } from './ai/ledger.js';
 
@@ -204,7 +204,7 @@ export async function runBeat(name) {
   const result = (await fn()) || { ok: true };
   markBeat(name);
   // Characters' status lines follow the story.
-  const statuses = Object.fromEntries(TEXTABLE.map((t) => [t.key, statusOf(t.key)]));
+  const statuses = { ...Object.fromEntries(TEXTABLE.map((t) => [t.key, statusOf(t.key)])), phase: phase() };
   everyone().forEach((p) => emit(p.token, 'status', statuses));
   if (PHOTOS[name]) await sendPhoto(PHOTOS[name]);
   return result;
