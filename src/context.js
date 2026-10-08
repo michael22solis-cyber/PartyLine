@@ -22,7 +22,7 @@ const RULES = `RULES YOU MUST ALWAYS FOLLOW:
 - Never ask for personal information, money, codes or passwords.
 - If the player sounds genuinely distressed, mentions self-harm, or asks to stop, drop the character immediately, speak plainly and kindly, and (for self-harm) tell them they can call or text 988 in the US.`;
 
-const TEXT_STYLE = `TEXTING: reply like a real text, 1-3 short sentences, about 60 words at most. No stage directions, asterisks or narration; emojis only if your character would use them.`;
+const TEXT_STYLE = `TEXTING: real texts, usually a few words or a line. Up to ~60 words only for a story, reveal or real question. No narration; emojis only if in character.`;
 
 const VOICE_STYLE = `ON THE PHONE: talk like a real person on a call. Usually one or two natural spoken sentences per turn; go longer only when the moment calls for it (your opening, a confession, a story, a direct question that needs it). Keep your emotional delivery: pauses, hesitation, warmth or menace as your character would. No lists, no stage directions, never read out sound effects. Let the caller lead.
 SOUND HUMAN, NOT LIKE AN ASSISTANT: you are not helpful and you are not polished. Use contractions and everyday words. Let speech be messy where it fits: "um", "uh", "I mean", "look", restarting a sentence, trailing off, a short laugh or sigh. React before you answer ("Wait, what?", "Who told you that?"). It's fine to be short, evasive, annoyed or to answer a question with a question. Never repeat the caller's question back, never say "great question", "I understand" or "is there anything else", never summarize, and never offer help. Where your HOW YOU SPEAK notes say otherwise, they win.
@@ -106,12 +106,12 @@ export function buildTextPrompt({ npc, player, thread, approvedNow = [], extra =
   const stable = stableBlock(npc, 'text');
   const fixed = dynamicBlock({ player, npc, approvedNow, extra, mode: 'text' });
   let room = Math.max(120, budget - estTokens(stable) - estTokens(fixed) - 8);
-  // History first (newest backwards, always the last 2), up to ~60% of what is left; memory gets the rest.
+  // History first (newest backwards, always the last 2), up to ~55% of what is left; memory gets the rest.
   const hist = [];
   let histTok = 0;
   for (let i = usable.length - 1; i >= 0; i--) {
     const t = estTokens(usable[i].text) + 4;
-    if (hist.length >= 2 && histTok + t > room * 0.6) break;
+    if (hist.length >= 2 && histTok + t > room * 0.55) break;
     hist.unshift(usable[i]);
     histTok += t;
   }
