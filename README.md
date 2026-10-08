@@ -13,6 +13,7 @@ A one-night Halloween mystery (about 75 minutes) played on phones. AI characters
 | Recap | After the final call, "The End" shows each player's detective score, rank, secrets uncovered, and a no-spoiler share card (PNG). |
 | Beats | Every scripted moment from the case doc (intro, clues, 9:40 voice memo, 911 twist, accomplice's secret texts, the final call). Fire by hand or schedule the whole night. |
 | Living cast | Characters text first (reactions and gossip, capped), are busy when their status says so, and keep some secrets for phone calls only. |
+| Secret agendas (pilot) | Everyone gets a personal secret and three private goals (one to uncover, one social, keep your secret). Teddy leaks a secret or two mid-game. The recap reveals every agenda. |
 | Host live view | `/host` shows each player's progress, AI spend, and who has gone quiet, with a **Send hint** button. |
 | Admin CLI | Add players, fire or schedule beats, check votes. |
 
@@ -93,7 +94,7 @@ npm run admin -- night 2026-10-31T20:00-05:00          # ~75 min; add `evening` 
 npm run admin -- status              # players, roles, votes, schedule
 ```
 
-All beats: `setup, welcome, accomplice, intro, calls, clues, cast, memo, ruthWarning, twist, planted, lilyCalls, caretakerHint, votesOpen, lineRinging, reveal`. Use `clues` instead of `calls` to test without phones.
+All beats: `setup, welcome, accomplice, agendas, intro, calls, clues, cast, memo, ruthWarning, leak, twist, planted, lilyCalls, caretakerHint, votesOpen, lineRinging, reveal`. Use `clues` instead of `calls` to test without phones.
 
 Tell iPhone players to tap **Share → Add to Home Screen**, open Blackwood from there, and turn on alerts (⋮ menu). Android and desktop can turn on alerts directly.
 

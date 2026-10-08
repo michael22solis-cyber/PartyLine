@@ -10,6 +10,7 @@ import { TEXTABLE } from './characters/index.js';
 import { ledger } from './ai/ledger.js';
 import { holdOff } from './voice/allowance.js';
 import { nudgeStuck } from './hints.js';
+import { dealAgendas, deliverAgendas, leakSecret } from './agenda.js';
 
 // BEAT_TIME_SCALE shrinks the waits inside beats (the full-game rehearsal test runs a night in seconds).
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms * Number(process.env.BEAT_TIME_SCALE ?? 1)));
@@ -65,7 +66,13 @@ export const BEATS = {
         updatePlayer(p.token, { clue: `${p.clue}\n\n${STARTING_CLUES[i]}` });
       }
     }
+    dealAgendas(); // everyone's secret and three goals (see agenda.js)
     return { players: ps.length, accomplice: ps.length >= 4 ? accomplice.name : '(none, fewer than 4 players)' };
+  },
+
+  // Everyone gets their secret agenda (sealed): a personal secret and three goals on top of solving the murder.
+  async agendas() {
+    await deliverAgendas();
   },
 
   async welcome() {
@@ -127,6 +134,11 @@ export const BEATS = {
     return { target: target.name };
   },
 
+  // Word gets around: a suspect leaks one player's secret to two others.
+  async leak() {
+    return leakSecret();
+  },
+
   async twist() {
     await toAll('line',
       '911 CALL — Thursday, 11:12 pm. A woman, crying: "There’s someone at the bottom of the stairs at Blackwood... I think she’s dead." Then she hangs up.',
@@ -140,7 +152,7 @@ export const BEATS = {
     if (!p) return { skipped: 'no accomplice' };
     await deliver({
       token: p.token, thread: 'line', from: 'character', kind: 'secret',
-      text: 'PLANTED EVIDENCE (forward it if you like): "Lily Blackwood’s car, parked at the manor, Thursday 11:02 pm." It’s true. It’s just not the whole truth. Push them toward Lily or Teddy.',
+      text: 'PLANTED EVIDENCE: "Lily Blackwood’s car, parked at the manor, Thursday 11:02 pm." It’s true. It’s just not the whole truth. Tell the others about it (the group chat or a DM), and push them toward Lily or Teddy.',
     });
   },
 
