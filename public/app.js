@@ -142,6 +142,7 @@ const sfx = (() => {
     creak: () => tone(140, 0, 0.5, 'sawtooth', 0.02, 70),
     ring: () => {
       const once = () => { for (let i = 0; i < 2; i++) { tone(440, i * 0.5, 0.4, 'sine', 0.06); tone(480, i * 0.5, 0.4, 'sine', 0.06); } buzz([400, 100, 400]); };
+      clearInterval(ringTimer); // a second ring signal (reconnect, refresh) must not start a ring that never stops
       once(); ringTimer = setInterval(once, 2400);
     },
     stopRing: () => { clearInterval(ringTimer); ringTimer = null; if (navigator.vibrate) navigator.vibrate(0); },
@@ -1119,6 +1120,7 @@ async function playRecordingCall(character, info) {
 }
 async function startCall(character) {
   if (call) return;
+  hideRing(); // however the call starts (ANSWER, CALL, call back), nothing keeps ringing underneath it
   sfx.unlock();
   call = { character, started: 0, timer: null };
   callScreen(character);
