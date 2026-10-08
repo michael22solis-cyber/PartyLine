@@ -61,15 +61,28 @@ const VICTIM = { name: 'Dana Whitlock', age: 46, lines: [
   'Found at the bottom of the cellar stairs. Police say she died between 9:30 and 10 pm, and call it an accident.',
 ] };
 // The Line has no face, only a shape in the static that never quite resolves.
+let lineAvN = 0;
 function lineAvatar() {
   const a = el('span', 'avatar av-line');
-  a.innerHTML = '<svg viewBox="0 0 40 40" aria-hidden="true"><defs><radialGradient id="lg" cx="50%" cy="40%" r="60%"><stop offset="0" stop-color="#2b3a2e"/><stop offset="1" stop-color="#030504"/></radialGradient></defs><rect width="40" height="40" fill="url(#lg)"/><g class="shade"><ellipse cx="20" cy="15" rx="6" ry="7.5"/><path d="M6 40c1-9 6-14 14-14s13 5 14 14z"/></g><circle class="eye" cx="17.6" cy="15" r="0.9"/><circle class="eye" cx="22.4" cy="15" r="0.9"/></svg>';
+  const id = `lg${++lineAvN}`; // unique per avatar so the glow survives when another copy is removed
+  a.innerHTML = `<svg viewBox="0 0 40 40" aria-hidden="true"><defs><radialGradient id="${id}" cx="50%" cy="42%" r="55%"><stop offset="0" stop-color="#9fc4a3"/><stop offset="0.45" stop-color="#3d5a43"/><stop offset="1" stop-color="#050806"/></radialGradient></defs><rect width="40" height="40" fill="url(#${id})"/><g class="shade"><ellipse cx="20" cy="15.5" rx="6.2" ry="7.6"/><path d="M5 40c1-9.5 6.5-14.5 15-14.5S34 30.5 35 40z"/></g><circle class="eye" cx="17.5" cy="15.2" r="1"/><circle class="eye" cx="22.5" cy="15.2" r="1"/></svg>`;
   return a;
 }
+// Generated art used until a copy is added to public/cast (public/cast/<key>.jpg always wins).
+const CDN_ART = {
+  dana: 'https://d8j0ntlcm91z4.cloudfront.net/user_3HCC73EuiIXBWsy0LnhpTM9HwUC/hf_20261008_233940_29fc5259-cc85-4e25-9b94-a5ca38dca494_min.webp',
+  lineup: 'https://d8j0ntlcm91z4.cloudfront.net/user_3HCC73EuiIXBWsy0LnhpTM9HwUC/hf_20261008_233940_83d74b87-cd21-4eca-968f-22b8bec873ef_min.webp',
+};
 // A portrait, or the shape of someone you haven't met.
 function portrait(key, cls = '') {
   const box = el('span', `portrait ${cls}`);
-  if (key) { const img = el('img'); img.src = `/assets/cast/${key}.jpg`; img.alt = ''; img.loading = 'lazy'; img.onerror = () => { img.remove(); box.classList.add('unknown'); }; box.append(img); } else box.classList.add('unknown');
+  if (key) {
+    const img = el('img'); img.alt = ''; img.loading = 'lazy';
+    const srcs = [`/assets/cast/${key}.jpg`, ...(CDN_ART[key] ? [CDN_ART[key]] : [])];
+    img.src = srcs.shift();
+    img.onerror = () => { if (srcs.length) img.src = srcs.shift(); else { img.remove(); box.classList.add('unknown'); } };
+    box.append(img);
+  } else box.classList.add('unknown');
   return box;
 }
 const KEY_OF_NAME = Object.fromEntries(Object.entries(CAST).map(([k, n]) => [n.toUpperCase(), k]));
@@ -870,6 +883,7 @@ function renderNotes(screen) {
   box.append(el('div', 'section-label', 'THE LINEUP'));
   const keys = Object.keys(CAST);
   if (!keys.includes(state.lineupPick) || !met(CAST[state.lineupPick])) state.lineupPick = keys.find((k) => met(CAST[k])) || null;
+  const pick = (k, known) => { if (!known) { flashNote('NOT MET YET.'); return; } state.lineupPick = k; sfx.click(); render(); };
   const lineup = el('div', 'lineup');
   keys.forEach((k, i) => {
     const known = met(CAST[k]);
@@ -879,9 +893,36 @@ function renderNotes(screen) {
     b.setAttribute('aria-label', known ? `${i + 1}: ${CAST[k]}` : `${i + 1}: someone you haven't met`);
     b.append(portrait(known ? k : null), el('span', 'placard', String(i + 1)), el('span', 'nm', known ? CAST[k].split(' ')[0] : '???'));
     if (known && s) b.append(el('em', 'mark', BOARD_LABEL[s]));
-    b.onclick = () => { if (!known) { flashNote('NOT MET YET.'); return; } state.lineupPick = k; sfx.click(); render(); };
+    b.onclick = () => pick(k, known);
     lineup.append(b);
   });
+  // The lineup photo: all four against the height chart, one per quarter, left to right in cast order.
+  // Hover (or tap) a suspect to learn more; anyone you haven't met stays in shadow. Falls back to the grid above.
+  const photo = el('div', 'lineup-photo');
+  const img = el('img'); img.alt = 'The four suspects in a police lineup';
+  const srcs = ['/assets/cast/lineup.jpg', CDN_ART.lineup];
+  img.src = srcs.shift();
+  img.onerror = () => { if (srcs.length) img.src = srcs.shift(); else { photo.remove(); lineup.hidden = false; } };
+  photo.append(img);
+  keys.forEach((k, i) => {
+    const known = met(CAST[k]);
+    const s = known ? board[CAST[k]] || 0 : 0;
+    const spot = el('button', `spot${known ? '' : ' hidden-suspect'}${state.lineupPick === k ? ' on' : ''}`);
+    spot.style.left = `${i * 25}%`;
+    spot.dataset.s = s;
+    spot.setAttribute('aria-label', known ? `${i + 1}: ${CAST[k]}` : `${i + 1}: someone you haven't met`);
+    if (!known) spot.append(el('span', 'q', '???'));
+    else {
+      const tip = el('span', 'tip');
+      tip.append(el('b', null, CAST[k]), el('span', null, `${BIO[k].age} · ${BIO[k].role}`), el('em', null, BIO[k].rumor));
+      spot.append(tip);
+      if (s) spot.append(el('em', 'mark', BOARD_LABEL[s]));
+    }
+    spot.onclick = () => pick(k, known);
+    photo.append(spot);
+  });
+  lineup.hidden = true;
+  box.append(photo, el('p', 'fine lineup-hint', 'Hover or tap a suspect to learn more.'));
   box.append(lineup);
   const k = state.lineupPick;
   const grid = el('div', 'bio');
