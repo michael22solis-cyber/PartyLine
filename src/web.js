@@ -28,9 +28,9 @@ import { mintClientSecret, createSidebandCall } from './voice/realtime-api.js';
 import { attachSideband } from './voice/sideband.js';
 import { openCall, getCall, closeCall, callTranscript, callUsage, callDisclose } from './voice/calls.js';
 import { checkCall, chargeCall, resetAllowances, callAllowance } from './voice/allowance.js';
-import { recordedCall, servedFile as caretakerClip, voiceStatus as caretakerVoice } from './voice/caretaker.js';
+import { recordedCall, servedFile as caretakerClip, voiceStatus as caretakerVoice, warmUp as warmCaretaker } from './voice/caretaker.js';
 import { statusOf, phase } from './cast.js';
-import { trackUrls, servedFile as musicFile, musicStatus } from './music.js';
+import { trackUrls, servedFile as musicFile, musicStatus, warmUp as warmMusic } from './music.js';
 import { SECRETS } from './secrets.js';
 
 const {
@@ -411,6 +411,13 @@ export function registerWeb(app) {
     if (!requireAdmin(req, reply)) return;
     try { reply.send({ scheduled: scheduleGame(req.body?.at, req.body?.length) }); }
     catch (err) { reply.code(err.status || 500).send({ error: err.message }); }
+  });
+  // Try the ElevenLabs setup again now (after fixing a key or voice ID) and report what happened.
+  app.post('/admin/voice/retry', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    await warmCaretaker({ attempts: 1 });
+    reply.send({ caretakerVoice: caretakerVoice(), music: musicStatus() });
+    warmMusic().catch(() => {});
   });
   app.post('/admin/schedule/clear', (req, reply) => {
     if (!requireAdmin(req, reply)) return;

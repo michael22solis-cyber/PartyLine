@@ -29,9 +29,15 @@ export const LINES = {
 const greeting = (name) => `${TAG} ...${name}... [pause] are you there...?`;
 export const spoken = (line) => line.replace(/\[[^\]]*\]\s*/g, '').trim();
 
-export const enabled = () => Boolean(env.ELEVENLABS_API_KEY && env.ELEVENLABS_VOICE_ID && env.CARETAKER_VOICE !== 'live');
-const model = () => env.ELEVENLABS_MODEL || 'eleven_v4';
-const fileFor = (text) => `${crypto.createHash('sha256').update(JSON.stringify([env.ELEVENLABS_VOICE_ID, model(), text])).digest('hex').slice(0, 24)}.mp3`;
+// Railway variables pasted with spaces or quotes around them still work.
+const clean = (v) => String(v || '').trim().replace(/^['"]|['"]$/g, '').trim();
+const KEY = () => clean(env.ELEVENLABS_API_KEY);
+const VOICE = () => clean(env.ELEVENLABS_VOICE_ID);
+export const enabled = () => Boolean(KEY() && VOICE() && env.CARETAKER_VOICE !== 'live');
+let lastError = null; // what ElevenLabs said the last time it refused (shown on the host page)
+const model = () => clean(env.ELEVENLABS_MODEL) || 'eleven_v4';
+const FALLBACK_MODEL = 'eleven_multilingual_v2';
+const fileFor = (text) => `${crypto.createHash('sha256').update(JSON.stringify([VOICE(), model(), text])).digest('hex').slice(0, 24)}.mp3`;
 export const servedFile = (name) => (/^[0-9a-f]{24}\.mp3$/.test(name) && fs.existsSync(path.join(DIR, name)) ? path.join(DIR, name) : null);
 
 const inFlight = new Map();
@@ -43,13 +49,21 @@ function clip(text) {
   if (fs.existsSync(file)) return Promise.resolve(url);
   if (inFlight.has(name)) return inFlight.get(name);
   const job = (async () => {
-    const res = await fetch(`${env.ELEVENLABS_BASE_URL || 'https://api.elevenlabs.io'}/v1/text-to-speech/${env.ELEVENLABS_VOICE_ID}?output_format=mp3_44100_128`, {
+    const say = async (modelId, words) => fetch(`${env.ELEVENLABS_BASE_URL || 'https://api.elevenlabs.io'}/v1/text-to-speech/${encodeURIComponent(VOICE())}?output_format=mp3_44100_128`, {
       method: 'POST',
-      headers: { 'xi-api-key': env.ELEVENLABS_API_KEY, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
-      body: JSON.stringify({ text, model_id: model() }),
+      headers: { 'xi-api-key': KEY(), 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
+      body: JSON.stringify({ text: words, model_id: modelId }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-    if (!res.ok) throw new Error(`elevenlabs_${res.status}`);
+    let res = await say(model(), text);
+    // A model this account can't use: try the standard one (it would read [delivery tags] aloud, so drop them).
+    if ([400, 422].includes(res.status) && model() !== FALLBACK_MODEL) res = await say(FALLBACK_MODEL, spoken(text));
+    if (!res.ok) {
+      const detail = await res.json().then((j) => j.detail?.message || j.detail?.status || j.detail || j.message).catch(() => '');
+      lastError = { status: res.status, message: String(detail || '').slice(0, 200), at: new Date().toISOString() };
+      throw new Error(`elevenlabs_${res.status}${detail ? `: ${lastError.message}` : ''}`);
+    }
+    lastError = null;
     const buf = Buffer.from(await res.arrayBuffer());
     fs.mkdirSync(DIR, { recursive: true });
     fs.writeFileSync(`${file}.tmp`, buf);
@@ -90,19 +104,36 @@ export function prepare(character, player, callIndex = 0) {
 // Every fixed line (riddle, hints, sign-off, reveal), generated at startup so the Caretaker is in the narrator's voice
 // from the first call of the night and never has to fall back to a different voice mid-game. Names are made as rings go.
 const FIXED = () => [LINES.riddle, ...LINES.hints, LINES.fading, LINES.reveal];
-export async function warmUp() {
+export async function warmUp({ attempts = 3 } = {}) {
   if (!enabled()) return;
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
     const results = await Promise.allSettled(FIXED().map(clip));
     const failed = results.filter((r) => r.status === 'rejected');
     if (!failed.length) { console.log(`[caretaker] narrator voice ready (${results.length} lines)`); return; }
-    console.error(`[caretaker] ${failed.length} line(s) not generated yet (${failed[0].reason?.message}); attempt ${attempt} of 3`);
-    await new Promise((r) => setTimeout(r, attempt * 5000));
+    console.error(`[caretaker] ${failed.length} line(s) not generated yet (${failed[0].reason?.message}); attempt ${attempt} of ${attempts}`);
+    if (attempt < attempts) await new Promise((r) => setTimeout(r, attempt * 5000));
   }
 }
 // For the host page: is the Caretaker on the narrator's voice, and are his lines ready?
+const HINTS = {
+  401: 'ElevenLabs rejected the API key: check ELEVENLABS_API_KEY, and that the key has Text to Speech access.',
+  402: 'ElevenLabs needs a paid plan or more credits for this voice (library voices can’t be used through the API on the free plan).',
+  403: 'The API key isn’t allowed to use Text to Speech or this voice: check the key’s permissions.',
+  404: 'ElevenLabs doesn’t know that voice ID: check ELEVENLABS_VOICE_ID (and add the voice to “My Voices”).',
+  422: 'ElevenLabs refused the request (often the model or voice ID).',
+  429: 'ElevenLabs is rate-limiting or out of quota; it will retry.',
+};
+// For the host page: is the Caretaker on the narrator's voice, are his lines ready, and if not, why?
 export function voiceStatus() {
-  if (!enabled()) return { mode: 'live', reason: env.CARETAKER_VOICE === 'live' ? 'CARETAKER_VOICE=live' : 'ElevenLabs keys not set' };
+  if (!enabled()) {
+    const reason = env.CARETAKER_VOICE === 'live' ? 'CARETAKER_VOICE=live' : !KEY() && !VOICE() ? 'ElevenLabs keys not set'
+      : !KEY() ? 'ELEVENLABS_API_KEY not set' : 'ELEVENLABS_VOICE_ID not set';
+    return { mode: 'live', reason };
+  }
   const lines = FIXED();
-  return { mode: 'narrator', voice: `…${String(env.ELEVENLABS_VOICE_ID).slice(-4)}`, model: model(), ready: lines.filter((t) => fs.existsSync(path.join(DIR, fileFor(t)))).length, total: lines.length };
+  return {
+    mode: 'narrator', voice: `…${VOICE().slice(-4)}`, model: model(),
+    ready: lines.filter((t) => fs.existsSync(path.join(DIR, fileFor(t)))).length, total: lines.length,
+    error: lastError ? { ...lastError, hint: HINTS[lastError.status] || 'ElevenLabs refused the request.' } : null,
+  };
 }

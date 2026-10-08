@@ -20,6 +20,7 @@ const elevenServer = http.createServer((req, res) => {
   req.on('end', () => {
     eleven.requests.push({ url: req.url, key: req.headers['xi-api-key'], body: JSON.parse(body || '{}') });
     if (eleven.fail) { res.writeHead(500); res.end('nope'); return; }
+    if (eleven.status) { res.writeHead(eleven.status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(eleven.body || {})); return; }
     if (eleven.noMusic && req.url.startsWith('/v1/music')) { res.writeHead(402); res.end('upgrade'); return; }
     res.writeHead(200, { 'Content-Type': 'audio/mpeg' });
     res.end(Buffer.from('ID3fake-mp3-bytes'));
@@ -191,5 +192,23 @@ test('music: five tracks composed once by ElevenLabs Music, each creepier, serve
   assert.equal(file.statusCode, 200);
   assert.equal(file.headers['content-type'], 'audio/mpeg');
   const admin = (await app.inject({ method: 'GET', url: '/admin/status', headers: { 'x-admin-key': 'test-admin' } })).json();
-  assert.deepEqual(admin.music, { mode: 'on', ready: 5, total: 5 });
+  assert.deepEqual(admin.music, { mode: 'on', ready: 5, total: 5, error: null });
+});
+
+test('when ElevenLabs refuses, the host page says exactly why, and pasted spaces/quotes in the variables are fine', async () => {
+  const { voiceStatus } = await import('../src/voice/caretaker.js');
+  Object.assign(process.env, { ELEVENLABS_API_KEY: ' "xi-test" ', ELEVENLABS_VOICE_ID: ' other-voice ' });
+  eleven.status = 404; eleven.body = { detail: { status: 'voice_not_found', message: 'A voice with the voice_id other-voice was not found.' } };
+  const p = addPlayer({ name: 'Err' });
+  await ringInApp(p, 'caretaker', {});
+  const r = await post(p, '/call', { character: 'caretaker' });
+  assert.notEqual(r.body.mode, 'recording', 'falls back to live');
+  assert.ok(eleven.requests.at(-1).url.includes('/other-voice?'), 'voice id trimmed');
+  assert.equal(eleven.requests.at(-1).key, 'xi-test', 'key trimmed and unquoted');
+  const v = voiceStatus();
+  assert.equal(v.error.status, 404);
+  assert.match(v.error.message, /not found/);
+  assert.match(v.error.hint, /voice ID/);
+  eleven.status = null; eleven.body = null;
+  await post(p, '/call/end', { callId: r.body.callId, character: 'caretaker', seconds: 3 });
 });
