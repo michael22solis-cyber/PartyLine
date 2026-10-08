@@ -197,7 +197,7 @@ test('music: five tracks composed once by ElevenLabs Music, each creepier, serve
   assert.equal(file.statusCode, 200);
   assert.equal(file.headers['content-type'], 'audio/mpeg');
   const admin = (await app.inject({ method: 'GET', url: '/admin/status', headers: { 'x-admin-key': 'test-admin' } })).json();
-  assert.deepEqual(admin.music, { mode: 'on', ready: 9, total: 9, error: null });
+  assert.deepEqual(admin.music, { mode: 'on', ready: 9, total: 9, error: null, working: false, generations: 9 });
 });
 
 test('when ElevenLabs refuses, the host page says exactly why, and pasted spaces/quotes in the variables are fine', async () => {

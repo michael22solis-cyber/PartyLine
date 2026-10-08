@@ -31,6 +31,7 @@ import { checkCall, chargeCall, resetAllowances, callAllowance, holdOff } from '
 import { resetInitiative } from './initiative.js';
 import { liveView } from './hostview.js';
 import { normalizePhone } from './phonenumber.js';
+import { dataSince } from './paths.js';
 import { sendHint, nextHint } from './hints.js';
 import { agendaView, agendaSummary, checkAgendas } from './agenda.js';
 import { recordedCall, servedFile as caretakerClip, voiceStatus as caretakerVoice, warmUp as warmCaretaker } from './voice/caretaker.js';
@@ -405,6 +406,7 @@ export function registerWeb(app) {
       revealed: getDb().revealed,
       caretakerVoice: caretakerVoice(),
       music: musicStatus(),
+      dataSince: dataSince().since,
       game: getGame() ? { ...lobbyView(null), invite: getGame().status === 'lobby' ? `https://${PUBLIC_HOST || 'localhost:5050'}/join/${getGame().code}` : null } : null,
       tally: tallyVotes(),
       schedule: scheduled(),
