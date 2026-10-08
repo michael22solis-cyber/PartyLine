@@ -1,6 +1,6 @@
-# Playtest runbook: Play now with friends
+# Playtest runbook: one night with friends
 
-How to run **Play now · about 75 minutes** in auto mode today, from "is the server up?" to the debrief. Budget
+How to run **One night · about 75 minutes** in auto mode today, from "is the server up?" to the debrief. Budget
 **about 2 hours** in total: 20 minutes of setup, 10 minutes for friends to join, 75 minutes of game, and 10 minutes
 of debrief.
 
@@ -21,7 +21,7 @@ running the night itself.
 
 - [ ] Server up, and its log says `OpenAI key: OK` (step 1)
 - [ ] Solo smoke test passed on your own phone (step 2)
-- [ ] New game created on `/host` with **Play now** (step 3)
+- [ ] New game created on `/host` with **One night · about 75 minutes** (step 3)
 - [ ] Invite sent, and the organizer chosen
 - [ ] Everyone has joined, allowed the mic, and turned on alerts
 - [ ] Organizer taps **START THE GAME**
@@ -116,7 +116,7 @@ If you can, repeat steps 1–2 on one iPhone and one Android phone. If a step fa
 
 ## 3. Open the lobby (10 min)
 
-1. On `/host`, go to **AUTO MODE**, pick **Play now · about 75 minutes**, and tap **New game**. Confirm the reset: this
+1. On `/host`, go to **AUTO MODE**, pick **One night · about 75 minutes**, and tap **New game**. Confirm the reset: this
    wipes the test player and creates a fresh invite.
 2. Decide who the **organizer** is. **The first person to join gets the START button.** If you're playing, join first
    yourself. If you'd rather keep control, start the game from `/host` with **Start now** instead.
@@ -137,7 +137,7 @@ If you can, repeat steps 1–2 on one iPhone and one Android phone. If a step fa
 
 After Start, **the invite link stops working.** Late arrivals have to be added by hand (see step 6).
 
-## 4. What happens when (Play now)
+## 4. What happens when (one night, 75 minutes)
 
 Times are minutes after Start. The server checks for due beats every 15 seconds, so each beat can land up to 15
 seconds late.
@@ -146,31 +146,38 @@ seconds late.
 |---|---|---|---|
 | 0:00 | setup | Role card: Detective, or Accomplice (4+ players only) | Everyone saw a card |
 | 0:12 | accomplice | The accomplice gets secret orders on The Line | Nothing visible to others |
+| 0:24 | agendas | Everyone's sealed secret and three goals (Notebook). Goals about a suspect stay 🔒 until they meet them. | |
 | 0:30 | intro | The story arrives on The Line | |
 | 1:00 | calls | The Caretaker rings each phone, 15 seconds apart. About 75 seconds after their ring, each player gets their starting clue and Ruth as a contact. | Unanswered rings become a missed call after 40 seconds. Missed Caretaker calls can't be returned, but the clue still arrives. With 8 players, the last clue lands around 4:00. |
-| 20 | cast | Every suspect's number, for everyone | Players who were stuck can now reach everyone |
+| 6 | nudge | Anyone still down to one contact gets texted first by a new suspect | |
+| 12 | cast | Every suspect's number, for everyone | Players who were stuck can now reach everyone |
 | 25 | memo | Dana's voice memo (audio) | |
 | 33 | ruthWarning | Ruth calls whoever talked most about the cellar. A voicemail if they miss it. | One player only |
-| 42 | twist | The anonymous 911 call | |
+| 37 | leak | Teddy leaks one player's secret to two others; Ruth warns that player | |
+| 42 | twist | The anonymous 911 call. Detectives who have found nothing get a hint. | |
 | 44 | planted | Planted evidence for the accomplice | Accomplice only |
+| 47 | lilyCalls | Lily calls everyone, 20 seconds apart, ready to talk on the phone only | Missed her? She won't pick up for 10 min |
 | 52 | caretakerHint | The Caretaker calls everyone with a hint, 20 seconds apart | |
-| 62 | votesOpen | "One hour left. Open the VOTE tab" | The vote count climbing on `/host` |
+| 57 | leak | A second secret leaks (5+ players only) | |
+| 62 | votesOpen | "Votes are open." The home screen counts down to the final call. | The vote count climbing on `/host` |
 | 74 | lineRinging | "The line is ringing." | |
-| 75 | reveal | Every phone rings at once with the Caretaker's reveal. About 75 seconds later: CASE CLOSED, the results, and **The End** with each player's recap. | Voting closes the moment the reveal starts |
+| 75 | reveal | The votes are counted out on every phone, then every phone rings at once with the Caretaker's reveal. About 75 seconds later: CASE CLOSED, the results, and **The End** with each player's recap. | Voting closes the moment the reveal starts |
 
-With 3 players, the accomplice and planted beats are skipped. The votesOpen message says "one hour left", but in this
-mode voting closes 13 minutes later at the reveal, so give the group a time check out loud.
+With 3 players, the accomplice and planted beats are skipped. Voting closes 13 minutes after votesOpen, at the reveal;
+the night clock on every home screen shows the countdown.
 
-Call limits: the Caretaker hangs up within 2 minutes and suspects within 4. A call with 45 seconds of silence ends on
+Call limits: the group shares 40 minutes of calls (`CALL_POOL_MINUTES`), and the whole game has a $5 AI budget
+(`GAME_BUDGET_USD`; at the cap, live calls stop and texting continues). The Caretaker hangs up within 2 minutes and suspects within 4. A call with 45 seconds of silence ends on
 its own. Each player can be on one call at a time.
 
 ## 5. Your job during the game
 
 - **Keep `/host` open.** It shows the next beat, votes in, and each player's contacts and secrets found.
 - **If you're playing, don't tap Show roles.** The vote tally hides the accomplice unless roles are shown.
-- **Spend so far:**
-  - On a laptop: `npm run admin -- usage`
-  - On Railway: `ADMIN_BASE_URL=https://YOUR-DOMAIN ADMIN_KEY=... npm run admin -- usage`
+- **Spend so far:** the AI spend box on `/host` (against the game budget). For the full breakdown:
+  `ADMIN_BASE_URL=https://YOUR-DOMAIN ADMIN_KEY=... npm run admin -- usage`
+- **QUIET tags and Send hint:** anyone silent for 10+ minutes is tagged on `/host`; **Send hint** nudges them.
+- **Need a break?** **Pause the night** on `/host`, then **Resume**: the rest of the night moves later by the pause.
 - **Don't fire beats by hand in auto mode** unless you mean to. A beat you fire by hand still fires again later on
   schedule. To take over pacing, tap **SCHEDULE → Clear upcoming** first, then fire the remaining beats yourself in
   the order of the table above.
@@ -181,14 +188,15 @@ its own. Each player can be on one call at a time.
 | Symptom | Fix |
 |---|---|
 | "This invite has expired." | A newer game exists, because New game makes a new code. Copy the current invite from `/host`. |
-| "This game has already started." | Add them on `/host` under PLAYERS, then **Copy link**. They play as a detective, but get no starting clue and their role card stays sealed. Pair them with someone; the `cast` beat at 20 min gives them every number. |
+| "This game has already started." | Add them on `/host` under PLAYERS, then **Copy link**. They play as a detective, but get no starting clue and their role card stays sealed. Fire **agendas** to give them their secret and goals. Pair them with someone; the `cast` beat at 12 min gives them every number. |
 | "Someone already took that name." | Use a different name or add an initial. |
-| A player closed the tab or lost their link | The invite won't get them back in, because their name is taken. Send their own link from `/host` (**Copy link** next to their name). |
+| A player closed the tab or lost their link | They open the invite link again. On the same phone it says **Continue as …**. On a new phone they tap their name under *Already playing?*, and you tap **Let in** on `/host`. Or send their link from `/host` (**Copy link**). |
 | A phone never rang | The app has to be open, or alerts on. Missed calls show up under Calls. |
 | "This browser can't use the microphone." | They opened the link inside another app. Copy it into Safari or Chrome. If they denied the mic earlier, re-allow it in the browser's site settings and reload. |
 | "The call didn't connect. Try again." | Check the server log. Usually it's the OpenAI key or billing. If calls keep failing, set `CONTEXT_MODE=legacy` and restart (see the checklist). |
 | "All lines are busy." | More than 25 live calls at once (`MAX_CONCURRENT_CALLS`). This shouldn't happen with 8 or fewer players. |
-| "The line is dead for tonight." | The player used all 30 calls (`MAX_CALLS_PER_PLAYER`). Raise it and restart; restarting also resets the count. |
+| "The group is out of call time tonight." | The shared 40 minutes are used up (`CALL_POOL_MINUTES`). Texting still works. |
+| "The line is dead for tonight." | Either the game hit its AI budget (`/host` says **BUDGET REACHED**; raise `GAME_BUDGET_USD` if you choose to), or the player used all 30 calls (`MAX_CALLS_PER_PLAYER`). |
 | "The line has gone quiet for tonight." | The player sent 150 texts (`MAX_TEXTS_PER_PLAYER`). Raise it and restart. |
 | Characters get cut off by background noise | Set `REALTIME_BARGE_IN_MS=700` and restart. If it's the other way round (characters are hard to interrupt), use `350`. |
 | Loud room | Players turn on MENU → **Captions on calls**. |
@@ -196,7 +204,7 @@ its own. Each player can be on one call at a time.
 | Texts get no reply at all | Check the server log for OpenAI errors (key, billing, or rate limits). |
 | Server crashed or restarted | Run `npm start` again. Players, messages and the schedule are saved in `data/`. Beats that came due while the server was down all fire within 15 seconds of the restart. Calls in progress drop. |
 | The group wants to end early | **Clear upcoming**, then fire **votesOpen**, give people a few minutes, then fire **reveal**. |
-| The group needs more time | **Clear upcoming**, then fire the remaining beats by hand when the room is ready. |
+| The group needs more time | **Pause the night**, then **Resume** when the room is ready. |
 
 ## 7. After the game (10–15 min)
 
