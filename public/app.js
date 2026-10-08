@@ -857,6 +857,19 @@ function renderRecap(screen) {
   r.found.forEach((t) => ul.append(el('li', 'got', t)));
   r.missed.forEach((t) => ul.append(el('li', null, t)));
   box.append(ul);
+  if (r.heardOnCalls) box.append(el('p', 'note', `☎ ${r.heardOnCalls} of them you heard on a call, for bonus points.`));
+  if (r.group?.length > 1) {
+    box.append(el('div', 'section-label', 'THE GROUP'));
+    box.append(el('p', 'note', `The group named ${r.groupVote.killer || 'no one'} as the killer${r.groupVote.accomplice ? ` and ${r.groupVote.accomplice} as the accomplice` : ''}.`));
+    const gl = el('ul', 'group-recap');
+    r.group.forEach((g) => {
+      const li = el('li', g.you ? 'you' : null);
+      li.append(el('b', null, `${g.name}${g.you ? ' (you)' : ''}${g.accomplice ? ' 🗝' : ''}`),
+        el('span', null, `${g.found} secret${g.found === 1 ? '' : 's'}${g.onCall ? ` · ${g.onCall} ☎` : ''} · ${g.vote ? `named ${g.vote.split(' ')[0]}` : 'no vote'}`));
+      gl.append(li);
+    });
+    box.append(gl);
+  }
   const share = el('button', 'wide', 'SAVE SHARE CARD');
   share.onclick = () => shareCard(r);
   box.append(share, el('p', 'fine', 'The card shows your rank and score, with no spoilers.'));
@@ -881,6 +894,7 @@ async function shareCard(r) {
   g.fillStyle = '#c9d6c3'; g.font = '70px "Special Elite", serif'; g.fillText(r.rank, 540, 920);
   g.fillStyle = '#6b7a66'; g.font = '48px VT323, monospace';
   g.fillText(`${r.name.toUpperCase()}  ·  ${r.found.length}/${r.totalClues} SECRETS UNCOVERED`, 540, 1010);
+  if (r.heardOnCalls) { g.fillStyle = '#9fe0a0'; g.fillText(`☎ ${r.heardOnCalls} HEARD ON A CALL`, 540, 1075); }
   g.fillStyle = '#d0412e'; g.font = '52px VT323, monospace';
   g.fillText('THE HOUSE CALLED. I ANSWERED.', 540, 1180);
   g.fillStyle = '#6b7a66'; g.font = '36px VT323, monospace'; g.fillText('All characters are AI. Happy Halloween.', 540, 1240);
@@ -1292,7 +1306,7 @@ async function startCall(character) {
     callBed(character).then((stop) => { if (stop && call === c0) c0.stopBed = stop; else stop?.(); });
   } catch (ex) {
     $('#callState').textContent = ex.name === 'NotAllowedError' ? 'MICROPHONE BLOCKED' : /busy/i.test(ex.message) ? 'LINE BUSY'
-      : /picking up/i.test(ex.message) ? 'NO ANSWER' : /line is dead/i.test(ex.message) ? 'NO SIGNAL' : 'CALL FAILED';
+      : /picking up|can't talk right now/i.test(ex.message) ? 'NO ANSWER' : /line is dead/i.test(ex.message) ? 'NO SIGNAL' : 'CALL FAILED';
     $('#callTime').textContent = ex.name === 'NotAllowedError' ? 'Allow the microphone to talk to them.'
       : ex instanceof TypeError ? 'The line dropped. Try again.' : ex.message;
     setTimeout(() => endCall('connect_failed'), 3200);

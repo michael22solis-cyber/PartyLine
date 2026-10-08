@@ -235,6 +235,9 @@ test('a confession heard on a call: phone-only evidence, marked as heard on a ca
   const r = recapFor(playerByToken(a.token));
   assert.equal(r.heardOnCalls, 1);
   assert.ok(r.found[0].endsWith('☎'));
+  const me = r.group.find((g) => g.you);
+  assert.deepEqual([me.name, me.found, me.onCall], ['Cal', 1, 1], 'the group recap shows everyone’s finds, calls highlighted');
+  assert.ok(r.group.every((g) => !('token' in g)));
 });
 
 test('Lily calls everyone mid-game; miss her and she shuts down and won’t pick up for a while', async () => {

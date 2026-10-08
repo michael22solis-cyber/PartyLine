@@ -24,9 +24,39 @@ few minutes of setup makes it count.
    - Read the transcripts in `eval-results/`. If 2.1-mini's acting isn't good enough for a character, keep the old model
      for just that one, e.g. `OPENAI_REALTIME_MODEL_RUTH=gpt-realtime`.
 
+6. **ElevenLabs (the Caretaker's voice, music and call backgrounds).**
+   - In Railway → Variables: `ELEVENLABS_API_KEY` and `ELEVENLABS_VOICE_ID` (the intro narrator). Never paste the key
+     anywhere else, chat included.
+   - The plan must be Creator or above for library voices, with credits for about 7 narrator lines, 5 music tracks
+     and 4 call backgrounds (generated once, then cached on the `/data` volume).
+   - On `/host`, the note under the stats should read *"all 7 lines ready"* and *"Music: all 9 tracks ready"*. If not,
+     it shows what ElevenLabs said and a **Try again now** button.
+7. **Rehearse the night offline:** `node --test test/rehearsal.test.js` plays a whole 75-minute game (every beat, five
+   players) against the mock AI in about a second.
+
+## What players should notice (worth watching for)
+
+- **Some secrets only come out on a call.** Lily's 911 call, the mud on Ruth's shoes, and Teddy's speakers are never
+  put in writing; by text the character tells you to call. Evidence heard on a call is marked **☎ HEARD ON A CALL** and
+  scores extra.
+- **Lily calls everyone** (about 47 minutes in) and only talks if you pick up and ask about Thursday night. Miss her and
+  she texts "nvm" and won't pick up for 10 minutes.
+- **Busy means busy.** Teddy is live during the early part and the deep part of the night, Marcus is driving late, Lily is
+  on shift early. The first call goes unanswered with a text excuse; try again in two minutes. Their texts come a little
+  slower too.
+- **Characters text first.** Accuse someone and they come back to it a few minutes later; uncover a secret and they ask
+  you to keep it quiet; word gets around and another suspect gossips to someone else. Capped at 2 per character and 5
+  per player a night. `INITIATIVE=off` turns it off.
+
 ## During
 
-- **Spend so far:** `npm run admin -- usage`.
+- **The host page (`/host`) is the live view:** each player's contacts, secrets (☎ = on a call), calls, call minutes
+  and AI spend, plus the total spend this game. Anyone silent for 10+ minutes gets a yellow **QUIET** tag.
+- **Stuck players:** tap **Send hint** on their row. They get a whisper on The Line about who to ask and how (never the
+  answer), starting with the call-only secrets. Anyone (but the accomplice) who has found nothing by the 911 twist gets
+  one automatically.
+
+- **Spend so far:** on `/host`, or `npm run admin -- usage` for the full breakdown.
 - **Characters cut off by background noise:** set `REALTIME_BARGE_IN_MS=700` and restart.
 - **Players say characters are hard to interrupt:** set `REALTIME_BARGE_IN_MS=350`.
 - **Loud room:** players can turn on **Captions on calls** in the ⋮ menu.
@@ -44,6 +74,8 @@ few minutes of setup makes it count.
    - Did any character feel off (personality, emotional delivery, or revealing too much or too little)?
    - Did characters get cut off, or ignore people?
    - Did anyone notice that texting "ok" or "thanks" gets no reply?
+   - Did people call on their own, or only answer? Did the busy excuses and unprompted texts feel alive, or annoying?
+   - Did the hints arrive too early, too late, or not at all? Was anyone tagged QUIET who was actually busy?
 
 `data/usage.jsonl` contains no dialogue, so it is safe to share for tuning.
 

@@ -15,6 +15,7 @@ delete process.env.VAPID_PRIVATE_KEY;
 // Never reach ElevenLabs from tests, even if a developer's .env has keys (dotenv won't override these).
 process.env.ELEVENLABS_API_KEY = '';
 process.env.ELEVENLABS_VOICE_ID = '';
+process.env.INITIATIVE ??= 'off'; // characters texting first: tested on its own (test/initiative.test.js)
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export async function until(fn, ms = 3000, step = 10) {

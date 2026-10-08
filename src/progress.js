@@ -11,6 +11,7 @@ import { callPhone } from './phone.js';
 import { mayAward } from './disclosure.js';
 import { prepare as prepareCaretaker } from './voice/caretaker.js';
 import { statusOf } from './cast.js';
+import { onSecretFound } from './initiative.js';
 
 const { UNLOCK_ALL, CALL_MODE = 'app' } = process.env; // CALL_MODE=phone uses real Twilio calls when a player has a number
 
@@ -50,6 +51,7 @@ export async function checkSecrets(p, characterKey, text, { approved = [], chann
     updatePlayer(p.token, { found: [...(fresh.found || []), s.id], ...(onCall ? { foundOnCall: [...(fresh.foundOnCall || []), s.id] } : {}) });
     await deliver({ token: p.token, thread: characterKey, from: 'system', kind: 'evidence',
       text: `SECRET UNCOVERED${onCall ? ' · HEARD ON A CALL' : ''}\n${s.card}` });
+    onSecretFound(p, characterKey);
   }
 }
 
@@ -80,7 +82,8 @@ export const audioIf = (file) => (fs.existsSync(path.join(AUDIO_DIR, file)) ? `/
 export async function ringInApp(p, character, { opening, voicemail, onMissed } = {}) {
   const c = CHARACTERS[character];
   const from = character.startsWith('caretaker') ? 'BLACKWOOD MANOR' : c.name.toUpperCase();
-  const r = { character, opening, until: Date.now() + 40_000 };
+  const ringMs = Number(process.env.RING_TIMEOUT_MS || 40_000);
+  const r = { character, opening, until: Date.now() + ringMs };
   r.timer = setTimeout(async () => {
     if (ringing.get(p.token) !== r) return;
     ringing.delete(p.token);
@@ -88,7 +91,7 @@ export async function ringInApp(p, character, { opening, voicemail, onMissed } =
     if (voicemail) await deliver({ token: p.token, thread: 'unknown', from: 'character', kind: 'voicemail', text: voicemail.text, audio: voicemail.audio, npc: character });
     else await deliver({ token: p.token, thread: 'unknown', from: 'system', kind: 'missed', text: `Missed call: ${from}`, npc: character });
     if (onMissed) await onMissed().catch((err) => console.error('[ring] after missed call:', err.message));
-  }, 40_000);
+  }, ringMs);
   ringing.set(p.token, r);
   if (character.startsWith('caretaker')) prepareCaretaker(character, p, character === 'caretaker' ? p.caretakerCalls || 0 : 0);
   emit(p.token, 'incoming', { character, from });

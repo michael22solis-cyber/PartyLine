@@ -12,6 +12,8 @@ A one-night Halloween mystery (about 75 minutes) played on phones. AI characters
 | New-player tutorial | A six-step, spoiler-free field guide opens after the first role card. Players can open the real apps from each step, return to the guide, pause and resume, or revisit it from the home screen and Menu → How to play. Progress is saved per private link on the current device. |
 | Recap | After the final call, "The End" shows each player's detective score, rank, secrets uncovered, and a no-spoiler share card (PNG). |
 | Beats | Every scripted moment from the case doc (intro, clues, 9:40 voice memo, 911 twist, accomplice's secret texts, the final call). Fire by hand or schedule the whole night. |
+| Living cast | Characters text first (reactions and gossip, capped), are busy when their status says so, and keep some secrets for phone calls only. |
+| Host live view | `/host` shows each player's progress, AI spend, and who has gone quiet, with a **Send hint** button. |
 | Admin CLI | Add players, fire or schedule beats, check votes. |
 
 ## Setup (about 45 minutes)

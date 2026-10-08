@@ -9,8 +9,10 @@ import { PHOTOS, statusOf, phase } from './cast.js';
 import { TEXTABLE } from './characters/index.js';
 import { ledger } from './ai/ledger.js';
 import { holdOff } from './voice/allowance.js';
+import { nudgeStuck } from './hints.js';
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// BEAT_TIME_SCALE shrinks the waits inside beats (the full-game rehearsal test runs a night in seconds).
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms * Number(process.env.BEAT_TIME_SCALE ?? 1)));
 const everyone = () => players();
 
 const STARTING_CLUES = [
@@ -129,6 +131,8 @@ export const BEATS = {
     await toAll('line',
       '911 CALL — Thursday, 11:12 pm. A woman, crying: "There’s someone at the bottom of the stairs at Blackwood... I think she’s dead." Then she hangs up.',
       'evidence', audioIf('call911.mp3'));
+    // Halfway through: anyone who hasn't found anything yet gets a nudge.
+    return { nudged: await nudgeStuck() };
   },
 
   async planted() {
