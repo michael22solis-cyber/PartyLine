@@ -30,6 +30,7 @@ import { openCall, getCall, closeCall, callTranscript, callUsage, callDisclose }
 import { checkCall, chargeCall, resetAllowances, callAllowance, holdOff } from './voice/allowance.js';
 import { resetInitiative } from './initiative.js';
 import { liveView } from './hostview.js';
+import { normalizePhone } from './phonenumber.js';
 import { sendHint, nextHint } from './hints.js';
 import { agendaView, agendaSummary, checkAgendas } from './agenda.js';
 import { recordedCall, servedFile as caretakerClip, voiceStatus as caretakerVoice, warmUp as warmCaretaker } from './voice/caretaker.js';
@@ -380,9 +381,10 @@ export function registerWeb(app) {
   // ---------- admin (you, running the game) ----------
   app.post('/admin/players', (req, reply) => {
     if (!requireAdmin(req, reply)) return;
-    const { name, phone } = req.body || {};
+    const { name } = req.body || {};
     if (!name) return reply.code(400).send({ error: 'name required' });
-    if (phone && !/^\+\d{10,15}$/.test(phone)) return reply.code(400).send({ error: 'phone must look like +15555550123' });
+    const phone = normalizePhone(req.body?.phone);
+    if (String(req.body?.phone || '').trim() && !phone) return reply.code(400).send({ error: 'That phone number doesn’t look right. Try 10 digits, like 806 555 0123.' });
     const p = addPlayer({ name, phone });
     reply.send({ name: p.name, link: linkFor(p.token) });
   });
