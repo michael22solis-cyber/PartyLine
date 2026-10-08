@@ -12,7 +12,7 @@ running the night itself.
 | | |
 |---|---|
 | Players | **3 to 8.** With 4 or more, one player is secretly the accomplice; with 3 there is no accomplice. |
-| Each player needs | A phone with Safari (iPhone) or Chrome (Android), sound on, headphones if possible, and microphone permission for calls |
+| Each player needs | A phone with Safari (iPhone) or Chrome (Android), sound on, headphones if possible, and microphone permission for calls. On a phone, the game only runs from the Blackwood app on the home screen; the link walks them through adding it. |
 | You need | The server reachable over HTTPS, an OpenAI key with credit, and your `ADMIN_KEY` |
 | Twilio | **Not needed.** Calls ring inside the app by default (`CALL_MODE=app`) |
 | Cost | A 4-minute suspect call is about $0.12. Texts are a fraction of a cent. A group of 4–6 should land at a few dollars. Watch it live (step 5). |
@@ -23,7 +23,8 @@ running the night itself.
 - [ ] Solo smoke test passed on your own phone (step 2)
 - [ ] New game created on `/host` with **Play now** (step 3)
 - [ ] Invite sent, and the organizer chosen
-- [ ] Everyone has joined, allowed the mic, and turned on alerts
+- [ ] Everyone has joined, added Blackwood to their home screen, and opened it from there
+- [ ] Everyone has allowed the mic and turned on alerts
 - [ ] Organizer taps **START THE GAME**
 - [ ] `/host` open on your phone for the whole game
 - [ ] Debrief notes written down before people leave (step 7)
@@ -79,8 +80,9 @@ Laptop rules for the night:
 - **Use `npm start`, not `npm run dev`.** Dev mode restarts the server whenever a file changes, which drops live calls
   and ringing phones.
 - Keep the laptop plugged in, awake, and on the same Wi-Fi all night. Don't close either terminal.
-- **Keep ngrok running.** If it restarts with a new URL, every player link breaks. To recover, update `PUBLIC_HOST`,
-  restart the server, and resend each player their link from `/host`.
+- **Keep ngrok running.** If it restarts with a new URL, every player link and every home-screen app breaks. To
+  recover, update `PUBLIC_HOST`, restart the server, and resend each player their link from `/host`. Players then
+  delete the old Blackwood icon and add the app again from the new link.
 - On the free ngrok plan, players see an ngrok warning page the first time. Tell them to tap **Visit Site**.
 - `PUBLIC_HOST` must be set. Without it, the invite link on `/host` points at `localhost` and won't work on anyone's
   phone.
@@ -101,18 +103,21 @@ Railway, commit the new files in `public/audio/` and push them to `main` **befor
 
 Test everything on your own phone first. Step 3 wipes this test player.
 
-1. Open `/host`. Under **PLAYERS**, add `Test`, tap **Copy link**, and open the link on your phone.
-2. Tap the power button. The intro video plays, then the boot screen, then a **"Your role is sealed"** card, then the
+1. Open `/host`. Under **PLAYERS**, add `Test`, tap **Copy link**, and open the link on your phone in Safari or
+   Chrome.
+2. Instead of the game, you should see **Put the line on your home screen**. Follow its steps, then open **Blackwood**
+   from your home screen. (A laptop skips this screen.)
+3. Tap the power button. The intro video plays, then the boot screen, then a **"Your role is sealed"** card, then the
    field guide. That card is correct: roles are dealt when the game starts.
-3. On `/host`, under **STORY BEATS**, tap **clues** twice (once to arm it, once to send it). A clue lands on The Line,
+4. On `/host`, under **STORY BEATS**, tap **clues** twice (once to arm it, once to send it). A clue lands on The Line,
    and Ruth appears as a contact.
-4. **Text Ruth.** A reply in a few seconds means the text model works.
-5. **Call Ruth** with ☎ CALL. Allow the microphone, talk for 20 seconds, and hang up. Hearing her means voice works.
-6. **Alerts:** tap MENU (bottom right), then **Turn on alerts**. On iPhone, first tap Share, then **Add to Home Screen**,
-   and open Blackwood from the home screen. Lock the phone, then send the **welcome** beat from `/host`. A notification
-   should appear.
+5. **Text Ruth.** A reply in a few seconds means the text model works.
+6. **Call Ruth** with ☎ CALL. Allow the microphone, talk for 20 seconds, and hang up. Hearing her means voice works.
+7. **Alerts:** tap MENU (bottom right), then **Turn on alerts**. Lock the phone, then send the **welcome** beat from
+   `/host`. A notification should appear.
 
-If you can, repeat steps 1–2 on one iPhone and one Android phone. If a step fails, see step 6.
+If you can, repeat steps 1–3 on one iPhone and one Android phone. Delete the test icon from your home screen
+afterwards, because it opens the test player, not you. If a step fails, see step 6.
 
 ## 3. Open the lobby (10 min)
 
@@ -123,16 +128,19 @@ If you can, repeat steps 1–2 on one iPhone and one Android phone. If a step fa
 3. Tap **Copy** next to the invite link and send it to the group chat with this message:
 
    > Tonight's game: LINK
-   > Open it on your phone in **Safari** (iPhone) or **Chrome** (Android). Don't open it inside Instagram, Messenger,
-   > or a group-chat preview. Type your first name and tap ANSWER THE LINE. Sound on, headphones if you have them.
-   > When it asks for the **microphone**, allow it, because that's how you talk to the characters.
-   > **iPhone:** tap Share, then Add to Home Screen, open Blackwood from there, then MENU → Turn on alerts.
-   > **Android:** MENU → Turn on alerts. Keep the app open when you can, so you don't miss a call.
+   > Open it on your phone in **Safari** (iPhone) or **Chrome** (Android), not inside Instagram or Messenger. Type your
+   > first name and tap ANSWER THE LINE.
+   > It then asks you to **add Blackwood to your home screen**. Follow the steps and open Blackwood from your home
+   > screen: the game only runs from there.
+   > In the app, tap MENU → **Turn on alerts**, and allow the **microphone** when asked, because that's how you talk to
+   > the characters. Sound on, headphones if you have them.
 
 4. Watch the names appear on `/host` and on every phone's lobby screen. The rules:
    - Names must be unique. "ana" and "Ana" count as the same name.
    - 3 to 8 players. Until there are 3, the organizer sees **NEED N MORE**.
    - Joiners see "Your role is sealed" until the game starts. That's expected.
+   - Names appear as soon as someone joins, before they've added the app. Before Start, check that everyone is in
+     Blackwood from their home screen. The organizer only sees START THE GAME inside the app.
 5. When everyone is in, **the organizer taps START THE GAME.** Every phone plays a short ring and the role cards appear.
 
 After Start, **the invite link stops working.** Late arrivals have to be added by hand (see step 6).
@@ -183,7 +191,8 @@ its own. Each player can be on one call at a time.
 | "This invite has expired." | A newer game exists, because New game makes a new code. Copy the current invite from `/host`. |
 | "This game has already started." | Add them on `/host` under PLAYERS, then **Copy link**. They play as a detective, but get no starting clue and their role card stays sealed. Pair them with someone; the `cast` beat at 20 min gives them every number. |
 | "Someone already took that name." | Use a different name or add an initial. |
-| A player closed the tab or lost their link | The invite won't get them back in, because their name is taken. Send their own link from `/host` (**Copy link** next to their name). |
+| A player closed the tab or lost their link | If they added the app, the Blackwood icon on their home screen still works. Otherwise the invite won't get them back in, because their name is taken. Send their own link from `/host` (**Copy link** next to their name). |
+| Stuck on **Put the line on your home screen** | That screen appears whenever the link is open in a browser tab on a phone. They need to tap the **Blackwood** icon on their home screen instead. If the icon itself opens a browser tab (an Android shortcut rather than an app), they delete it and add it again with **ADD TO HOME SCREEN** or ⋮ → **Install app**. If someone still can't get in, set `REQUIRE_INSTALL=off` and restart: phones can then play in a browser tab, but iPhones get no alerts there. |
 | A phone never rang | The app has to be open, or alerts on. Missed calls show up under Calls. |
 | "This browser can't use the microphone." | They opened the link inside another app. Copy it into Safari or Chrome. If they denied the mic earlier, re-allow it in the browser's site settings and reload. |
 | "The call didn't connect. Try again." | Check the server log. Usually it's the OpenAI key or billing. If calls keep failing, set `CONTEXT_MODE=legacy` and restart (see the checklist). |

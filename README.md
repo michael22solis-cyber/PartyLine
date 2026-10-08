@@ -7,7 +7,7 @@ A 2-night Halloween mystery played on real phones. AI characters **call** player
 | Piece | What it does |
 |---|---|
 | Phone calls | The Caretaker calls players; players can call Ruth (or each suspect, with extra numbers). Real-time AI voices via Twilio + OpenAI Realtime (`gpt-realtime-2.1-mini` by default). 4-minute cap on every call, incoming ones included. |
-| Haunted old phone | Each player's private link opens a power-on and boot screen, then a home screen with Messages, Calls, Evidence, Notes (suspect board), Vote and The End. Glitches, whispers, synth sounds and a full-screen incoming-call alert. Installs to the home screen; push alerts. |
+| Haunted old phone | Each player's private link opens a power-on and boot screen, then a home screen with Messages, Calls, Evidence, Notes (suspect board), Vote and The End. Glitches, whispers, synth sounds and a full-screen incoming-call alert. On a phone it only runs from the home screen: a link opened in a browser tab shows how to add it first. Push alerts. |
 | Intro video | A 30-second story intro plays after a player taps the power button, then their private role card (Detective, or a blurred Accomplice card), then the phone. Replay it from Menu. Script: `intro/SCRIPT.md`. |
 | New-player tutorial | A six-step, spoiler-free field guide opens after the first role card. Players can open the real apps from each step, return to the guide, pause and resume, or revisit it from the home screen and Menu → How to play. Progress is saved per private link on the current device. |
 | Recap | After the midnight reveal, "The End" shows each player's detective score, rank, secrets uncovered, and a no-spoiler share card (PNG). |
@@ -96,7 +96,7 @@ npm run admin -- status              # players, roles, votes, schedule
 
 All beats: `setup, welcome, accomplice, intro, calls, clues, cast, memo, ruthWarning, closeNight1, twist, planted, caretakerHint, votesOpen, lineRinging, reveal`. Use `clues` instead of `calls` to test without phones.
 
-Tell iPhone players to tap **Share → Add to Home Screen**, open Blackwood from there, and turn on alerts (⋮ menu). Android and desktop can turn on alerts directly.
+On a phone, each link first asks the player to add Blackwood to their home screen (iPhone: **Share → Add to Home Screen**; Android: the **ADD TO HOME SCREEN** button, or **⋮ → Install app**), and the game only runs from that icon. Then they turn on alerts under **MENU**. Computers play in the browser. `REQUIRE_INSTALL=off` lets phones play in a browser tab too (iPhones get no alerts there).
 
 Reset everything: `npm run admin -- reset`.
 
