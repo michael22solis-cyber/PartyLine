@@ -30,7 +30,7 @@ import { openCall, getCall, closeCall, callTranscript, callUsage, callDisclose }
 import { checkCall, chargeCall, resetAllowances, callAllowance } from './voice/allowance.js';
 import { recordedCall, servedFile as caretakerClip, voiceStatus as caretakerVoice, warmUp as warmCaretaker } from './voice/caretaker.js';
 import { statusOf, phase } from './cast.js';
-import { trackUrls, servedFile as musicFile, musicStatus, warmUp as warmMusic } from './music.js';
+import { trackUrls, bedUrls, servedFile as musicFile, musicStatus, warmUp as warmMusic } from './music.js';
 import { SECRETS } from './secrets.js';
 
 const {
@@ -103,6 +103,7 @@ export function registerWeb(app) {
       },
       phase: phase(),
       music: trackUrls(), // background tracks, one per stretch of the night (see music.js)
+      callBeds: bedUrls(), // what you hear behind each character on a call
       threads: TEXTABLE.filter((t) => unlockedFor(p).includes(t.key)).map((t) => ({ ...t, status: statusOf(t.key) })),
       ringing: pendingRing(p.token) ? { character: pendingRing(p.token).character } : null,
       messages: messagesFor(p.token),
@@ -294,7 +295,7 @@ export function registerWeb(app) {
     if (!c || !clean) return reply.send({ ok: true });
     remember({ player: p.name, pid: p.pid, npc: character, character: c.name, speaker: speaker === 'player' ? 'player' : 'character', text: clean, channel: 'call' });
     if (speaker === 'player') await unlockMentions(p, clean);
-    else if (c.textable) await onCharacterSaid(p, character, clean);
+    else if (c.textable) await onCharacterSaid(p, character, clean, { channel: 'call' });
     reply.send({ ok: true });
   });
 

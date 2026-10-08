@@ -178,21 +178,26 @@ test('music: five tracks composed once by ElevenLabs Music, each creepier, serve
   const music = await import('../src/music.js');
   const n0 = eleven.requests.length;
   await music.warmUp();
-  const made = eleven.requests.slice(n0);
+  const all = eleven.requests.slice(n0);
+  const beds = all.filter((r) => r.url.startsWith('/v1/sound-generation'));
+  assert.equal(beds.length, 4, 'a background for each character’s calls');
+  assert.match(beds.find((r) => /humming/.test(r.body.text)).body.text, /lullaby/, 'Ruth’s room has the hum');
+  const made = all.filter((r) => r.url.startsWith('/v1/music'));
   assert.equal(made.length, 5);
-  assert.ok(made.every((r) => r.url.startsWith('/v1/music') && r.body.force_instrumental === true && r.body.music_length_ms === 60000));
+  assert.ok(made.every((r) => r.body.force_instrumental === true && r.body.music_length_ms === 60000));
   assert.match(made[0].body.prompt, /music box/);
   assert.match(made[3].body.prompt, /dread/i, 'the final stretch is the most tense');
   await music.warmUp();
-  assert.equal(eleven.requests.length, n0 + 5, 'made once, then reused');
+  assert.equal(eleven.requests.length, n0 + 9, 'made once, then reused');
   const p = addPlayer({ name: 'Mo' });
   const st = (await app.inject({ method: 'GET', url: `/api/p/${p.token}/state` })).json();
   assert.deepEqual(Object.keys(st.music), ['early', 'late', 'deep', 'final', 'after']);
+  assert.deepEqual(Object.keys(st.callBeds).sort(), ['lily', 'marcus', 'ruth', 'teddy']);
   const file = await app.inject({ method: 'GET', url: st.music.deep });
   assert.equal(file.statusCode, 200);
   assert.equal(file.headers['content-type'], 'audio/mpeg');
   const admin = (await app.inject({ method: 'GET', url: '/admin/status', headers: { 'x-admin-key': 'test-admin' } })).json();
-  assert.deepEqual(admin.music, { mode: 'on', ready: 5, total: 5, error: null });
+  assert.deepEqual(admin.music, { mode: 'on', ready: 9, total: 9, error: null });
 });
 
 test('when ElevenLabs refuses, the host page says exactly why, and pasted spaces/quotes in the variables are fine', async () => {
@@ -211,4 +216,43 @@ test('when ElevenLabs refuses, the host page says exactly why, and pasted spaces
   assert.match(v.error.hint, /voice ID/);
   eleven.status = null; eleven.body = null;
   await post(p, '/call/end', { callId: r.body.callId, character: 'caretaker', seconds: 3 });
+});
+
+test('a confession heard on a call: phone-only evidence, marked as heard on a call, worth more at the end', async () => {
+  const { checkSecrets } = await import('../src/progress.js');
+  const { approveFromPlayerText } = await import('../src/disclosure.js');
+  const { recapFor } = await import('../src/recap.js');
+  const { messagesFor } = await import('../src/store.js');
+  const a = addPlayer({ name: 'Cal' });
+  approveFromPlayerText(a, 'lily', 'did you make the 911 call?', 'text');
+  await checkSecrets(a, 'lily', 'okay. it was me. she was already dead.', { channel: 'text' });
+  assert.deepEqual(playerByToken(a.token).found || [], [], 'not over text');
+  approveFromPlayerText(a, 'lily', 'did you make the 911 call?', 'call');
+  await checkSecrets(a, 'lily', 'okay. it was me. she was already dead.', { channel: 'call' });
+  assert.deepEqual(playerByToken(a.token).found, ['call911']);
+  const card = messagesFor(a.token).find((m) => m.kind === 'evidence');
+  assert.match(card.text, /^SECRET UNCOVERED · HEARD ON A CALL/);
+  const r = recapFor(playerByToken(a.token));
+  assert.equal(r.heardOnCalls, 1);
+  assert.ok(r.found[0].endsWith('☎'));
+});
+
+test('Lily calls everyone mid-game; miss her and she shuts down and won’t pick up for a while', async () => {
+  const { BEATS } = await import('../src/beats.js');
+  const { messagesFor } = await import('../src/store.js');
+  const { mock: fake } = await import('node:test');
+  const lonely = addPlayer({ name: 'Nia' });
+  fake.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const run = BEATS.lilyCalls();
+    for (let i = 0; i < 40 && !messagesFor(lonely.token).some((m) => m.kind === 'missed' && m.npc === 'lily'); i++) {
+      fake.timers.tick(20_000); await new Promise((r) => setImmediate(r));
+    }
+    fake.timers.tick(60_000); await new Promise((r) => setImmediate(r));
+    await run;
+  } finally { fake.timers.reset(); }
+  await until(() => messagesFor(lonely.token).some((m) => m.thread === 'lily' && m.text === 'nvm. forget i called.'), 5000);
+  const r = await post(lonely, '/call', { character: 'lily' });
+  assert.equal(r.status, 409);
+  assert.match(r.body.error, /isn't picking up/);
 });

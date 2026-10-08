@@ -6,7 +6,7 @@ import { firedBeats } from './store.js';
 const PHASES = [
   ['after', ['reveal']],
   ['final', ['votesOpen', 'lineRinging']],
-  ['deep', ['twist', 'planted', 'caretakerHint']],
+  ['deep', ['twist', 'planted', 'lilyCalls', 'caretakerHint']],
   ['late', ['memo', 'ruthWarning']],
   ['early', ['intro', 'calls', 'clues', 'cast']],
 ];

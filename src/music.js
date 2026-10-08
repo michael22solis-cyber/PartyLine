@@ -29,6 +29,14 @@ const FALLBACK = { // sound-effects ambience if the music API isn't on the plan 
   final: 'horror tension drone, ticking clock, fast heartbeat, rising dissonant strings, static bursts, seamless loop',
   after: 'soft rain, slow music box winding down, quiet melancholy ambience, seamless loop',
 };
+// What you hear behind each character on a call (20 s seamless loops, played quietly under their voice). Ruth's has
+// the hum: a clue for players who listen.
+export const BEDS = {
+  ruth: 'quiet old living room at night, a grandfather clock ticking, an old woman faintly humming a slow lullaby in the next room, seamless loop',
+  lily: 'small-town diner in the background, plates and cutlery clinking, a fryer sizzling, low murmur of a few customers, seamless loop',
+  marcus: 'inside a car at night, engine idling, light rain on the windshield, a turn signal clicking now and then, seamless loop',
+  teddy: 'cramped apartment, computer fans humming, soft livestream chat notification pings every few seconds, distant city traffic, seamless loop',
+};
 export const PHASE_TRACK = { before: 'early', early: 'early', late: 'late', deep: 'deep', final: 'final', after: 'after' };
 
 const KEY = () => String(env.ELEVENLABS_API_KEY || '').trim().replace(/^['"]|['"]$/g, '').trim();
@@ -36,12 +44,19 @@ export const enabled = () => Boolean(KEY() && env.MUSIC !== 'off');
 let lastError = null;
 const fileFor = (name) => `${name}-${crypto.createHash('sha256').update(JSON.stringify([TRACKS[name], LENGTH_MS])).digest('hex').slice(0, 12)}.mp3`;
 const pathFor = (name) => path.join(DIR, fileFor(name));
+const bedFile = (npc) => `bed-${crypto.createHash('sha256').update(BEDS[npc]).digest('hex').slice(0, 12)}.mp3`;
 export const servedFile = (file) => (/^[a-z]+-[0-9a-f]{12}\.mp3$/.test(file) && fs.existsSync(path.join(DIR, file)) ? path.join(DIR, file) : null);
 
 // Tracks the phone can play now: { early: '/assets/music/…', … } (missing ones are left out).
 export function trackUrls() {
   if (!enabled()) return {};
   return Object.fromEntries(Object.keys(TRACKS).filter((n) => fs.existsSync(pathFor(n))).map((n) => [n, `/assets/music/${fileFor(n)}`]));
+}
+
+// Background sounds for calls that are ready: { ruth: '/assets/music/bed-…', … }.
+export function bedUrls() {
+  if (!enabled()) return {};
+  return Object.fromEntries(Object.keys(BEDS).filter((n) => fs.existsSync(path.join(DIR, bedFile(n)))).map((n) => [n, `/assets/music/${bedFile(n)}`]));
 }
 
 async function post(url, body) {
@@ -80,6 +95,7 @@ async function make(name) {
 // Make any missing tracks, one at a time, in story order (so the opening track is ready first).
 export async function warmUp() {
   if (!enabled()) return;
+  await warmUpBeds(); // the call backgrounds first: small, and heard from the first call
   for (const name of Object.keys(TRACKS)) {
     if (fs.existsSync(pathFor(name))) continue;
     for (let attempt = 1; attempt <= 2; attempt++) {
@@ -89,7 +105,23 @@ export async function warmUp() {
   }
 }
 
+async function makeBed(npc) {
+  const audio = await post(`${BASE()}/v1/sound-generation?output_format=mp3_44100_128`, { text: BEDS[npc], duration_seconds: 20, loop: true, prompt_influence: 0.6 });
+  fs.mkdirSync(DIR, { recursive: true });
+  fs.writeFileSync(path.join(DIR, `${bedFile(npc)}.tmp`), audio);
+  fs.renameSync(path.join(DIR, `${bedFile(npc)}.tmp`), path.join(DIR, bedFile(npc)));
+  ledger.event('music_generated', { provider: 'elevenlabs', track: `bed:${npc}`, kind: 'sound_effect' });
+}
+export async function warmUpBeds() {
+  if (!enabled()) return;
+  for (const npc of Object.keys(BEDS)) {
+    if (fs.existsSync(path.join(DIR, bedFile(npc)))) continue;
+    try { await makeBed(npc); lastError = null; console.log(`[music] ${npc} call background ready`); }
+    catch (err) { lastError = err.message; console.error(`[music] ${npc} call background failed (${err.message})`); }
+  }
+}
+
 export function musicStatus() {
   if (!enabled()) return { mode: 'off', reason: env.MUSIC === 'off' ? 'MUSIC=off' : 'ElevenLabs key not set' };
-  return { mode: 'on', ready: Object.keys(trackUrls()).length, total: Object.keys(TRACKS).length, error: lastError };
+  return { mode: 'on', ready: Object.keys(trackUrls()).length + Object.keys(bedUrls()).length, total: Object.keys(TRACKS).length + Object.keys(BEDS).length, error: lastError };
 }

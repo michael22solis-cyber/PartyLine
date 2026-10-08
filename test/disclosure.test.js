@@ -65,9 +65,11 @@ test('the model alone cannot unlock a secret: the player must have raised it', (
 
 test('one message can approve several topics, once each', () => {
   const p = addPlayer({ name: 'Bo' });
-  const got = approveFromPlayerText(p, 'lily', 'the 911 call, and the lullaby, and 1996. all of it.');
-  assert.deepEqual(got.map((t) => t.id).sort(), ['call911', 'lullaby', 'mud']);
-  assert.deepEqual(approveFromPlayerText(p, 'lily', 'the 911 call again'), []);
+  // In a text only the lullaby can be approved: the 911 call and 1996 are phone-only.
+  assert.deepEqual(approveFromPlayerText(p, 'lily', 'the 911 call, and the lullaby, and 1996. all of it.').map((t) => t.id), ['lullaby']);
+  const got = approveFromPlayerText(p, 'lily', 'the 911 call, and the lullaby, and 1996. all of it.', 'call');
+  assert.deepEqual(got.map((t) => t.id).sort(), ['call911', 'mud']);
+  assert.deepEqual(approveFromPlayerText(p, 'lily', 'the 911 call again', 'call'), []);
 });
 
 test('rollback (CONTEXT_MODE=legacy) returns secret judgement to the characters, as before', async () => {

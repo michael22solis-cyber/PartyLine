@@ -40,14 +40,16 @@ export async function unlockAll(reason) {
 // ---------- secrets ----------
 // A secret becomes evidence when the character actually says it AND the engine had approved that disclosure for this
 // player (or, in a group chat, for the conversation: `approved`). Each card is awarded once.
-export async function checkSecrets(p, characterKey, text, { approved = [] } = {}) {
+// Heard on a call counts for more (see recap.js), and some secrets only come out on a call.
+export async function checkSecrets(p, characterKey, text, { approved = [], channel = 'text' } = {}) {
   for (const s of SECRETS) {
     const fresh = playerByToken(p.token) || p;
     if (s.who !== characterKey || (fresh.found || []).includes(s.id) || !s.test(text || '')) continue;
-    if (!mayAward(fresh, characterKey, s.id, approved)) continue;
-    updatePlayer(p.token, { found: [...(fresh.found || []), s.id] });
+    if (!mayAward(fresh, characterKey, s.id, approved, channel)) continue;
+    const onCall = channel === 'call';
+    updatePlayer(p.token, { found: [...(fresh.found || []), s.id], ...(onCall ? { foundOnCall: [...(fresh.foundOnCall || []), s.id] } : {}) });
     await deliver({ token: p.token, thread: characterKey, from: 'system', kind: 'evidence',
-      text: `SECRET UNCOVERED\n${s.card}` });
+      text: `SECRET UNCOVERED${onCall ? ' · HEARD ON A CALL' : ''}\n${s.card}` });
   }
 }
 
@@ -74,7 +76,8 @@ const AUDIO_DIR = path.resolve('public/audio');
 export const audioIf = (file) => (fs.existsSync(path.join(AUDIO_DIR, file)) ? `/assets/audio/${file}` : null);
 
 // Ring a player's Blackwood phone. If they don't pick up in 40 s it becomes a missed call (or a voicemail).
-export async function ringInApp(p, character, { opening, voicemail } = {}) {
+// `onMissed`: what happens if they don't pick up (besides the missed call), e.g. the caller giving up on them.
+export async function ringInApp(p, character, { opening, voicemail, onMissed } = {}) {
   const c = CHARACTERS[character];
   const from = character.startsWith('caretaker') ? 'BLACKWOOD MANOR' : c.name.toUpperCase();
   const r = { character, opening, until: Date.now() + 40_000 };
@@ -84,6 +87,7 @@ export async function ringInApp(p, character, { opening, voicemail } = {}) {
     emit(p.token, 'ringEnd', { character });
     if (voicemail) await deliver({ token: p.token, thread: 'unknown', from: 'character', kind: 'voicemail', text: voicemail.text, audio: voicemail.audio, npc: character });
     else await deliver({ token: p.token, thread: 'unknown', from: 'system', kind: 'missed', text: `Missed call: ${from}`, npc: character });
+    if (onMissed) await onMissed().catch((err) => console.error('[ring] after missed call:', err.message));
   }, 40_000);
   ringing.set(p.token, r);
   if (character.startsWith('caretaker')) prepareCaretaker(character, p, character === 'caretaker' ? p.caretakerCalls || 0 : 0);

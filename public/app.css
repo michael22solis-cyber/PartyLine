@@ -557,3 +557,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .home[data-phase="after"] .wall { --tint: linear-gradient(rgba(120,130,140,0.12), rgba(120,130,140,0.12)); }
 .home .home-note, .home .cast-chip .nm, .home .app .lbl { text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
 @media (prefers-reduced-motion: reduce) { .wall::before, .wall .fog, .wall .grain { animation: none; } }
+
+/* evidence heard on a call: worth more, and looks it */
+.card.oncall { box-shadow: 0 0 0 1px rgba(230,162,60,0.6), 0 0 18px rgba(230,162,60,0.25); }
+.card.oncall .tag { color: #a5640f; }

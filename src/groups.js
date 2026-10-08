@@ -7,8 +7,8 @@ import { remember } from './memory.js';
 import { isUnlocked, onCharacterSaid } from './progress.js';
 import { MENTIONS } from './secrets.js';
 import { chatComplete } from './ai/openai.js';
-import { buildGroupPrompt } from './context.js';
-import { approveFromPlayerText, shareApprovals } from './disclosure.js';
+import { buildGroupPrompt, callMeNote } from './context.js';
+import { approveFromPlayerText, shareApprovals, phoneOnlyRaised } from './disclosure.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, process.env.TEXT_FAST === '1' ? 0 : ms * Number(process.env.TEXT_DELAY_SCALE ?? 1)));
 const CUT_IN_CHANCE = Number(process.env.GROUP_CUT_IN_CHANCE ?? 0.4);
@@ -108,7 +108,8 @@ async function speak(g, key, sender, said, cuttingIn = false) {
   const approved = approveFromPlayerText(sender, key, said, 'group').map((t) => t.id);
   let reply;
   try {
-    const messages = buildGroupPrompt({ npc: key, player: sender, setting, transcript, ask, approvedNow: approved.map((id) => ({ id })) });
+    const callOnly = phoneOnlyRaised(key, said); // never in a group chat; ask them to call instead
+    const messages = buildGroupPrompt({ npc: key, player: sender, setting: [setting, callMeNote(callOnly)].filter(Boolean).join(' '), transcript, ask, approvedNow: approved.map((id) => ({ id })) });
     ({ text: reply } = await chatComplete(messages, { meta: { session: sender.pid, npc: key, capability: 'group', purpose: cuttingIn ? 'cut_in' : 'reply' } }));
     reply = reply.replace(new RegExp(`^(${c.name}|${c.name.split(' ')[0]}):\\s*`, 'i'), '');
   } catch (err) {
@@ -123,5 +124,5 @@ async function speak(g, key, sender, said, cuttingIn = false) {
   remember({ player: sender.name, pid: sender.pid, npc: key, character: c.name, speaker: 'character', text: `(in group chat "${room.name}") ${reply}`, channel: 'group' });
   const permittedHere = [...approved, ...((sender.permitted || {})[key] || [])];
   shareApprovals(people, key, approved);
-  for (const p of people) await onCharacterSaid(p, key, reply, { approved: permittedHere });
+  for (const p of people) await onCharacterSaid(p, key, reply, { approved: permittedHere, channel: 'group' });
 }
