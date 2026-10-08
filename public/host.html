@@ -239,6 +239,12 @@ async function refresh() {
     else if (v.error) { text = `Caretaker voice NOT working: ElevenLabs said ${v.error.status}${v.error.message ? ` (“${v.error.message}”)` : ''}. ${v.error.hint} Until it's fixed he uses the OpenAI voice.`; vn.className = 'note bad'; }
     else text = `Caretaker voice: the intro narrator (ElevenLabs ${v.voice}), preparing lines (${v.ready}/${v.total})…`;
     vn.append(text);
+    if (v?.files?.length && v.mode === 'narrator') {
+      const d = el('details'); d.style.marginTop = '6px';
+      d.append(el('summary', null, `Download the Caretaker's lines (${v.files.length} files): upload them to public/audio to keep them forever`));
+      v.files.forEach((f) => { const a = el('a', null, f.name); a.href = f.url; a.download = f.name; a.style.display = 'block'; a.style.color = 'var(--glow)'; d.append(a); });
+      vn.append(d);
+    }
     if (mu) {
       vn.append(mu.mode !== 'on' ? ` Music: off (${mu.reason}).` : mu.ready >= mu.total ? ` Music: all ${mu.total} tracks ready (recorded once, looped every game).`
         : mu.working ? ` Music: composing tracks (${mu.ready}/${mu.total})…` : ` Music: ${mu.ready} of ${mu.total} tracks made${mu.error ? ` (last try: ${mu.error})` : ''}.`);

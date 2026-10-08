@@ -160,7 +160,12 @@ export function voiceStatus() {
     return { mode: 'live', reason };
   }
   const lines = FIXED();
+  // Recorded lines, named the way public/audio/ expects, for the host to download and build into the game.
+  const files = Object.entries(BUILT_FILES)
+    .map(([name, line]) => ({ name, url: builtFor(line) || (fs.existsSync(path.join(DIR, fileFor(line))) ? `/assets/voice/${fileFor(line)}` : null) }))
+    .filter((f) => f.url);
   return {
+    files,
     mode: 'narrator', voice: `…${VOICE().slice(-4)}`, model: model(),
     ready: lines.filter((t) => hasBuilt(t) || fs.existsSync(path.join(DIR, fileFor(t)))).length, total: lines.length, builtIn: built,
     error: lastError ? { ...lastError, hint: HINTS[lastError.status] || 'ElevenLabs refused the request.' } : null,
