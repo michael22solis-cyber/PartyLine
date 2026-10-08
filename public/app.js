@@ -36,6 +36,42 @@ const READONLY = { line: 'The Line', unknown: 'UNKNOWN' };
 
 // ============ the cast's faces (public/cast/) ============
 const CAST = { ruth: 'Ruth Calloway', marcus: 'Marcus Vane', lily: 'Lily Blackwood', teddy: 'Teddy Fisk' };
+// Public bios: only what anyone in town could tell you. Never a secret, never anything the player has to earn.
+const BIO = {
+  ruth: { age: 74, role: 'Retired night nurse',
+    background: ['Thirty years of night shifts at St. Agnes Hospital. In the ’90s she nursed Elias Blackwood’s sick wife at the manor.', 'Widowed since 2009. Lives alone two streets from the manor, in the yellow house with the cat in the window.', 'Bakes lemon bars for every church function. Her grandniece set up her phone; she still texts with full punctuation.'],
+    thursday: 'At St. Agnes bingo until 10. Ask anyone.',
+    rumor: 'Walks past the manor every evening. The neighbors say she never once looks at it.' },
+  marcus: { age: 48, role: 'Realtor, Vane Realty',
+    background: ['His face is on the billboard on Route 9. Divorced; his daughter stays with him every other weekend.', 'Blackwood Manor sat on the market for three years. He cut the price twice before Dana bought it in September.', 'Drives a black sedan he keeps spotless. Never off the phone.'],
+    thursday: 'Showed Dana around in the evening. Says he left by 6:30 and went home.',
+    rumor: 'Somebody spray-painted “LIAR” across his billboard last month.' },
+  lily: { age: 42, role: 'The caretaker’s daughter',
+    background: ['Was twelve when her father, Elias, vanished on Halloween 1996. Her mother died three years later.', 'Has waited tables at Rosie’s Diner for fifteen years. Lives alone above the laundromat on Main.', 'Never wanted the house sold. Can’t stand the ghost tours.'],
+    thursday: 'Working her shift at Rosie’s Diner.',
+    rumor: 'Every Halloween she leaves flowers at the manor gate, and never says who they’re for.' },
+  teddy: { age: 34, role: 'Ghost-tour guide & streamer',
+    background: ['Runs Blackwood Ghost Tours: $25 a head, weekends and all of Halloween week. Streams as “Fisk After Dark.”', 'Dropped out of film school. Drives a van with his own face on the side.', 'Dreams of a TV deal. His mom still calls him in the middle of his streams.'],
+    thursday: 'Live on his stream from his apartment, 9 to 10. The replay is online.',
+    rumor: 'Tour guests swear they’ve heard voices in the walls of the manor.' },
+};
+const VICTIM = { name: 'Dana Whitlock', age: 46, lines: [
+  'An architect from Boston who restores old houses. Bought Blackwood Manor in September and planned to turn it into a bed and breakfast.',
+  'Spent her first weeks asking neighbors about the house’s history. Booked a crew to dig up the cellar floor on November 2.',
+  'Found at the bottom of the cellar stairs. Police say she died between 9:30 and 10 pm, and call it an accident.',
+] };
+// The Line has no face, only a shape in the static that never quite resolves.
+function lineAvatar() {
+  const a = el('span', 'avatar av-line');
+  a.innerHTML = '<svg viewBox="0 0 40 40" aria-hidden="true"><defs><radialGradient id="lg" cx="50%" cy="40%" r="60%"><stop offset="0" stop-color="#2b3a2e"/><stop offset="1" stop-color="#030504"/></radialGradient></defs><rect width="40" height="40" fill="url(#lg)"/><g class="shade"><ellipse cx="20" cy="15" rx="6" ry="7.5"/><path d="M6 40c1-9 6-14 14-14s13 5 14 14z"/></g><circle class="eye" cx="17.6" cy="15" r="0.9"/><circle class="eye" cx="22.4" cy="15" r="0.9"/></svg>';
+  return a;
+}
+// A portrait, or the shape of someone you haven't met.
+function portrait(key, cls = '') {
+  const box = el('span', `portrait ${cls}`);
+  if (key) { const img = el('img'); img.src = `/assets/cast/${key}.jpg`; img.alt = ''; img.loading = 'lazy'; img.onerror = () => { img.remove(); box.classList.add('unknown'); }; box.append(img); } else box.classList.add('unknown');
+  return box;
+}
 const KEY_OF_NAME = Object.fromEntries(Object.entries(CAST).map(([k, n]) => [n.toUpperCase(), k]));
 const faceKey = (k) => (CAST[k] ? k : String(k || '').startsWith('caretaker') ? 'caretaker' : null);
 const keyOfName = (name) => KEY_OF_NAME[String(name || '').trim().toUpperCase()] || (/BLACKWOOD MANOR|UNKNOWN/i.test(name || '') ? 'caretaker' : null);
@@ -519,6 +555,7 @@ function threadRow(thread, extraClass = '') {
   const b = el('button');
   const last = lastOf(thread);
   if (CAST[thread] || thread.startsWith('dm:')) { b.classList.add('has-av'); b.append(avatar(thread, titleOf(thread))); }
+  else if (thread === 'line') { b.classList.add('has-av'); b.append(lineAvatar()); }
   b.append(
     el('span', `name ${extraClass}`, titleOf(thread)),
     el('span', 'time', last ? fmtTime(last.at) : ''),
@@ -694,7 +731,10 @@ function renderConvo(screen, thread) {
     const face = avatar(thread);
     face.onclick = () => openLightbox({ video: `/assets/cast/${thread}.mp4`, poster: `/assets/cast/${thread}.jpg`, caption: `${CAST[thread]} · ${subOf(thread)}` });
     head.append(face);
-  } else sub.textContent = subOf(thread);
+  } else {
+    sub.textContent = subOf(thread);
+    if (thread === 'line') head.append(lineAvatar());
+  }
   info.append(el('div', 'to', READONLY[thread] ? 'FROM' : 'TO'), el('div', 'title', titleOf(thread)), sub);
   head.append(info);
   if (!READONLY[thread] && !isPeerThread(thread)) {
@@ -781,6 +821,13 @@ function renderConvo(screen, thread) {
 function renderEvidence(screen) {
   markSeen('evidence');
   screen.append(el('div', 'app-title', 'CASE FILE'));
+  // The victim, first in the file: Dana, so she is a person and not just a name.
+  const vic = el('div', 'victim');
+  const vtext = el('div', 'vtext');
+  vtext.append(el('span', 'tag', 'THE VICTIM'), el('b', null, VICTIM.name), el('span', 'vrole', `${VICTIM.age} · new owner of Blackwood Manor`));
+  VICTIM.lines.forEach((l) => vtext.append(el('p', null, l)));
+  vic.append(portrait('dana', 'victim-photo'), vtext);
+  screen.append(vic);
   const items = state.messages.filter((m) => EVIDENCE_KINDS.has(m.kind) || (m.kind === 'photo' && m.from === 'character'));
   if (!items.length) { screen.append(el('div', 'empty', 'Nothing yet.\n\nClues, recordings and evidence you receive will be kept here.')); return; }
   const wrap = el('div', 'bubbles');
@@ -818,16 +865,45 @@ function renderNotes(screen) {
     });
     box.append(ul, el('p', 'fine', 'Solving the murder comes first. These are extra, and nobody else can see them until the end.'));
   }
-  box.append(el('div', 'section-label', 'SUSPECT BOARD'));
-  const grid = el('div', 'board');
-  state.suspects.forEach((name) => {
-    if (!met(name)) { const b = el('button', 'locked'); b.disabled = true; b.append(el('span', null, '???'), el('em', null, 'NOT MET')); grid.append(b); return; }
-    const s = board[name] || 0;
-    const b = el('button'); b.dataset.s = s;
-    b.append(el('span', null, name), el('em', null, BOARD_LABEL[s]));
-    b.onclick = () => { board[name] = (s + 1) % 3; store.set(boardKey, JSON.stringify(board)); sfx.click(); render(); };
-    grid.append(b);
+  // The lineup: all four suspects against the height chart, numbered. Tap one for their bio and to mark your theory.
+  // Anyone you haven't met stands in the lineup as a shadow.
+  box.append(el('div', 'section-label', 'THE LINEUP'));
+  const keys = Object.keys(CAST);
+  if (!keys.includes(state.lineupPick) || !met(CAST[state.lineupPick])) state.lineupPick = keys.find((k) => met(CAST[k])) || null;
+  const lineup = el('div', 'lineup');
+  keys.forEach((k, i) => {
+    const known = met(CAST[k]);
+    const s = board[CAST[k]] || 0;
+    const b = el('button', `slot${state.lineupPick === k ? ' on' : ''}`);
+    b.dataset.s = known ? s : 0;
+    b.setAttribute('aria-label', known ? `${i + 1}: ${CAST[k]}` : `${i + 1}: someone you haven't met`);
+    b.append(portrait(known ? k : null), el('span', 'placard', String(i + 1)), el('span', 'nm', known ? CAST[k].split(' ')[0] : '???'));
+    if (known && s) b.append(el('em', 'mark', BOARD_LABEL[s]));
+    b.onclick = () => { if (!known) { flashNote('NOT MET YET.'); return; } state.lineupPick = k; sfx.click(); render(); };
+    lineup.append(b);
   });
+  box.append(lineup);
+  const k = state.lineupPick;
+  const grid = el('div', 'bio');
+  if (!k) grid.append(el('p', 'fine', 'Meet the suspects to fill in the lineup.'));
+  else {
+    const bio = BIO[k];
+    grid.append(el('b', 'bio-name', CAST[k]), el('span', 'bio-role', `${bio.age} · ${bio.role}`));
+    const ul = el('ul'); bio.background.forEach((l) => ul.append(el('li', null, l))); grid.append(ul);
+    grid.append(el('div', 'bio-sub', 'THEIR STORY: THURSDAY NIGHT'), el('p', 'bio-said', `“${bio.thursday}”`));
+    grid.append(el('div', 'bio-sub', 'AROUND TOWN'), el('p', 'bio-rumor', bio.rumor));
+    // What this player has uncovered about them (their own evidence cards).
+    const found = state.messages.filter((m) => m.thread === k && m.kind === 'evidence' && /^SECRET UNCOVERED/.test(m.text)).map((m) => m.text.split('\n').slice(1).join(' '));
+    if (found.length) { grid.append(el('div', 'bio-sub', 'WHAT YOU’VE UNCOVERED')); const f = el('ul', 'found'); found.forEach((t) => f.append(el('li', null, t))); grid.append(f); }
+    const marks = el('div', 'bio-marks');
+    BOARD_LABEL.forEach((label, s) => {
+      const mb = el('button', (board[CAST[k]] || 0) === s ? 'on' : '', s === 0 ? 'UNDECIDED' : label);
+      mb.dataset.s = s;
+      mb.onclick = () => { board[CAST[k]] = s; store.set(boardKey, JSON.stringify(board)); sfx.click(); render(); };
+      marks.append(mb);
+    });
+    grid.append(marks);
+  }
   box.append(grid, el('div', 'section-label', 'YOUR NOTES'));
   const ta = el('textarea'); ta.placeholder = 'Who lied? What doesn’t add up?'; ta.maxLength = 4000;
   ta.value = state.drafts.notes ?? store.get(notesKey, '');
