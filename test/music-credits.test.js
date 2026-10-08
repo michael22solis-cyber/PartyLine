@@ -17,6 +17,7 @@ const server = http.createServer((req, res) => {
 });
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 after(() => server.close());
+process.env.BUILTIN_AUDIO_DIR = path.join(dataDir, 'builtin-audio'); // private: other test files share public/audio
 Object.assign(process.env, { ELEVENLABS_API_KEY: 'xi-test', ELEVENLABS_BASE_URL: `http://127.0.0.1:${server.address().port}` });
 const music = await import('../src/music.js');
 
@@ -39,7 +40,7 @@ test('never more than MUSIC_MAX_GENERATIONS paid generations per server start', 
 });
 
 test('tracks built into the game (public/audio/music) are used as-is and never generated', async () => {
-  const dir = path.resolve('public/audio/music');
+  const dir = path.join(process.env.BUILTIN_AUDIO_DIR, 'music');
   const made = !fs.existsSync(dir);
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, 'final.mp3');
@@ -63,7 +64,8 @@ test('nothing is generated when the server starts unless MUSIC_AUTO=on', async (
 });
 
 test('tracks uploaded straight into public/audio/ are picked up too', () => {
-  const file = path.resolve('public/audio/late.mp3');
+  fs.mkdirSync(process.env.BUILTIN_AUDIO_DIR, { recursive: true });
+  const file = path.join(process.env.BUILTIN_AUDIO_DIR, 'late.mp3');
   const existed = fs.existsSync(file);
   if (!existed) fs.writeFileSync(file, 'ID3fake');
   try { assert.equal(music.trackUrls().late, '/assets/audio/late.mp3'); }

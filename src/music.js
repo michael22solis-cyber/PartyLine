@@ -10,7 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { dataFile } from './paths.js';
+import { dataFile, BUILTIN_AUDIO } from './paths.js';
 import { ledger } from './ai/ledger.js';
 
 const env = process.env;
@@ -50,8 +50,8 @@ const fileFor = (name) => `${name}-${crypto.createHash('sha256').update(JSON.str
 const pathFor = (name) => path.join(DIR, fileFor(name));
 const bedFile = (npc) => `bed-${crypto.createHash('sha256').update(BEDS[npc]).digest('hex').slice(0, 12)}.mp3`;
 // Built-in tracks: public/audio/music/<file>, or straight in public/audio/<file> (easier to upload on GitHub).
-const BUNDLED = [[path.resolve('public/audio/music'), '/assets/audio/music/'], [path.resolve('public/audio'), '/assets/audio/']];
-const bundled = (file) => { for (const [dir, url] of BUNDLED) if (fs.existsSync(path.join(dir, file))) return `${url}${file}`; return null; };
+const BUNDLED = () => [[path.join(BUILTIN_AUDIO(), 'music'), '/assets/audio/music/'], [BUILTIN_AUDIO(), '/assets/audio/']];
+const bundled = (file) => { for (const [dir, url] of BUNDLED()) if (fs.existsSync(path.join(dir, file))) return `${url}${file}`; return null; };
 const trackUrl = (n) => bundled(`${n}.mp3`) || (enabled() && fs.existsSync(pathFor(n)) ? `/assets/music/${fileFor(n)}` : null);
 const bedUrl = (n) => bundled(`bed-${n}.mp3`) || (enabled() && fs.existsSync(path.join(DIR, bedFile(n))) ? `/assets/music/${bedFile(n)}` : null);
 export const servedFile = (file) => (/^[a-z]+-[0-9a-f]{12}\.mp3$/.test(file) && fs.existsSync(path.join(DIR, file)) ? path.join(DIR, file) : null);

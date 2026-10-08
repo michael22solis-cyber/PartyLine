@@ -159,7 +159,7 @@ test('the scripted midnight reveal plays a recording when one exists: no live se
     await ringInApp(p, 'caretaker_reveal');
     const r = await post(p, '/call', { character: 'caretaker_reveal' });
     assert.equal(r.body.mode, 'recording');
-    assert.equal(r.body.audio, '/assets/audio/caretaker-reveal.mp3');
+    assert.deepEqual([].concat(r.body.audio), ['/assets/audio/caretaker-reveal.mp3']);
     assert.equal(mock.log.clientSecrets.length, n0);
     assert.ok(allLines().some((l) => l.pid === p.pid && /Thirty years/.test(l.text)), 'the reveal is in memory');
     await post(p, '/call/end', { character: 'caretaker_reveal', mode: 'recording', seconds: 31 });
