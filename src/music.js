@@ -5,8 +5,8 @@
 // ambience is made instead. MUSIC=off disables it.
 //
 // Recorded once, looped forever: tracks are never made automatically. The host taps "Make music" once on /host
-// (or sets MUSIC_AUTO=on), and the files are kept on the data volume. Tracks committed to public/audio/music/
-// (early.mp3 … after.mp3, bed-ruth.mp3 …) take priority and never touch ElevenLabs at all.
+// (or sets MUSIC_AUTO=on), and the files are kept on the data volume. Tracks committed to public/audio/ or
+// public/audio/music/ (early.mp3 … after.mp3, bed-ruth.mp3 …) take priority and never touch ElevenLabs at all.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -49,8 +49,9 @@ let lastError = null;
 const fileFor = (name) => `${name}-${crypto.createHash('sha256').update(JSON.stringify([TRACKS[name], LENGTH_MS])).digest('hex').slice(0, 12)}.mp3`;
 const pathFor = (name) => path.join(DIR, fileFor(name));
 const bedFile = (npc) => `bed-${crypto.createHash('sha256').update(BEDS[npc]).digest('hex').slice(0, 12)}.mp3`;
-const BUNDLED = path.resolve('public/audio/music');
-const bundled = (file) => (fs.existsSync(path.join(BUNDLED, file)) ? `/assets/audio/music/${file}` : null);
+// Built-in tracks: public/audio/music/<file>, or straight in public/audio/<file> (easier to upload on GitHub).
+const BUNDLED = [[path.resolve('public/audio/music'), '/assets/audio/music/'], [path.resolve('public/audio'), '/assets/audio/']];
+const bundled = (file) => { for (const [dir, url] of BUNDLED) if (fs.existsSync(path.join(dir, file))) return `${url}${file}`; return null; };
 const trackUrl = (n) => bundled(`${n}.mp3`) || (enabled() && fs.existsSync(pathFor(n)) ? `/assets/music/${fileFor(n)}` : null);
 const bedUrl = (n) => bundled(`bed-${n}.mp3`) || (enabled() && fs.existsSync(path.join(DIR, bedFile(n))) ? `/assets/music/${bedFile(n)}` : null);
 export const servedFile = (file) => (/^[a-z]+-[0-9a-f]{12}\.mp3$/.test(file) && fs.existsSync(path.join(DIR, file)) ? path.join(DIR, file) : null);
