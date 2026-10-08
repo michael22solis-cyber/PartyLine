@@ -151,6 +151,42 @@ if (chromium) {
     await page.close();
   });
 
+  test('background music: plays on the phone, goes quiet for a ring, gets weirder as the night moves on', async () => {
+    const http = await import('node:http');
+    const os = await import('node:os');
+    const tone = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'bw-music-')), 'm.mp3');
+    execFileSync(ffmpeg, ['-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=frequency=220:duration=6', '-b:a', '64k', tone]);
+    const mp3 = fs.readFileSync(tone);
+    const eleven = http.createServer((req, res) => { req.resume(); req.on('end', () => { res.writeHead(200, { 'Content-Type': 'audio/mpeg' }); res.end(mp3); }); });
+    await new Promise((r) => eleven.listen(0, '127.0.0.1', r));
+    Object.assign(process.env, { ELEVENLABS_API_KEY: 'xi-test', ELEVENLABS_BASE_URL: `http://127.0.0.1:${eleven.address().port}` });
+    try {
+      const { warmUp } = await import('../../src/music.js');
+      const { emit } = await import('../../src/live.js');
+      await warmUp();
+      const p = addPlayer({ name: 'Mus' });
+      const page = await browser.newPage();
+      page.on('pageerror', (e) => console.error('page error:', e.message));
+      await page.addInitScript((token) => {
+        localStorage.setItem(`bw-on-${token}`, '1');
+        localStorage.setItem(`bw-tutorial-v1-${token}`, JSON.stringify({ status: 'complete', step: 0 }));
+      }, p.token);
+      await page.goto(`${base}/p/${p.token}`);
+      await page.mouse.click(5, 5); // a first tap lets the phone play sound
+      await page.waitForFunction(() => document.body.dataset.music === 'early', null, { timeout: 10_000 });
+      await ringInApp(p, 'teddy', {});
+      await page.waitForFunction(() => document.body.dataset.music === '', null, { timeout: 5000 });
+      await page.click('#ringDismiss');
+      await page.waitForFunction(() => document.body.dataset.music === 'early', null, { timeout: 10_000 });
+      emit(p.token, 'status', { phase: 'deep' }); // the story moves on: a stranger track
+      await page.waitForFunction(() => document.body.dataset.music === 'deep', null, { timeout: 10_000 });
+      await page.close();
+    } finally {
+      process.env.ELEVENLABS_API_KEY = '';
+      eleven.close();
+    }
+  });
+
   test('a ring that arrives twice stops ringing once the call is answered', async () => {
     const p = addPlayer({ name: 'Bell' });
     const page = await browser.newPage();

@@ -219,6 +219,10 @@ async function refresh() {
     : v.mode === 'narrator'
       ? (v.ready >= v.total ? `Caretaker voice: the intro narrator (ElevenLabs ${v.voice}), all ${v.total} lines ready.` : `Caretaker voice: the intro narrator (ElevenLabs ${v.voice}), preparing lines (${v.ready}/${v.total})…`)
       : `Caretaker voice: OpenAI live voice (${v.reason}). Add ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID in Railway to use the intro narrator.`;
+  const mu = status.music;
+  if (mu) $('voiceNote').textContent += mu.mode === 'on'
+    ? (mu.ready >= mu.total ? ` Music: all ${mu.total} tracks ready.` : ` Music: composing tracks (${mu.ready}/${mu.total})…`)
+    : ` Music: off (${mu.reason}).`;
   const g = status.game;
   $('inviteRow').hidden = !g?.invite; $('startRow').hidden = !(g && g.status === 'lobby');
   if (g?.invite) $('invite').value = g.invite;
