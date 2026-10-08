@@ -732,7 +732,7 @@ function renderNotes(screen) {
   const ta = el('textarea'); ta.placeholder = 'Who lied? What doesn’t add up?'; ta.maxLength = 4000;
   ta.value = state.drafts.notes ?? store.get(notesKey, '');
   ta.oninput = () => { state.drafts.notes = ta.value; store.set(notesKey, ta.value); };
-  box.append(ta, el('p', 'fine', 'Only you can see this. It stays on this phone.'));
+  box.append(ta, el('p', 'fine', 'Notes stay private from the group.'));
   screen.append(box);
 }
 

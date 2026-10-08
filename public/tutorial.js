@@ -83,7 +83,7 @@ export function tutorialStep(index, state) {
       points: [
         'Write one fact you learned and one question you still have. Your notes save as you type.',
         'Tap a name on the suspect board to cycle through ?, SUSPICIOUS, and CLEARED. These are your own working theories.',
-        'Notes are private and stored on this device. Keep using the same device to keep them with you.',
+        'Notes stay private from the group.',
       ],
       tip: 'Stuck? Re-read a clue or recording, compare it with an answer, and ask one specific follow-up. New story updates arrive from the host; you do not need to find everything at once.',
       actions: [{ label: 'OPEN NOTES', view: 'notes' }],
