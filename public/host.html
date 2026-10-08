@@ -80,6 +80,7 @@ h2 small { font-size: 15px; letter-spacing: 0.1em; }
       <div class="stat"><b id="sVotes">0</b><span>votes in</span></div>
       <div class="stat"><b id="sNext">—</b><span id="sNextLabel">next beat</span></div>
     </div>
+    <p class="note" id="voiceNote"></p>
 
     <h2>AUTO MODE</h2>
     <div class="card">
@@ -182,6 +183,11 @@ async function refresh() {
   const next = status.schedule.filter((s) => !s.done).sort((a, b) => a.at.localeCompare(b.at))[0];
   $('sNext').textContent = next ? next.beat : '—';
   $('sNextLabel').textContent = next ? fmt(next.at) : 'nothing scheduled';
+  const v = status.caretakerVoice;
+  $('voiceNote').textContent = !v ? ''
+    : v.mode === 'narrator'
+      ? (v.ready >= v.total ? `Caretaker voice: the intro narrator (ElevenLabs ${v.voice}), all ${v.total} lines ready.` : `Caretaker voice: the intro narrator (ElevenLabs ${v.voice}), preparing lines (${v.ready}/${v.total})…`)
+      : `Caretaker voice: OpenAI live voice (${v.reason}). Add ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID in Railway to use the intro narrator.`;
   const g = status.game;
   $('inviteRow').hidden = !g?.invite; $('startRow').hidden = !(g && g.status === 'lobby');
   if (g?.invite) $('invite').value = g.invite;

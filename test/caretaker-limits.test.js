@@ -157,3 +157,16 @@ test('call limits on the server: cooldowns per character, minutes counted from t
   const status = await app.inject({ method: 'GET', url: '/admin/status', headers: { 'x-admin-key': 'test-admin' } });
   assert.ok(status.json().players.find((x) => x.name === 'Lou').callMinutes >= 2.8);
 });
+
+test('warm-up: every fixed line is made at startup, and the host page can see it', async () => {
+  withEleven();
+  const { warmUp, voiceStatus } = await import('../src/voice/caretaker.js');
+  await warmUp();
+  const v = voiceStatus();
+  assert.equal(v.mode, 'narrator');
+  assert.equal(v.ready, v.total);
+  assert.equal(v.total, 7, 'riddle, 4 hints, sign-off, reveal');
+  const st = await app.inject({ method: 'GET', url: '/admin/status', headers: { 'x-admin-key': 'test-admin' } });
+  assert.equal(st.json().caretakerVoice.ready, 7);
+  assert.ok(!JSON.stringify(st.json().caretakerVoice).includes('narrator123'), 'only the last characters of the voice id are shown');
+});

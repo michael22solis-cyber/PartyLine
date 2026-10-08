@@ -86,3 +86,23 @@ export async function recordedCall(character, player, callIndex = 0) {
 export function prepare(character, player, callIndex = 0) {
   if (enabled()) recordedCall(character, player, callIndex).catch(() => {});
 }
+
+// Every fixed line (riddle, hints, sign-off, reveal), generated at startup so the Caretaker is in the narrator's voice
+// from the first call of the night and never has to fall back to a different voice mid-game. Names are made as rings go.
+const FIXED = () => [LINES.riddle, ...LINES.hints, LINES.fading, LINES.reveal];
+export async function warmUp() {
+  if (!enabled()) return;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const results = await Promise.allSettled(FIXED().map(clip));
+    const failed = results.filter((r) => r.status === 'rejected');
+    if (!failed.length) { console.log(`[caretaker] narrator voice ready (${results.length} lines)`); return; }
+    console.error(`[caretaker] ${failed.length} line(s) not generated yet (${failed[0].reason?.message}); attempt ${attempt} of 3`);
+    await new Promise((r) => setTimeout(r, attempt * 5000));
+  }
+}
+// For the host page: is the Caretaker on the narrator's voice, and are his lines ready?
+export function voiceStatus() {
+  if (!enabled()) return { mode: 'live', reason: env.CARETAKER_VOICE === 'live' ? 'CARETAKER_VOICE=live' : 'ElevenLabs keys not set' };
+  const lines = FIXED();
+  return { mode: 'narrator', voice: `…${String(env.ELEVENLABS_VOICE_ID).slice(-4)}`, model: model(), ready: lines.filter((t) => fs.existsSync(path.join(DIR, fileFor(t)))).length, total: lines.length };
+}

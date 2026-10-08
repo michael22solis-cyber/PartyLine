@@ -28,7 +28,7 @@ import { mintClientSecret, createSidebandCall } from './voice/realtime-api.js';
 import { attachSideband } from './voice/sideband.js';
 import { openCall, getCall, closeCall, callTranscript, callUsage, callDisclose } from './voice/calls.js';
 import { checkCall, chargeCall, resetAllowances } from './voice/allowance.js';
-import { recordedCall, servedFile as caretakerClip } from './voice/caretaker.js';
+import { recordedCall, servedFile as caretakerClip, voiceStatus as caretakerVoice } from './voice/caretaker.js';
 import { statusOf, phase } from './cast.js';
 import { SECRETS } from './secrets.js';
 
@@ -364,6 +364,7 @@ export function registerWeb(app) {
         callMinutes: Math.round((p.callSeconds || 0) / 6) / 10,
       })),
       revealed: getDb().revealed,
+      caretakerVoice: caretakerVoice(),
       game: getGame() ? { ...lobbyView(null), invite: getGame().status === 'lobby' ? `https://${PUBLIC_HOST || 'localhost:5050'}/join/${getGame().code}` : null } : null,
       tally: tallyVotes(),
       schedule: scheduled(),
