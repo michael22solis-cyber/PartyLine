@@ -46,3 +46,12 @@ export function chargeCall(token, npc, seconds, now = Date.now()) {
 }
 
 export function resetAllowances() { cooldowns.clear(); }
+
+// What the phone shows: minutes of calls left (null when unlimited) and the longest one call can run.
+export function callAllowance(player) {
+  const budget = budgetSeconds();
+  const longest = Math.min(Number(env.MAX_CALL_SECONDS || 240), 240);
+  if (!(budget > 0)) return { minutesLeft: null, minutesMax: null, maxSeconds: longest };
+  const left = secondsLeft(player);
+  return { minutesLeft: left < MIN_USEFUL_SECONDS ? 0 : Math.floor(left / 60), minutesMax: Math.round(budget / 60), maxSeconds: Math.min(longest, Math.floor(left)) };
+}

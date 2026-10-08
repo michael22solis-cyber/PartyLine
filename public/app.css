@@ -175,6 +175,35 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .tutorial-example { border: 1px solid var(--line); background: var(--panel); padding: 10px 14px; margin-bottom: 18px; }
 .tutorial-example small { font-size: 10px; letter-spacing: 0.1em; color: var(--glow); }
 .tutorial-example p { margin: 6px 0 0; font-size: 14px; line-height: 1.5; }
+/* Field-guide diagrams */
+.tv { margin: 0 0 18px; padding: 12px 14px; border: 1px solid var(--line); background: var(--panel); font-size: 12px; }
+.tv figcaption { margin-top: 10px; font-size: 11px; color: var(--dim); }
+.tv-row { display: flex; justify-content: space-between; align-items: baseline; font-family: var(--lcd); font-size: 17px; letter-spacing: 0.08em; color: var(--dim); }
+.tv-row b { font-weight: 400; color: var(--glow); }
+.tv-segs { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; margin: 6px 0 12px; }
+.tv-segs i { height: 8px; background: var(--line); }
+.tv-segs i.on { background: var(--glow); box-shadow: 0 0 6px rgba(159,224,160,0.3); }
+.tv-share { display: flex; align-items: center; gap: 8px; }
+.tv-card, .tv-chat { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; padding: 8px; border: 1px solid var(--line); background: var(--bg); }
+.tv-card small, .tv-chat small, .tv-night { font-size: 10px; letter-spacing: 0.1em; color: var(--amber); }
+.tv-card span { color: var(--dim); letter-spacing: 0.05em; }
+.tv-card b { align-self: flex-start; font-family: var(--lcd); font-size: 15px; font-weight: 400; color: var(--glow); border: 1px solid var(--glow); padding: 1px 6px; }
+.tv-bubble { align-self: flex-end; max-width: 100%; padding: 4px 7px; font-size: 11px; background: #16251c; color: var(--ink); }
+.tv-bubble.them { align-self: flex-start; background: var(--line); }
+.tv-arrow { flex: none; font-family: var(--lcd); font-size: 20px; color: var(--amber); }
+.tv-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.tv-chip { padding: 3px 8px; border: 1px solid var(--dim); font-family: var(--lcd); font-size: 16px; letter-spacing: 0.08em; color: var(--ink); }
+.tv-chip.sus { border-color: var(--ember); color: var(--ember); }
+.tv-chip.clear { border-color: var(--glow); color: var(--glow); }
+.tv-line { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 8px; }
+.tv-stop { position: relative; display: flex; flex-direction: column; gap: 3px; padding-top: 16px; }
+.tv-stop::before { content: ''; position: absolute; top: 5px; left: 0; right: 0; height: 2px; background: var(--dim); }
+.tv-stop.end::before { right: auto; width: 6px; }
+.tv-stop i { position: absolute; top: 0; left: 0; width: 12px; height: 12px; border-radius: 50%; background: var(--bg); border: 2px solid var(--glow); }
+.tv-stop.end i { border-color: var(--amber); background: var(--amber); }
+.tv-stop b { font-family: var(--lcd); font-size: 17px; font-weight: 400; color: var(--glow); }
+.tv-stop.end b { color: var(--amber); }
+.tv-stop span { font-size: 11px; line-height: 1.4; color: var(--dim); padding-right: 6px; }
 .tutorial-extra, .tutorial-return { font-size: 12px; line-height: 1.65; }
 .tutorial-extra { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 18px; }
 .tutorial-return { color: var(--amber); }
@@ -333,6 +362,9 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .convo-head .who { flex: 1; min-width: 0; }
 .callbtn { padding: 9px 12px; border: 1px solid var(--glow); color: var(--glow); font-family: var(--lcd); font-size: 18px; letter-spacing: 0.12em; }
 .callbtn:active { background: #16251c; }
+.callbox { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.callsleft { font-family: var(--lcd); font-size: 13px; letter-spacing: 0.08em; color: var(--dim); }
+.callsleft.out { color: var(--ember); }
 
 /* audio evidence */
 .player { display: flex; align-items: center; gap: 10px; margin: 6px 0 10px; }

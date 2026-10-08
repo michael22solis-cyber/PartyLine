@@ -21,57 +21,54 @@ export function tutorialStep(index, state) {
   const evidence = state.messages.some((m) => ['clue', 'memo', 'evidence'].includes(m.kind));
   const contacts = state.threads.length > 0;
   const crew = (state.peers || []).length > 0;
+  const calls = state.me.calls || { minutesLeft: 20, minutesMax: 20, maxSeconds: 240 };
   const steps = [
     {
       icon: 'messages', tag: 'BLACKWOOD MOBILE · FIELD GUIDE',
       title: TUTORIAL_TITLES[0],
       intro: 'Dana Whitlock was found dead at Blackwood Manor. Your phone is your way into the mystery.',
       points: [
-        'Read clues, question the four suspects, and compare what you learn with the other players.',
-        'Your private role card explains your goal. Keep it to yourself. You can read it again in MENU → My role.',
-        'The story unfolds over one night, about an hour. New texts, calls and evidence arrive as it goes; explore at your own pace in between.',
+        'Read clues, question the four suspects, and compare notes with the other players.',
+        'Your role card is private. Find it anytime in MENU → My role.',
+        'The story plays out over one night, about an hour.',
       ],
-      tip: 'BACK returns to the previous app. The round HOME button opens your apps. MENU has sound, calls, call captions, and alerts. You can return to this guide at any time.',
-      extra: 'To catch new messages, use MENU → Turn on alerts. On iPhone, first add Blackwood to your Home Screen. If alerts are unavailable, keep the page open during play.',
+      tip: 'BACK returns to the last app. The round HOME button opens your apps. MENU has sound, calls, captions, alerts, and this guide.',
+      extra: 'Turn on alerts in MENU so you catch new messages. On iPhone, add Blackwood to your Home Screen first.',
     },
     {
       icon: 'evidence', tag: '01 · FIND A LEAD', title: TUTORIAL_TITLES[1],
-      intro: 'Open The Line in Messages for story updates. Clues and recordings also collect in Evidence, your case file.',
+      intro: 'Story updates arrive on The Line in Messages. Clues and recordings collect in Evidence, your case file.',
       points: [
         'Read your starting clue closely. Look for a name, a time, or a detail you can ask someone about.',
-        'When a recording has a play button, tap it to listen. Its written transcript stays on the card.',
-        'The Line sends updates and private instructions; it does not accept replies.',
       ],
-      tip: evidence ? 'Your case file has arrived. Open it and choose one detail to investigate.'
-        : state.me.assigned ? 'Your role is ready. Your clue arrives when the host starts the first calls or sends the clues. Check The Line while you wait.'
-          : 'Waiting for the host is normal. Your role and first clue will arrive as the game begins. Keep your private link handy.',
+      tip: evidence ? 'Your case file has arrived. Open it and pick one detail to chase.'
+        : state.me.assigned ? 'Your role is ready. Your clue arrives when the host sends it.'
+          : 'Your role and first clue arrive when the host starts the game.',
       actions: [{ label: evidence ? 'OPEN EVIDENCE' : 'OPEN THE LINE', view: evidence ? 'evidence' : 'messages', open: evidence ? null : 'line' }],
     },
     {
       icon: 'calls', tag: '02 · ASK A QUESTION', title: TUTORIAL_TITLES[2],
-      intro: 'In Messages, choose an unlocked suspect under CONTACTS. Type a question and tap SEND.',
-      example: 'Where were you when Dana died?',
+      intro: 'Pick an unlocked suspect in Messages and text them a question, or tap ☎ CALL to talk out loud.',
+      hint: { label: 'HOW TO ASK', text: 'Start broad. Then push on whatever doesn’t add up.' },
+      visual: { type: 'calls', left: calls.minutesLeft, max: calls.minutesMax, maxSeconds: calls.maxSeconds },
       points: [
-        'Start with an open question, then ask a follow-up about a detail from your clue. Try “Who can confirm that?”',
-        'Suspects remember what the group tells them. Compare their answers and ask about contradictions.',
-        'You can also tap CALL in a suspect’s conversation and talk out loud. Calls need microphone access and last up to four minutes. Texting is always an option.',
+        'Suspects hear what the group tells them. Catch them contradicting each other.',
       ],
-      tip: contacts ? 'You have a contact ready. Choose a suspect and ask your first question.'
-        : 'No contacts yet? The first clue unlocks contacts, and more appear as names come up in conversations. Check The Line for the next update.',
+      tip: contacts ? 'You have a contact ready. Pick a suspect and ask your first question.'
+        : 'No contacts yet. Your first clue unlocks them, and more appear as names come up.',
       actions: [{ label: contacts ? 'CHOOSE A SUSPECT' : 'CHECK THE LINE', view: 'messages', open: contacts ? null : 'line' }],
-      extra: 'When the phone rings, tap ANSWER and speak. If you miss it, check Calls for the call log or a voicemail. You can always come back to this guide afterward.',
+      extra: 'When the phone rings, tap ANSWER. Missed it? Check Calls for a voicemail.',
     },
     {
       icon: 'messages', tag: '03 · PUT THE PIECES TOGETHER', title: TUTORIAL_TITLES[3],
-      intro: 'Players receive different clues. The Crew is the group chat at the top of Messages.',
+      intro: 'The Crew is your group chat. Share what you find and compare stories.',
+      visual: { type: 'share' },
       points: [
-        'On a clue, evidence card, or recording, tap ↗ SHARE, then choose The Crew or one player. They receive a copy of the card.',
-        'Ask the crew what they found and compare times and stories. Use a player’s private chat for a one-to-one conversation.',
-        'One player may have a different goal. Check claims against the evidence, and keep your role and private instructions to yourself.',
+        'One of you may be lying. Trust the evidence.',
       ],
-      tip: !crew ? 'You are the only player on the line so far. Sharing buttons appear when another player joins.'
-        : !evidence ? 'The crew is here. Say hello while you wait for a clue to share.'
-          : 'Open Evidence to share a card, then visit The Crew to compare what everyone knows.',
+      tip: !crew ? 'You’re the only player here so far. Sharing turns on when someone joins.'
+        : !evidence ? 'The crew is here. Say hello while you wait for a clue.'
+          : 'Share a card from Evidence, then compare in The Crew.',
       actions: [
         { label: 'OPEN THE CREW', view: 'messages', open: 'crew' },
         ...(evidence && crew ? [{ label: 'FIND A CARD TO SHARE', view: 'evidence' }] : []),
@@ -79,29 +76,24 @@ export function tutorialStep(index, state) {
     },
     {
       icon: 'notes', tag: '04 · FOLLOW THE THREAD', title: TUTORIAL_TITLES[4],
-      intro: 'Use Notes to keep a timeline and remember what you want to ask next.',
-      points: [
-        'Write one fact you learned and one question you still have. Your notes save as you type.',
-        'Tap a name on the suspect board to cycle through ?, SUSPICIOUS, and CLEARED. These are your own working theories.',
-        'Notes stay private from the group.',
-      ],
-      tip: 'Stuck? Re-read a clue or recording, compare it with an answer, and ask one specific follow-up. New story updates arrive from the host; you do not need to find everything at once.',
+      intro: 'Jot down facts and open questions. Notes stay private from the group.',
+      visual: { type: 'board' },
+      points: [],
+      tip: 'Stuck? Re-read a clue and ask one sharp follow-up.',
       actions: [{ label: 'OPEN NOTES', view: 'notes' }],
     },
     {
       icon: state.revealed ? 'recap' : 'vote', tag: '05 · FINISH THE CASE', title: TUTORIAL_TITLES[5],
-      intro: state.revealed ? 'The reveal has arrived. Open The End to see the result and your personal recap.'
-        : 'When you are ready, open Vote to name the killer and the player you think is the accomplice.',
+      intro: state.revealed ? 'The reveal has arrived. Open The End to see the result and your recap.'
+        : 'Name the killer and their accomplice, then tap LOCK IN VOTE.',
+      visual: state.revealed ? null : { type: 'timeline' },
       points: [
-        'Choose a suspect, choose an accomplice from the other players, then tap LOCK IN VOTE. Watch for “Your vote” to confirm it saved.',
-        'You can update a saved vote until voting closes. The game’s deadline is 11:30 pm on Night 2; watch The Line for the host’s reminders.',
-        'At the final call, The End unlocks with the result, your score, and the secrets you found.',
+        'At the reveal, see the result, your score, and the secrets you found.',
       ],
       tip: state.revealed ? 'Your case is closed. The End is ready to open.'
-        : state.vote ? 'You already have a saved vote. Review it as new evidence arrives.'
-          : 'Opening Vote lets you review the choices. Your vote is sent only when you tap LOCK IN VOTE.',
+        : state.vote ? 'You have a saved vote. Change it as new evidence arrives.'
+          : 'Opening Vote is safe. Nothing is sent until you tap LOCK IN VOTE.',
       actions: [{ label: state.revealed ? 'OPEN THE END' : 'REVIEW VOTING', view: state.revealed ? 'recap' : 'vote' }],
-      extra: 'Your investigation loop: read a clue → ask a question → compare answers → update your notes. Then make your final vote.',
     },
   ];
   return steps[index];

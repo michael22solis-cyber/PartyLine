@@ -27,7 +27,7 @@ import { callTiming, openingItem, realtimeModel } from './voice/session.js';
 import { mintClientSecret, createSidebandCall } from './voice/realtime-api.js';
 import { attachSideband } from './voice/sideband.js';
 import { openCall, getCall, closeCall, callTranscript, callUsage, callDisclose } from './voice/calls.js';
-import { checkCall, chargeCall, resetAllowances } from './voice/allowance.js';
+import { checkCall, chargeCall, resetAllowances, callAllowance } from './voice/allowance.js';
 import { recordedCall, servedFile as caretakerClip, voiceStatus as caretakerVoice } from './voice/caretaker.js';
 import { statusOf, phase } from './cast.js';
 import { SECRETS } from './secrets.js';
@@ -93,8 +93,13 @@ export function registerWeb(app) {
   app.get('/api/p/:token/state', (req, reply) => {
     const p = requirePlayer(req, reply); if (!p) return;
     reply.send({
-      me: { pid: p.pid, name: p.name, role: p.role, assigned: Boolean(p.clue), callsOff: p.callsOff, hasPhone: Boolean(p.phone),
-        found: (p.found || []).length, totalSecrets: SECRETS.length },
+      me: {
+        pid: p.pid, name: p.name, role: p.role, assigned: Boolean(p.clue), callsOff: p.callsOff, hasPhone: Boolean(p.phone),
+        found: (p.found || []).length, totalSecrets: SECRETS.length,
+        // Call allowance for the guide and the CALL button: minutes of calls left tonight (see voice/allowance.js;
+        // null = unlimited) and the longest a single call can run.
+        calls: callAllowance(p),
+      },
       phase: phase(),
       threads: TEXTABLE.filter((t) => unlockedFor(p).includes(t.key)).map((t) => ({ ...t, status: statusOf(t.key) })),
       ringing: pendingRing(p.token) ? { character: pendingRing(p.token).character } : null,

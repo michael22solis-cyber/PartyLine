@@ -389,6 +389,40 @@ function renderTutorialPrompt() {
   prompt.append(text, back);
 }
 
+// Small diagrams that replace paragraphs of instructions in the field guide.
+function tutorialVisual(v) {
+  const fig = el('figure', `tv tv-${v.type}`);
+  if (v.type === 'calls') {
+    const segs = 10;
+    const lit = v.max == null ? segs : v.max ? Math.ceil((v.left / v.max) * segs) : 0;
+    const bar = el('div', 'tv-segs');
+    for (let i = 0; i < segs; i++) bar.append(el('i', i < lit ? 'on' : ''));
+    const row = (label, value) => { const r = el('div', 'tv-row'); r.append(el('span', null, label), el('b', null, value)); return r; };
+    fig.append(row('☎ CALL TIME LEFT', v.max == null ? 'UNLIMITED' : `${v.left} / ${v.max} MIN`), bar, row('⏱ EACH CALL', `UP TO ${fmtSec(v.maxSeconds)}`),
+      el('figcaption', null, 'Out of call time? Texting always works.'));
+  } else if (v.type === 'share') {
+    const card = el('div', 'tv-card'); card.append(el('small', null, 'CLUE'), el('span', null, '▤ ▤▤▤ ▤▤'), el('b', null, '↗ SHARE'));
+    const chat = el('div', 'tv-chat'); chat.append(el('small', null, 'THE CREW'), el('span', 'tv-bubble', '↗ shared a clue'), el('span', 'tv-bubble them', 'that time is wrong…'));
+    fig.append(card, el('span', 'tv-arrow', '→'), chat);
+  } else if (v.type === 'board') {
+    const chips = el('div', 'tv-chips');
+    [['?', ''], ['SUSPICIOUS', 'sus'], ['CLEARED', 'clear']].forEach(([label, cls], i) => {
+      if (i) chips.append(el('span', 'tv-arrow', '→'));
+      chips.append(el('span', `tv-chip ${cls}`, label));
+    });
+    fig.append(chips, el('figcaption', null, 'Tap a name on the suspect board to mark your theory.'));
+  } else if (v.type === 'timeline') {
+    const line = el('div', 'tv-line');
+    [['NOW', 'Vote or change it'], ['VOTES OPEN', 'The Line tells you'], ['FINAL CALL', 'The reveal']].forEach(([when, what], i) => {
+      const stop = el('div', `tv-stop${i === 2 ? ' end' : ''}`);
+      stop.append(el('i'), el('b', null, when), el('span', null, what));
+      line.append(stop);
+    });
+    fig.append(el('small', 'tv-night', 'TONIGHT'), line);
+  }
+  return fig;
+}
+
 function renderTutorial(screen) {
   const step = tutorialStep(tutorial.step, state);
   const box = el('article', 'tutorial');
@@ -406,16 +440,20 @@ function renderTutorial(screen) {
   });
   const title = el('h1', null, step.title); title.tabIndex = -1;
   box.append(header, progress, el('div', 'tutorial-tag', step.tag), title, el('p', 'tutorial-intro', step.intro));
-  if (step.example) {
-    const example = el('div', 'tutorial-example');
-    example.append(el('small', null, 'TRY ASKING'), el('p', null, `“${step.example}”`));
-    box.append(example);
+  if (step.hint) {
+    const hint = el('div', 'tutorial-example');
+    hint.append(el('small', null, step.hint.label), el('p', null, step.hint.text));
+    box.append(hint);
   }
-  const points = el('ul', 'tutorial-points');
-  step.points.forEach((text) => points.append(el('li', null, text)));
+  if (step.visual) box.append(tutorialVisual(step.visual));
+  if (step.points.length) {
+    const points = el('ul', 'tutorial-points');
+    step.points.forEach((text) => points.append(el('li', null, text)));
+    box.append(points);
+  }
   const tip = el('div', 'tutorial-tip');
   tip.append(el('b', null, 'YOUR NEXT MOVE'), el('p', null, step.tip));
-  box.append(points, tip);
+  box.append(tip);
   (step.actions || []).forEach((action, i) => {
     const button = el('button', i === 0 ? 'wide' : 'wide ghost', action.label);
     button.onclick = () => go(action.view, action.open);
@@ -631,7 +669,14 @@ function renderConvo(screen, thread) {
   if (!READONLY[thread] && !isPeerThread(thread)) {
     const call = el('button', 'callbtn', '☎ CALL');
     call.onclick = () => startCall(thread);
-    head.append(call);
+    const calls = state.me?.calls;
+    if (calls) {
+      const box = el('div', 'callbox');
+      const out = calls.minutesLeft === 0;
+      box.append(call, el('div', `callsleft${out ? ' out' : ''}`, out ? 'NO CALL TIME LEFT'
+        : calls.minutesLeft == null ? `UP TO ${fmtSec(calls.maxSeconds)}` : `${calls.minutesLeft} MIN LEFT · ${fmtSec(calls.maxSeconds)} MAX`));
+      head.append(box);
+    } else head.append(call);
   }
 
   const wrap = el('div', 'bubbles');
@@ -990,7 +1035,7 @@ function startClock(maxSeconds, onTick) {
   call.timer = setInterval(() => {
     if (!call) return;
     const secs = (Date.now() - call.started) / 1000;
-    $('#callTime').textContent = fmtSec(secs);
+    $('#callTime').textContent = `${fmtSec(Math.max(0, maxSeconds - secs))} LEFT`;
     onTick?.();
     if (secs > maxSeconds) endCall('max_duration');
   }, 500);
@@ -1161,7 +1206,8 @@ function endCall(reason = 'player_hung_up') {
   audio.pause(); audio.onended = null; audio.onloadedmetadata = null; audio.srcObject = null; audio.removeAttribute('src'); audio.muted = false;
   showCallEnded(c, reason);
   if (c.started || c.callId) {
-    api('/call/end', { method: 'POST', body: JSON.stringify({ callId: c.callId, character: c.character, mode: c.mode, reason, seconds: c.started ? (Date.now() - c.started) / 1000 : 0 }) }).catch(() => {});
+    api('/call/end', { method: 'POST', body: JSON.stringify({ callId: c.callId, character: c.character, mode: c.mode, reason, seconds: c.started ? (Date.now() - c.started) / 1000 : 0 }) })
+      .then(() => refresh()).catch(() => {}); // refresh: the call-time meter
   }
   sfx.creak();
 }

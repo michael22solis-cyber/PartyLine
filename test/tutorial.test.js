@@ -22,7 +22,7 @@ test('paused and finished tutorials survive a reload', () => {
 
 test('a player waiting for the host gets a reachable next move', () => {
   const game = waiting();
-  assert.match(tutorialStep(1, game).tip, /Waiting for the host/);
+  assert.match(tutorialStep(1, game).tip, /host starts the game/);
   assert.equal(tutorialStep(1, game).actions[0].open, 'line');
   assert.equal(tutorialStep(2, game).actions[0].open, 'line');
   game.me.assigned = true;
