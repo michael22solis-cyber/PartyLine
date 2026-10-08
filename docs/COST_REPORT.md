@@ -235,6 +235,7 @@ Rollback switches (env only; no code change):
 | Caretaker in the ElevenLabs narrator voice | `CARETAKER_VOICE=live` (or leave the ElevenLabs keys unset) |
 | Call minutes per player / cooldowns | `CALL_MINUTES_PER_PLAYER=0`, `CALL_COOLDOWN_MINUTES=0` |
 | Phone-line sound | players switch it off in the ⋮ menu |
+| Background music | `MUSIC=off` (players can also switch it off in the ⋮ menu) |
 | Usage ledger | `USAGE_LEDGER=off` |
 | Everything | `git revert` the branch's commit |
 

@@ -206,6 +206,7 @@ function goBack() {
 // ============ rendering ============
 let lastKey = '';
 function render() {
+  setTimeout(() => music.sync(), 0);
   const screen = $('#screen');
   const key = `${state.view}:${state.open || ''}`;
   const keepScroll = key === lastKey ? screen.scrollTop : 0;
@@ -917,10 +918,10 @@ function showRing(sub, note, { id = 'UNKNOWN', answer = null } = {}) {
   $('#ringId').textContent = id; $('#ringSub').textContent = sub; $('#ringNote').textContent = note;
   $('#ringAnswer').hidden = !answer;
   $('#ringDismiss').textContent = answer ? 'DECLINE' : 'DISMISS';
-  $('#ring').hidden = false; sfx.ring();
+  $('#ring').hidden = false; sfx.ring(); music.sync();
   clearTimeout(ringTimeout); ringTimeout = setTimeout(hideRing, 40_000);
 }
-function hideRing() { $('#ring').hidden = true; sfx.stopRing(); clearTimeout(ringTimeout); ringFor = null; setFace($('#ringFace'), null); }
+function hideRing() { $('#ring').hidden = true; sfx.stopRing(); clearTimeout(ringTimeout); ringFor = null; setFace($('#ringFace'), null); setTimeout(() => music.sync(), 0); }
 $('#ringDismiss').onclick = hideRing;
 $('#ringAnswer').onclick = () => { const c = ringFor; hideRing(); if (c) startCall(c); };
 function incoming({ character, from }) {
@@ -1041,6 +1042,85 @@ function startClock(maxSeconds, onTick) {
     if (secs > maxSeconds) endCall('max_duration');
   }, 500);
 }
+// ============ background music (ElevenLabs tracks, ⋮ menu) ============
+// One track per stretch of the night, each stranger than the last (src/music.js). The phone crossfades to the next one
+// as the story moves, and warps it more as it goes: slower and lower, a wobbling tape, the line cutting out. It goes
+// quiet for calls, rings, the intro and recordings, and when the phone is put away.
+const musicOn = () => store.get('bw-music', '1') === '1' && store.get('bw-sound', '1') !== '0';
+const MUSIC_ORDER = ['early', 'late', 'deep', 'final', 'after'];
+const TRACK_OF = { before: 'early', early: 'early', late: 'late', deep: 'deep', final: 'final', after: 'after' };
+const WEIRD = { // playback rate, tape wobble depth, chance of the sound cutting out (per check)
+  early: { rate: 1, wobble: 0, drop: 0 }, late: { rate: 0.97, wobble: 0.004, drop: 0 },
+  deep: { rate: 0.93, wobble: 0.012, drop: 0.25 }, final: { rate: 0.9, wobble: 0.02, drop: 0.4 }, after: { rate: 0.86, wobble: 0, drop: 0 },
+};
+const MUSIC_VOL = 0.22;
+const music = (() => {
+  const buffers = new Map();
+  let cur = null; let busy = false; let dropTimer = null;
+  const load = (url, ctx) => {
+    if (!buffers.has(url)) buffers.set(url, fetch(url).then((r) => r.arrayBuffer()).then((b) => ctx.decodeAudioData(b)).catch((e) => { buffers.delete(url); throw e; }));
+    return buffers.get(url);
+  };
+  function wanted() {
+    const tracks = state.music || {};
+    let i = MUSIC_ORDER.indexOf(TRACK_OF[state.phase] || 'early');
+    while (i >= 0 && !tracks[MUSIC_ORDER[i]]) i -= 1; // not composed yet: keep the latest one that is
+    return i >= 0 ? { name: MUSIC_ORDER[i], url: tracks[MUSIC_ORDER[i]] } : null;
+  }
+  const shouldPlay = () => musicOn() && !call && $('#ring').hidden && $('#power').hidden && $('#intro').hidden && !document.hidden && audioEl.paused;
+  function fadeOut(t, secs = 1.2) {
+    if (!t) return;
+    const ctx = t.gain.context;
+    t.gain.gain.cancelScheduledValues(ctx.currentTime);
+    t.gain.gain.setTargetAtTime(0, ctx.currentTime, secs / 4);
+    setTimeout(() => { try { t.src.stop(); t.lfo?.stop(); } catch { /* stopped */ } t.gain.disconnect(); }, secs * 1000 + 200);
+  }
+  function dropouts(t, chance) {
+    clearInterval(dropTimer);
+    if (!chance) return;
+    dropTimer = setInterval(() => { // the line cuts out for a moment
+      if (cur !== t || Math.random() > chance) return;
+      const g = t.gain.gain; const now = t.gain.context.currentTime;
+      g.cancelScheduledValues(now); g.setValueAtTime(MUSIC_VOL * 0.08, now); g.setValueAtTime(MUSIC_VOL, now + 0.15 + Math.random() * 0.5);
+    }, 7000);
+  }
+  async function sync() {
+    document.body.dataset.music = cur && shouldPlay() ? cur.name : '';
+    if (busy) return;
+    if (!shouldPlay()) { if (cur) { fadeOut(cur); cur = null; clearInterval(dropTimer); } return; }
+    const want = wanted();
+    if (!want) return;
+    if (cur?.url === want.url) return;
+    const ctx = sfx.unlock(); if (!ctx || ctx.state !== 'running') return; // waits for a first tap
+    busy = true;
+    try {
+      const buf = await load(want.url, ctx);
+      if (!shouldPlay()) return;
+      const w = WEIRD[want.name] || WEIRD.early;
+      const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true; src.playbackRate.value = w.rate;
+      const gain = ctx.createGain(); gain.gain.value = 0;
+      src.connect(gain).connect(ctx.destination);
+      let lfo = null;
+      if (w.wobble) { // warped tape: the pitch drifts slowly up and down
+        lfo = ctx.createOscillator(); lfo.frequency.value = 0.23;
+        const depth = ctx.createGain(); depth.gain.value = w.wobble;
+        lfo.connect(depth).connect(src.playbackRate); lfo.start();
+      }
+      src.start(0, Math.random() * Math.max(0, buf.duration - 5));
+      gain.gain.setTargetAtTime(MUSIC_VOL, ctx.currentTime, 1);
+      fadeOut(cur, 3);
+      cur = { name: want.name, url: want.url, src, gain, lfo };
+      dropouts(cur, w.drop);
+    } catch { /* no music this time; try again later */ } finally { busy = false; }
+    document.body.dataset.music = cur && shouldPlay() ? cur.name : '';
+  }
+  return { sync };
+})();
+setInterval(() => music.sync(), 4000);
+document.addEventListener('visibilitychange', () => music.sync());
+['play', 'pause', 'ended'].forEach((ev) => audioEl.addEventListener(ev, () => music.sync()));
+addEventListener('pointerdown', () => setTimeout(() => music.sync(), 50));
+
 // ============ phone-line sound (on by default, ⋮ menu) ============
 // The character's voice goes through a telephone band (about 300-3,400 Hz) with a faint line hiss, like a real call
 // on an old landline, instead of studio-clean audio. If the browser can't do it, the voice plays unprocessed.
@@ -1123,6 +1203,7 @@ async function startCall(character) {
   hideRing(); // however the call starts (ANSWER, CALL, call back), nothing keeps ringing underneath it
   sfx.unlock();
   call = { character, started: 0, timer: null };
+  music.sync(); // quiet for the call
   callScreen(character);
   const audio = $('#callAudio');
   audio.play().catch(() => {}); // unlock playback inside the tap
@@ -1198,6 +1279,7 @@ async function startCall(character) {
 function endCall(reason = 'player_hung_up') {
   if (!call) return;
   const c = call; call = null;
+  setTimeout(() => music.sync(), 1500); // the music creeps back after the call
   clearInterval(c.timer); cancelAnimationFrame(meterRaf); $('#callScreen').style.setProperty('--lvl', '0');
   captions.stop();
   c.ctl?.end(reason); // saves what was heard so far and reports any outstanding usage
@@ -1349,12 +1431,14 @@ function setupMenu() {
     $('#soundToggle').checked = store.get('bw-sound', '1') !== '0';
     $('#captionsToggle').checked = captionsOn();
     $('#phoneLineToggle').checked = phoneLineOn();
+    $('#musicToggle').checked = store.get('bw-music', '1') === '1';
     menu.showModal();
   };
   $('#closeMenu').onclick = () => menu.close();
   $('#soundToggle').onchange = (e) => store.set('bw-sound', e.target.checked ? '1' : '0');
   $('#captionsToggle').onchange = (e) => store.set('bw-captions', e.target.checked ? '1' : '0');
   $('#phoneLineToggle').onchange = (e) => store.set('bw-phoneline', e.target.checked ? '1' : '0');
+  $('#musicToggle').onchange = (e) => { store.set('bw-music', e.target.checked ? '1' : '0'); music.sync(); };
   $('#callsToggle').onchange = async (e) => {
     try {
       const r = await api('/settings', { method: 'POST', body: JSON.stringify({ callsOff: !e.target.checked }) });
@@ -1522,7 +1606,7 @@ async function refresh() {
     fresh.messages.filter((m) => !known.has(m.id)).forEach((m) => state.messages.push(m));
     Object.assign(state.me, fresh.me);
     state.threads = fresh.threads;
-    state.phase = fresh.phase;
+    state.phase = fresh.phase; state.music = fresh.music;
     state.revealed = fresh.revealed; state.vote = fresh.vote; state.players = fresh.players; state.peers = fresh.peers; state.groups = fresh.groups; state.lobby = fresh.lobby;
     if (state.revealed && !state.recap) loadRecap();
     render();

@@ -13,13 +13,14 @@ const mock = await startMockOpenAI();
 process.env.OPENAI_BASE_URL = mock.url;
 
 // A stand-in for ElevenLabs text-to-speech.
-const eleven = { requests: [], fail: false };
+const eleven = { requests: [], fail: false, noMusic: false };
 const elevenServer = http.createServer((req, res) => {
   let body = '';
   req.on('data', (d) => { body += d; });
   req.on('end', () => {
     eleven.requests.push({ url: req.url, key: req.headers['xi-api-key'], body: JSON.parse(body || '{}') });
     if (eleven.fail) { res.writeHead(500); res.end('nope'); return; }
+    if (eleven.noMusic && req.url.startsWith('/v1/music')) { res.writeHead(402); res.end('upgrade'); return; }
     res.writeHead(200, { 'Content-Type': 'audio/mpeg' });
     res.end(Buffer.from('ID3fake-mp3-bytes'));
   });
@@ -169,4 +170,26 @@ test('warm-up: every fixed line is made at startup, and the host page can see it
   const st = await app.inject({ method: 'GET', url: '/admin/status', headers: { 'x-admin-key': 'test-admin' } });
   assert.equal(st.json().caretakerVoice.ready, 7);
   assert.ok(!JSON.stringify(st.json().caretakerVoice).includes('narrator123'), 'only the last characters of the voice id are shown');
+});
+
+test('music: five tracks composed once by ElevenLabs Music, each creepier, served to the phone by phase', async () => {
+  withEleven();
+  const music = await import('../src/music.js');
+  const n0 = eleven.requests.length;
+  await music.warmUp();
+  const made = eleven.requests.slice(n0);
+  assert.equal(made.length, 5);
+  assert.ok(made.every((r) => r.url.startsWith('/v1/music') && r.body.force_instrumental === true && r.body.music_length_ms === 60000));
+  assert.match(made[0].body.prompt, /music box/);
+  assert.match(made[3].body.prompt, /dread/i, 'the final stretch is the most tense');
+  await music.warmUp();
+  assert.equal(eleven.requests.length, n0 + 5, 'made once, then reused');
+  const p = addPlayer({ name: 'Mo' });
+  const st = (await app.inject({ method: 'GET', url: `/api/p/${p.token}/state` })).json();
+  assert.deepEqual(Object.keys(st.music), ['early', 'late', 'deep', 'final', 'after']);
+  const file = await app.inject({ method: 'GET', url: st.music.deep });
+  assert.equal(file.statusCode, 200);
+  assert.equal(file.headers['content-type'], 'audio/mpeg');
+  const admin = (await app.inject({ method: 'GET', url: '/admin/status', headers: { 'x-admin-key': 'test-admin' } })).json();
+  assert.deepEqual(admin.music, { mode: 'on', ready: 5, total: 5 });
 });

@@ -30,6 +30,7 @@ import { openCall, getCall, closeCall, callTranscript, callUsage, callDisclose }
 import { checkCall, chargeCall, resetAllowances, callAllowance } from './voice/allowance.js';
 import { recordedCall, servedFile as caretakerClip, voiceStatus as caretakerVoice } from './voice/caretaker.js';
 import { statusOf, phase } from './cast.js';
+import { trackUrls, servedFile as musicFile, musicStatus } from './music.js';
 import { SECRETS } from './secrets.js';
 
 const {
@@ -101,6 +102,7 @@ export function registerWeb(app) {
         calls: callAllowance(p),
       },
       phase: phase(),
+      music: trackUrls(), // background tracks, one per stretch of the night (see music.js)
       threads: TEXTABLE.filter((t) => unlockedFor(p).includes(t.key)).map((t) => ({ ...t, status: statusOf(t.key) })),
       ringing: pendingRing(p.token) ? { character: pendingRing(p.token).character } : null,
       messages: messagesFor(p.token),
@@ -166,6 +168,12 @@ export function registerWeb(app) {
   app.get('/assets/shared/call-controller.js', (_req, reply) => {
     reply.type('application/javascript').header('Cache-Control', 'no-cache')
       .send(fs.readFileSync(path.join(SHARED_DIR, 'call-controller.js'), 'utf8'));
+  });
+  // Background music (generated once by ElevenLabs, cached on the data volume).
+  app.get('/assets/music/:file', (req, reply) => {
+    const file = musicFile(req.params.file);
+    if (!file) return reply.code(404).send({ error: 'Not found' });
+    reply.type('audio/mpeg').header('Cache-Control', 'public, max-age=31536000, immutable').send(fs.createReadStream(file));
   });
   // The Caretaker's generated lines (cached on the data volume; file names are content hashes).
   app.get('/assets/voice/:file', (req, reply) => {
@@ -370,6 +378,7 @@ export function registerWeb(app) {
       })),
       revealed: getDb().revealed,
       caretakerVoice: caretakerVoice(),
+      music: musicStatus(),
       game: getGame() ? { ...lobbyView(null), invite: getGame().status === 'lobby' ? `https://${PUBLIC_HOST || 'localhost:5050'}/join/${getGame().code}` : null } : null,
       tally: tallyVotes(),
       schedule: scheduled(),

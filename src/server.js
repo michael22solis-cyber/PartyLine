@@ -4,6 +4,7 @@ import 'dotenv/config';
 import './env.js';
 import { pathToFileURL } from 'node:url';
 import { warmUp as warmCaretaker } from './voice/caretaker.js';
+import { warmUp as warmMusic } from './music.js';
 import Fastify from 'fastify';
 import fastifyWs from '@fastify/websocket';
 import fastifyFormBody from '@fastify/formbody';
@@ -44,6 +45,8 @@ if (isMain) {
   app.listen({ port: Number(PORT), host: '0.0.0.0' }).then(() => {
     console.log(`Blackwood Line server listening on :${PORT} (voice model ${realtimeModel()}, text model ${process.env.OPENAI_TEXT_MODEL || 'gpt-4.1-mini'})`);
     if (!PUBLIC_HOST) console.warn('PUBLIC_HOST is not set; Twilio will not be able to reach the media stream.');
-    warmCaretaker().catch((e) => console.error('[caretaker] warm-up failed:', e.message));
+    // ElevenLabs: the Caretaker's lines first (needed from the first call), then the background music.
+    warmCaretaker().catch((e) => console.error('[caretaker] warm-up failed:', e.message))
+      .then(() => warmMusic()).catch((e) => console.error('[music] warm-up failed:', e.message));
   });
 }
