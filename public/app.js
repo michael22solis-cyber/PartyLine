@@ -33,9 +33,35 @@ let tutorial = readTutorialProgress(store.get(tutorialKey));
 const saveTutorial = () => store.set(tutorialKey, JSON.stringify(tutorial));
 
 const READONLY = { line: 'The Line', unknown: 'UNKNOWN' };
+
+// ============ the cast's faces (public/cast/) ============
+const CAST = { ruth: 'Ruth Calloway', marcus: 'Marcus Vane', lily: 'Lily Blackwood', teddy: 'Teddy Fisk' };
+const KEY_OF_NAME = Object.fromEntries(Object.entries(CAST).map(([k, n]) => [n.toUpperCase(), k]));
+const faceKey = (k) => (CAST[k] ? k : String(k || '').startsWith('caretaker') ? 'caretaker' : null);
+const keyOfName = (name) => KEY_OF_NAME[String(name || '').trim().toUpperCase()] || (/BLACKWOOD MANOR|UNKNOWN/i.test(name || '') ? 'caretaker' : null);
+function avatar(key, initial = '') {
+  const k = faceKey(key);
+  const a = el('span', `avatar ${k ? `av-${k}` : 'av-none'}`);
+  if (k && k !== 'caretaker') {
+    const img = el('img'); img.src = `/assets/cast/${k}-sm.jpg`; img.alt = ''; img.loading = 'lazy'; img.decoding = 'async';
+    a.append(img);
+  } else if (!k && initial) a.textContent = initial.slice(0, 1).toUpperCase();
+  return a;
+}
+// Online / last seen, from when they last wrote to you.
+function presence(thread) {
+  const last = [...state.messages].reverse().find((m) => m.thread === thread && m.from === 'character');
+  if (!last) return '';
+  const mins = (Date.now() - new Date(last.at)) / 60000;
+  if (mins < 5) return 'online';
+  if (mins < 60) return `last seen ${Math.round(mins)}m ago`;
+  if (mins < 24 * 60) return `last seen ${Math.round(mins / 60)}h ago`;
+  return 'last seen a while ago';
+}
+const statusOf = (thread) => state.threads.find((t) => t.key === thread)?.status || '';
 const EVIDENCE_KINDS = new Set(['clue', 'memo', 'evidence', 'reveal']);
 const CALL_KINDS = new Set(['call', 'calllog', 'missed', 'voicemail']);
-const SHARE_KINDS = new Set(['clue', 'evidence', 'memo', 'voicemail']);
+const SHARE_KINDS = new Set(['clue', 'evidence', 'memo', 'voicemail', 'photo']);
 
 // Start a group chat with any mix of players and suspects you have numbers for.
 function openNewGroup() {
@@ -393,13 +419,14 @@ function lastOf(thread) {
 const preview = (m) =>
   ((m.from === 'peer' || (m.from === 'character' && m.sender)) && !m.thread.startsWith('dm:') && m.sender ? `${m.sender.split(' ')[0]}: ` : '') +
   (m.forwarded ? '↗ shared ' : '') +
-  (m.kind === 'secret' ? 'Open this alone.' : m.kind === 'memo' ? '▶ Voice memo' : m.kind === 'voicemail' ? '▶ Voicemail'
+  (m.kind === 'secret' ? 'Open this alone.' : m.kind === 'memo' ? '▶ Voice memo' : m.kind === 'voicemail' ? '▶ Voicemail' : m.kind === 'photo' ? '📷 Photo'
     : m.text.replace(/\s+/g, ' '));
 
 function threadRow(thread, extraClass = '') {
   const li = el('li', unread(thread) ? 'unread' : '');
   const b = el('button');
   const last = lastOf(thread);
+  if (CAST[thread] || thread.startsWith('dm:')) { b.classList.add('has-av'); b.append(avatar(thread, titleOf(thread))); }
   b.append(
     el('span', `name ${extraClass}`, titleOf(thread)),
     el('span', 'time', last ? fmtTime(last.at) : ''),
@@ -449,8 +476,10 @@ function renderCalls(screen) {
     calls.forEach((m) => {
       if (m.kind === 'voicemail') { const li = el('li', 'vm-row'); li.append(messageNode(m)); ul.append(li); return; }
       const li = el('li', `call-row ${m.kind}`);
-      const b = el('button'); b.disabled = true;
+      const b = el('button', 'has-av'); b.disabled = true;
       const label = { call: '☎ incoming · real phone', calllog: '☎ call', missed: '✕ missed' }[m.kind];
+      const who = m.kind === 'missed' ? m.text.replace(/^Missed call: /, '') : m.kind === 'calllog' ? m.text.split(' · ')[0] : 'BLACKWOOD MANOR';
+      b.append(avatar(m.npc || keyOfName(who)));
       b.append(el('span', 'name', m.kind === 'missed' ? m.text.replace(/^Missed call: /, '') : m.kind === 'calllog' ? m.text.split(' · ')[0] : 'BLACKWOOD MANOR'),
         el('span', 'time', fmtTime(m.at)), el('span', 'preview', m.kind === 'calllog' ? `${label} · ${m.text.split(' · ')[1] || ''}` : label));
       li.append(b); ul.append(li);
@@ -461,8 +490,8 @@ function renderCalls(screen) {
     screen.append(el('div', 'section-label', 'CALL SOMEONE'));
     const ul2 = el('ul', 'list');
     state.threads.forEach((t) => {
-      const li = el('li'); const b = el('button');
-      b.append(el('span', 'name', t.name), el('span', 'time', '☎'), el('span', 'preview', t.tagline));
+      const li = el('li'); const b = el('button', 'has-av');
+      b.append(avatar(t.key), el('span', 'name', t.name), el('span', 'time', '☎'), el('span', 'preview', [t.tagline, t.status].filter(Boolean).join(' · ')));
       b.onclick = () => startCall(t.key);
       li.append(b); ul2.append(li);
     });
@@ -504,7 +533,14 @@ function audioPlayer(m) {
 
 function messageNode(m) {
   let node;
-  if (m.kind === 'secret') {
+  if (m.kind === 'photo') {
+    const who = m.from === 'player' ? 'me' : m.from === 'peer' ? 'them peer' : 'them';
+    node = el('div', `bubble ${who} photo`);
+    const img = el('img'); img.src = m.image; img.alt = m.text || 'Photo'; img.loading = 'lazy';
+    img.onclick = (e) => { e.stopPropagation(); openLightbox({ image: m.image, caption: m.text }); };
+    node.append(img);
+    if (m.text) node.append(el('span', 'cap', m.text));
+  } else if (m.kind === 'secret') {
     node = el('div', 'secret');
     node.append(el('span', 'tag', 'FOR YOUR EYES ONLY'), el('div', 'body', m.text), el('div', 'hint', 'Make sure no one is looking, then tap to read.'));
     node.onclick = () => { node.classList.add('open'); sfx.creak(); };
@@ -523,6 +559,7 @@ function messageNode(m) {
   } else if (m.kind === 'voicemail') {
     node = el('div', 'card voicemail');
     node.append(el('span', 'tag', 'VOICEMAIL'));
+    if (CAST[m.npc]) { const h = el('div', 'vm-head'); h.append(avatar(m.npc), el('b', null, CAST[m.npc].toUpperCase())); node.append(h); }
     if (m.audio) node.append(audioPlayer(m));
     node.append(document.createTextNode(m.text));
   } else if (m.kind === 'contact') {
@@ -554,7 +591,18 @@ function messageNode(m) {
 function renderConvo(screen, thread) {
   const head = el('div', 'convo-head');
   const info = el('div', 'who');
-  info.append(el('div', 'to', READONLY[thread] ? 'FROM' : 'TO'), el('div', 'title', titleOf(thread)), el('div', 'sub', subOf(thread)));
+  const sub = el('div', 'sub');
+  if (CAST[thread]) {
+    // What they're up to (follows the story) and when they were last on their phone.
+    const st = statusOf(thread);
+    const seen = presence(thread);
+    sub.append(el('span', /LIVE/.test(st) ? 'live' : null, st || subOf(thread)));
+    if (seen) sub.append(' · ', el('span', seen === 'online' ? 'on' : null, seen));
+    const face = avatar(thread);
+    face.onclick = () => openLightbox({ video: `/assets/cast/${thread}.mp4`, poster: `/assets/cast/${thread}.jpg`, caption: `${CAST[thread]} · ${subOf(thread)}` });
+    head.append(face);
+  } else sub.textContent = subOf(thread);
+  info.append(el('div', 'to', READONLY[thread] ? 'FROM' : 'TO'), el('div', 'title', titleOf(thread)), sub);
   head.append(info);
   if (!READONLY[thread] && !isPeerThread(thread)) {
     const call = el('button', 'callbtn', '☎ CALL');
@@ -633,7 +681,7 @@ function renderConvo(screen, thread) {
 function renderEvidence(screen) {
   markSeen('evidence');
   screen.append(el('div', 'app-title', 'CASE FILE'));
-  const items = state.messages.filter((m) => EVIDENCE_KINDS.has(m.kind));
+  const items = state.messages.filter((m) => EVIDENCE_KINDS.has(m.kind) || (m.kind === 'photo' && m.from === 'character'));
   if (!items.length) { screen.append(el('div', 'empty', 'Nothing yet.\n\nClues, recordings and evidence you receive will be kept here.')); return; }
   const wrap = el('div', 'bubbles');
   items.forEach((m) => { wrap.append(el('div', 'stamp', fmtTime(m.at))); wrap.append(messageNode(m)); });
@@ -775,9 +823,26 @@ async function shareCard(r) {
 // ============ incoming call overlay ============
 let ringTimeout = null;
 let ringFor = null; // character key when the call can be answered in the app
+// The caller's face fills the ring screen: their portrait moving, or for the house, a lit window through static.
+function setFace(box, key, { video = false } = {}) {
+  const k = faceKey(key);
+  box.querySelectorAll('video, img, i').forEach((n) => n.remove());
+  box.classList.toggle('on', Boolean(k));
+  box.classList.toggle('ghost', k === 'caretaker');
+  if (!k) return;
+  if (k === 'caretaker') { box.prepend(el('i')); return; }
+  if (video && !reduceMotion) {
+    const v = el('video'); v.muted = true; v.loop = true; v.autoplay = true; v.playsInline = true; v.setAttribute('playsinline', '');
+    v.poster = `/assets/cast/${k}.jpg`; v.src = `/assets/cast/${k}.mp4`;
+    box.prepend(v); v.play().catch(() => {});
+  } else {
+    const img = el('img'); img.src = `/assets/cast/${k}.jpg`; img.alt = ''; box.prepend(img);
+  }
+}
 function showRing(sub, note, { id = 'UNKNOWN', answer = null } = {}) {
   if (call) return; // already on a call
   closeCallScreen(); // a lingering "call ended" screen would sit on top of the ring
+  setFace($('#ringFace'), answer, { video: true });
   ringFor = answer;
   $('#ringId').textContent = id; $('#ringSub').textContent = sub; $('#ringNote').textContent = note;
   $('#ringAnswer').hidden = !answer;
@@ -785,7 +850,7 @@ function showRing(sub, note, { id = 'UNKNOWN', answer = null } = {}) {
   $('#ring').hidden = false; sfx.ring();
   clearTimeout(ringTimeout); ringTimeout = setTimeout(hideRing, 40_000);
 }
-function hideRing() { $('#ring').hidden = true; sfx.stopRing(); clearTimeout(ringTimeout); ringFor = null; }
+function hideRing() { $('#ring').hidden = true; sfx.stopRing(); clearTimeout(ringTimeout); ringFor = null; setFace($('#ringFace'), null); }
 $('#ringDismiss').onclick = hideRing;
 $('#ringAnswer').onclick = () => { const c = ringFor; hideRing(); if (c) startCall(c); };
 function incoming({ character, from }) {
@@ -860,6 +925,9 @@ function callScreen(character) {
   clearTimeout(callAfterTimer);
   captions.reset();
   $('#callName').textContent = callName(character);
+  setFace($('#callFace'), character);
+  $('#callScreen').classList.toggle('has-face', Boolean(CAST[character]));
+  $('#callScreen').style.setProperty('--lvl', '0');
   $('#callState').textContent = 'CALLING…';
   $('#callTime').textContent = '';
   $('#callMute').classList.remove('on');
@@ -951,6 +1019,7 @@ async function playRecordingCall(character, info) {
       const buffers = await Promise.all(parts.map((u) => fetch(u).then((r) => r.arrayBuffer()).then((b) => ctx.decodeAudioData(b))));
       if (call !== c) return;
       const chain = phoneChain(ctx);
+      meter(chain.input); // the Caretaker's window (or face) pulses with his voice
       let src = null;
       c.stopLine = () => { try { src?.stop(); } catch { /* done */ } chain.stop(); };
       for (const [i, buf] of buffers.entries()) {
@@ -1058,7 +1127,7 @@ async function startCall(character) {
 function endCall(reason = 'player_hung_up') {
   if (!call) return;
   const c = call; call = null;
-  clearInterval(c.timer); cancelAnimationFrame(meterRaf);
+  clearInterval(c.timer); cancelAnimationFrame(meterRaf); $('#callScreen').style.setProperty('--lvl', '0');
   captions.stop();
   c.ctl?.end(reason); // saves what was heard so far and reports any outstanding usage
   c.mic?.getTracks().forEach((t) => t.stop());
@@ -1080,22 +1149,34 @@ $('#callMute').onclick = () => {
 };
 // The rings pulse with the character's voice.
 let meterRaf = 0;
-function meter(stream) {
+function meter(source) {
   try {
     const ctx = sfx.unlock(); if (!ctx) return;
     const an = ctx.createAnalyser(); an.fftSize = 256;
-    ctx.createMediaStreamSource(stream).connect(an);
+    (source instanceof MediaStream ? ctx.createMediaStreamSource(source) : source).connect(an);
     const buf = new Uint8Array(an.frequencyBinCount);
-    const viz = $('#callViz');
+    const scr = $('#callScreen');
+    cancelAnimationFrame(meterRaf);
     const tickMeter = () => {
       an.getByteFrequencyData(buf);
       const level = buf.reduce((a, b) => a + b, 0) / buf.length / 255;
-      viz.style.setProperty('--lvl', Math.min(1, level * 3).toFixed(3));
+      scr.style.setProperty('--lvl', Math.min(1, level * 3).toFixed(3));
       meterRaf = requestAnimationFrame(tickMeter);
     };
     tickMeter();
   } catch { /* visual only */ }
 }
+
+// ============ photo / portrait viewer ============
+function openLightbox({ image, video, poster, caption }) {
+  const box = $('#lightbox'); const img = $('#lightboxImg'); const vid = $('#lightboxVid');
+  img.hidden = !image; vid.hidden = !video;
+  if (image) img.src = image;
+  if (video) { vid.poster = poster || ''; vid.src = video; if (!reduceMotion) vid.play().catch(() => {}); }
+  $('#lightboxCap').textContent = caption || '';
+  box.hidden = false;
+}
+$('#lightbox').onclick = () => { const v = $('#lightboxVid'); v.pause(); v.removeAttribute('src'); $('#lightbox').hidden = true; };
 
 // ============ toast ============
 let toastTimer = null;
@@ -1167,6 +1248,11 @@ function connect() {
   es.addEventListener('read', (e) => {
     const { thread, at } = JSON.parse(e.data);
     state.messages.forEach((m) => { if (m.thread === thread && m.from === 'player' && !m.readAt) m.readAt = at; });
+    render();
+  });
+  es.addEventListener('status', (e) => {
+    const statuses = JSON.parse(e.data);
+    state.threads.forEach((t) => { if (statuses[t.key] != null) t.status = statuses[t.key]; });
     render();
   });
   es.addEventListener('typing', (e) => {

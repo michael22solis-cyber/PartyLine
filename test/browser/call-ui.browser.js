@@ -171,7 +171,11 @@ if (chromium) {
     const p = addPlayer({ name: 'Dro' });
     await ringInApp(p, 'teddy', {});
     const page = await openPhone(p);
+    // The caller's face: his moving portrait on the ring, his photo behind the call.
+    await page.waitForSelector('#ringFace video[src$="/assets/cast/teddy.mp4"]', { timeout: 10_000 });
     await page.click('#ringAnswer', { timeout: 10_000 });
+    await page.waitForSelector('#callFace img[src$="/assets/cast/teddy.jpg"]', { timeout: 5000 });
+    assert.equal(await page.evaluate(() => document.querySelector('#ringFace video')), null, 'the ring video is gone once answered');
     await page.waitForFunction(() => document.querySelector('#callState').textContent === 'ON THE LINE', null, { timeout: 10_000 });
     // With the phone-line sound (on by default) the voice is heard through the filter, not the plain element.
     await page.waitForFunction(() => document.querySelector('#callAudio').muted === true, null, { timeout: 3000 });

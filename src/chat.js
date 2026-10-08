@@ -8,6 +8,7 @@ import { buildTextPrompt, buildNudgePrompt } from './context.js';
 import { approveFromPlayerText } from './disclosure.js';
 import { chatComplete } from './ai/openai.js';
 import { ledger } from './ai/ledger.js';
+import { typingPlan } from './cast.js';
 
 const { MAX_TEXTS_PER_PLAYER = 150 } = process.env;
 const env = process.env;
@@ -123,7 +124,12 @@ async function replyOnce(player, thread, s) {
       model, meta: { session: player.pid, npc: thread, capability: 'text', purpose, turn: countPlayerMessages(player.token) },
     });
 
-    await delay(Math.min(4000, 600 + reply.length * 25)); // "typing" time scales with length
+    // "Typing" time scales with length, at each character's own pace (Ruth slow and careful, Teddy fast); some stop
+    // and start again, like someone deciding what to say.
+    for (const step of typingPlan(thread, reply)) {
+      emit(player.token, 'typing', { thread, on: step.typing });
+      await delay(step.ms);
+    }
     emit(player.token, 'typing', { thread, on: false });
     await deliver({ token: player.token, thread, from: 'character', text: reply });
     remember({ player: player.name, pid: player.pid, npc: thread, character: c.name, speaker: 'character', text: `(text) ${reply}`, channel: 'text' });

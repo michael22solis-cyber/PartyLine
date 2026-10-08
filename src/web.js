@@ -29,6 +29,7 @@ import { attachSideband } from './voice/sideband.js';
 import { openCall, getCall, closeCall, callTranscript, callUsage, callDisclose } from './voice/calls.js';
 import { checkCall, chargeCall, resetAllowances } from './voice/allowance.js';
 import { recordedCall, servedFile as caretakerClip } from './voice/caretaker.js';
+import { statusOf } from './cast.js';
 
 const {
   ADMIN_KEY, PUBLIC_HOST, OPENAI_API_KEY,
@@ -92,7 +93,7 @@ export function registerWeb(app) {
     const p = requirePlayer(req, reply); if (!p) return;
     reply.send({
       me: { pid: p.pid, name: p.name, role: p.role, assigned: Boolean(p.clue), callsOff: p.callsOff, hasPhone: Boolean(p.phone) },
-      threads: TEXTABLE.filter((t) => unlockedFor(p).includes(t.key)),
+      threads: TEXTABLE.filter((t) => unlockedFor(p).includes(t.key)).map((t) => ({ ...t, status: statusOf(t.key) })),
       ringing: pendingRing(p.token) ? { character: pendingRing(p.token).character } : null,
       messages: messagesFor(p.token),
       suspects: SUSPECTS,
@@ -311,7 +312,7 @@ export function registerWeb(app) {
     }
     if (c && reason !== 'connect_failed') {
       const who = req.body.character.startsWith('caretaker') ? 'BLACKWOOD MANOR' : c.name;
-      await deliver({ token: p.token, thread: 'unknown', from: 'system', kind: 'calllog',
+      await deliver({ token: p.token, thread: 'unknown', from: 'system', kind: 'calllog', npc: req.body.character,
         text: `${who} · ${Math.floor(secs / 60)}:${String(Math.floor(secs % 60)).padStart(2, '0')}` });
     }
     reply.send({ ok: true });

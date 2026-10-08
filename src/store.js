@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 import { dataFile } from './paths.js';
 
 const FILE = dataFile('game.json');
-const EMPTY = { players: [], messages: [], votes: {}, pushSubs: {}, schedule: [], revealed: false, groups: [], game: null };
+const EMPTY = { players: [], messages: [], votes: {}, pushSubs: {}, schedule: [], revealed: false, groups: [], game: null, beats: [] };
 
 let db = load();
 db.players.forEach((p) => { p.pid ||= crypto.randomBytes(4).toString('hex'); p.permitted ||= {}; });
@@ -82,7 +82,7 @@ export function updatePlayer(token, patch) {
 // thread: a character key ('ruth', 'marcus'...), 'line' (narrator) or 'unknown' (the Caretaker's call log)
 // from: 'player' | 'character' | 'system'
 // kind: 'text' | 'clue' | 'memo' | 'call' | 'calllog' | 'missed' | 'voicemail' | 'secret' | 'evidence' | 'reveal'
-export function addMessage({ token, thread, from, text, kind = 'text', audio = null, sender = null, forwarded = false, clientId = null }) {
+export function addMessage({ token, thread, from, text, kind = 'text', audio = null, sender = null, forwarded = false, clientId = null, npc = null, image = null }) {
   if (clientId) {
     const dup = db.messages.find((m) => m.token === token && m.clientId === clientId);
     if (dup) return { ...dup, duplicate: true };
@@ -95,6 +95,8 @@ export function addMessage({ token, thread, from, text, kind = 'text', audio = n
     text,
     kind,
     ...(audio ? { audio } : {}),
+    ...(npc ? { npc } : {}),     // which character it is about (call log, voicemail, photo): the phone shows their face
+    ...(image ? { image } : {}),
     ...(sender ? { sender } : {}),
     ...(forwarded ? { forwarded: true } : {}),
     ...(clientId ? { clientId: String(clientId).slice(0, 64) } : {}),
@@ -172,6 +174,10 @@ export function clearPendingSchedule() { db.schedule = db.schedule.filter((x) =>
 // ---- auto mode: one game per server with a self-serve invite link ----
 export function setGame(game) { db.game = game; save(); return game; }
 export const getGame = () => db.game;
+
+// Story beats that have fired, in order (characters' status lines follow the story).
+export function markBeat(name) { db.beats = [...(db.beats || []), name]; save(); }
+export const firedBeats = () => db.beats || [];
 
 export function setRevealed() { db.revealed = true; save(); }
 

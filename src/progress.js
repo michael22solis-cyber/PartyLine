@@ -10,6 +10,7 @@ import { SECRETS, MENTIONS } from './secrets.js';
 import { callPhone } from './phone.js';
 import { mayAward } from './disclosure.js';
 import { prepare as prepareCaretaker } from './voice/caretaker.js';
+import { statusOf } from './cast.js';
 
 const { UNLOCK_ALL, CALL_MODE = 'app' } = process.env; // CALL_MODE=phone uses real Twilio calls when a player has a number
 
@@ -21,7 +22,7 @@ export async function unlock(p, key, reason = '') {
   if (!MENTIONS[key] || isUnlocked(p, key)) return false;
   updatePlayer(p.token, { unlocked: [...(p.unlocked || []), key] });
   const t = TEXTABLE.find((x) => x.key === key);
-  emit(p.token, 'unlock', t);
+  emit(p.token, 'unlock', { ...t, status: statusOf(key) });
   await deliver({ token: p.token, thread: 'line', from: 'system', kind: 'contact',
     text: `NEW CONTACT: ${t.name}, ${t.tagline}.${reason ? ` ${reason}` : ''}` });
   return true;
@@ -81,8 +82,8 @@ export async function ringInApp(p, character, { opening, voicemail } = {}) {
     if (ringing.get(p.token) !== r) return;
     ringing.delete(p.token);
     emit(p.token, 'ringEnd', { character });
-    if (voicemail) await deliver({ token: p.token, thread: 'unknown', from: 'character', kind: 'voicemail', text: voicemail.text, audio: voicemail.audio });
-    else await deliver({ token: p.token, thread: 'unknown', from: 'system', kind: 'missed', text: `Missed call: ${from}` });
+    if (voicemail) await deliver({ token: p.token, thread: 'unknown', from: 'character', kind: 'voicemail', text: voicemail.text, audio: voicemail.audio, npc: character });
+    else await deliver({ token: p.token, thread: 'unknown', from: 'system', kind: 'missed', text: `Missed call: ${from}`, npc: character });
   }, 40_000);
   ringing.set(p.token, r);
   if (character.startsWith('caretaker')) prepareCaretaker(character, p, character === 'caretaker' ? p.caretakerCalls || 0 : 0);

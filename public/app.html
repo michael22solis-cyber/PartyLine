@@ -36,7 +36,10 @@
       <button id="skMenu" aria-label="Settings">MENU</button>
     </nav>
 
+    <div class="lightbox" id="lightbox" hidden role="dialog" aria-label="Photo"><img id="lightboxImg" alt="" /><video id="lightboxVid" muted loop playsinline hidden></video><p id="lightboxCap"></p></div>
+
     <section class="ring" id="ring" hidden aria-live="assertive">
+      <div class="ring-face" id="ringFace" aria-hidden="true"></div>
       <div class="ring-top">INCOMING CALL</div>
       <div class="ring-id" id="ringId">UNKNOWN</div>
       <div class="ring-sub" id="ringSub">BLACKWOOD MANOR</div>
@@ -49,6 +52,7 @@
     </section>
 
     <section class="callscr" id="callScreen" hidden>
+      <div class="call-face" id="callFace" aria-hidden="true"><div class="glow"></div></div>
       <div class="call-state" id="callState">CALLING…</div>
       <div class="call-name" id="callName"></div>
       <div class="call-time" id="callTime"></div>

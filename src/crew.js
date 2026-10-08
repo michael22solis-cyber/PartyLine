@@ -7,7 +7,7 @@ import { overheard } from './chat.js';
 import { postToGroup } from './groups.js';
 
 const { MAX_TEXTS_PER_PLAYER = 150 } = process.env;
-const SHAREABLE = new Set(['clue', 'evidence', 'memo', 'voicemail', 'text']);
+const SHAREABLE = new Set(['photo', 'clue', 'evidence', 'memo', 'voicemail', 'text']);
 
 // The house listens to the group chat: certain words can make Ruth text someone about it.
 const TRIGGER = /cellar|basement|ruth|lullaby|humm|bingo|mud|911|accomplice|killer/i;
@@ -21,13 +21,15 @@ export async function sendPeer(sender, to, { text, forward } = {}) {
   let body = String(text || '').trim().slice(0, 600);
   let kind = 'text';
   let audio = null;
+  let image = null;
+  let npc = null;
   if (forward) {
     const m = messageById(sender.token, forward);
     if (!m || !SHAREABLE.has(m.kind)) throw Object.assign(new Error('That can’t be shared.'), { status: 400 });
-    body = m.text; kind = m.kind === 'text' ? 'text' : m.kind; audio = m.audio || null;
+    body = m.text; kind = m.kind === 'text' ? 'text' : m.kind; audio = m.audio || null; image = m.image || null; npc = m.npc || null;
   }
   if (!body) throw Object.assign(new Error('Empty message'), { status: 400 });
-  const extra = { kind, audio, sender: sender.name, forwarded: Boolean(forward) };
+  const extra = { kind, audio, image, npc, sender: sender.name, forwarded: Boolean(forward) };
 
   if (String(to).startsWith('g:')) return postToGroup(sender, String(to).slice(2), { body, extra });
 

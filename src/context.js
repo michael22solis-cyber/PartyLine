@@ -92,7 +92,7 @@ function dynamicBlock({ player, npc, approvedNow = [], notes = [], extra = '' })
  * the message being answered). Returns { messages, stats }.
  */
 export function buildTextPrompt({ npc, player, thread, approvedNow = [], extra = '', budget = TEXT_BUDGET() }) {
-  const asChat = (m) => ({ role: m.from === 'player' ? 'user' : 'assistant', content: m.text });
+  const asChat = (m) => ({ role: m.from === 'player' ? 'user' : 'assistant', content: m.kind === 'photo' ? `[you sent a photo] ${m.text}` : m.text });
   const usable = thread.filter((m) => m.from !== 'system');
   if (contextMode() === 'legacy') {
     const messages = [{ role: 'system', content: buildLegacyInstructions(npc, player.name, summary(), 'text') }, ...usable.slice(-20).map(asChat)];
