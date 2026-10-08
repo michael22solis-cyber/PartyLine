@@ -4,11 +4,13 @@
 //   personal: keep your secret: don't let anyone name you as the accomplice. Now and then a suspect leaks someone's
 //             secret to a couple of other players (the `leak` beat), which makes that harder.
 // The accomplice gets misdirection goals instead of case/social ones, and a secret too, so leaks don't give them away.
+// A goal or secret about a particular suspect (`who`) stays sealed until the player has that suspect in their phone,
+// so the agenda never spoils who's in the story; it appears in the Notebook (with a heads-up) the moment they do.
 // Everything is checked from game state with plain rules: no AI calls, no extra cost. Goals tied to the vote are
 // settled at the reveal; at the end the recap shows everyone's agenda.
 import { players, playerByToken, updatePlayer, messagesFor, votes, groupsFor, getDb } from './store.js';
 import { deliver } from './live.js';
-import { unlock } from './progress.js';
+import { unlock, isUnlocked } from './progress.js';
 import { remember } from './memory.js';
 import { ledger } from './ai/ledger.js';
 
@@ -22,15 +24,15 @@ export const SECRETS = [
     they: 'was at the manor thursday afternoon. like, THE day' },
   { id: 'will', you: 'Dana put you in her will: her whole vintage record collection. You found out last week.',
     they: 'is in dana’s WILL. she left them her record collection' },
-  { id: 'ex', you: 'You dated Teddy Fisk in high school, and you still watch every one of his streams.',
+  { id: 'ex', who: 'teddy', you: 'You dated Teddy Fisk in high school, and you still watch every one of his streams.',
     they: 'used to date me in high school 😳 and still watches every stream' },
-  { id: 'debt', you: 'You owe Marcus Vane $2,000 from a bet you lost, and he’s been texting you about it.',
+  { id: 'debt', who: 'marcus', you: 'You owe Marcus Vane $2,000 from a bet you lost, and he’s been texting you about it.',
     they: 'owes marcus vane two grand. from a BET' },
   { id: 'brick', you: 'You stole a brick from the manor’s cellar wall last Halloween as a souvenir. It’s in your car.',
     they: 'took a brick out of the manor cellar last halloween. it’s in their car rn' },
   { id: 'review', you: 'You left Dana’s renovation crew a one-star review under a fake name. She found out it was you.',
     they: 'left dana a fake one-star review and she FOUND OUT' },
-  { id: 'prayer', you: 'You’ve been going to Ruth’s prayer group. Twice. You liked it.',
+  { id: 'prayer', who: 'ruth', you: 'You’ve been going to Ruth’s prayer group. Twice. You liked it.',
     they: 'has been going to ruth’s prayer group 🙏 like on purpose' },
   { id: 'date', you: 'You were outside Rosie’s Diner at 9:30 Thursday, on a date you’re keeping secret.',
     they: 'was outside rosie’s diner thursday at 9:30 on a secret date' },
@@ -42,12 +44,12 @@ const distinctThreads = (msgs) => new Set(msgs.map((m) => m.thread)).size;
 
 export const GOALS = {
   // case: one specific thing to uncover
-  case_bingo: { slot: 'case', text: 'Find out what time bingo really ends at St. Agnes.', check: found('bingo') },
-  case_diner: { slot: 'case', text: 'Find out where Marcus really went Thursday night.', check: found('diner') },
-  case_speakers: { slot: 'case', text: 'Find out how Teddy’s “ghost voices” really work.', check: found('speakers') },
-  case_911: { slot: 'case', text: 'Find out who made the anonymous 911 call.', check: found('call911') },
-  case_mud: { slot: 'case', text: 'Find out what Lily saw the night her father vanished.', check: found('mud') },
-  case_lullaby: { slot: 'case', text: 'Find out whose lullaby keeps humming in that house.', check: found('lullaby') },
+  case_bingo: { slot: 'case', who: 'teddy', text: 'Find out what time bingo really ends at St. Agnes.', check: found('bingo') },
+  case_diner: { slot: 'case', who: 'marcus', text: 'Find out where Marcus really went Thursday night.', check: found('diner') },
+  case_speakers: { slot: 'case', who: 'teddy', text: 'Find out how Teddy’s “ghost voices” really work.', check: found('speakers') },
+  case_911: { slot: 'case', who: 'lily', text: 'Find out who made the anonymous 911 call.', check: found('call911') },
+  case_mud: { slot: 'case', who: 'lily', text: 'Find out what Lily saw the night her father vanished.', check: found('mud') },
+  case_lullaby: { slot: 'case', who: 'lily', text: 'Find out whose lullaby keeps humming in that house.', check: found('lullaby') },
   // social: the other players
   soc_share: { slot: 'social', text: 'Share clues or evidence (↗ SHARE) in 3 different chats.',
     check: (p) => distinctThreads(mine(p).filter((m) => m.forwarded)) >= 3 },
@@ -67,7 +69,7 @@ export const GOALS = {
   // accomplice
   acc_misdirect: { slot: 'case', atVote: true, text: 'Get other players to vote for someone other than Ruth (2 of them, or 1 in a small group).',
     check: (p) => players().filter((x) => x.token !== p.token && votes()[x.token] && votes()[x.token].killer !== KILLER).length >= (players().length >= 5 ? 2 : 1) },
-  acc_plant: { slot: 'social', text: 'Tell the others about Lily’s car at the manor (the planted evidence), in a chat with other players.',
+  acc_plant: { slot: 'social', who: 'lily', text: 'Tell the others about Lily’s car at the manor (the planted evidence), in a chat with other players.',
     check: (p) => mine(p).some((m) => !SUSPECT_KEYS.includes(m.thread) && m.thread !== 'line' && /lily/i.test(m.text) && /\bcar\b/i.test(m.text)) },
 };
 
@@ -81,21 +83,26 @@ export function dealAgendas({ onlyMissing = false } = {}) {
   players().forEach((p, i) => {
     if (onlyMissing && p.agenda) return;
     const goals = p.role === 'accomplice' ? ['acc_misdirect', 'acc_plant', 'personal'] : [cases[i % cases.length], socials[i % socials.length], 'personal'];
-    updatePlayer(p.token, { agenda: { secret: secrets[i % secrets.length], goals }, agendaDone: [], leaked: false });
+    updatePlayer(p.token, { agenda: { secret: secrets[i % secrets.length], goals }, agendaDone: [], agendaSeen: [], agendaDelivered: false, leaked: false });
   });
 }
 
 const secretOf = (p) => SECRETS.find((s) => s.id === p.agenda?.secret);
 
 // What the phone shows: the goals and how each stands. Before the reveal, vote goals read "decided at the vote".
-export function agendaView(p) {
+// Sealed until the player has met the suspect it's about (everything opens at the reveal; `all` for the host).
+const sealed = (p, who, all) => Boolean(who) && !all && !getDb().revealed && !isUnlocked(p, who);
+export function agendaView(p, { all = false } = {}) {
   if (!p.agenda) return null;
   const revealed = getDb().revealed;
+  const secretLocked = sealed(p, secretOf(p)?.who, all);
   return {
-    secret: secretOf(p)?.you || null,
+    secret: secretLocked ? null : secretOf(p)?.you || null,
+    secretLocked,
     leaked: Boolean(p.leaked),
     goals: p.agenda.goals.map((id) => {
       const g = GOALS[id];
+      if (sealed(p, g.who, all)) return { id, slot: g.slot, text: null, status: 'locked' };
       const status = g.atVote ? (revealed ? (g.check(p) ? 'done' : 'failed') : 'vote')
         : (p.agendaDone || []).includes(id) || g.check(p) ? 'done' : revealed ? 'failed' : 'open';
       return { id, slot: g.slot, text: g.text, status };
@@ -106,16 +113,28 @@ export const agendaScore = (p) => agendaView(p)?.goals.filter((g) => g.status ==
 
 // Notice goals completed since last time and tell the player. Runs every few seconds from the scheduler.
 export async function checkAgendas() {
-  for (const p of players()) {
-    if (!p.agenda) continue;
-    for (const id of p.agenda.goals) {
-      const g = GOALS[id];
-      const fresh = playerByToken(p.token);
-      if (g.atVote || (fresh.agendaDone || []).includes(id) || !g.check(fresh)) continue;
-      updatePlayer(p.token, { agendaDone: [...(fresh.agendaDone || []), id] });
-      ledger.event('agenda_goal_done', { session: p.pid, goal: id });
-      await deliver({ token: p.token, thread: 'line', from: 'system', kind: 'agenda', text: `✓ AGENDA COMPLETE: ${g.text}` });
+  for (const p of players()) await checkAgenda(p);
+}
+export async function checkAgenda(p) {
+  if (!p?.agenda || !playerByToken(p.token)?.agendaDelivered) return; // nothing until the agenda packet has arrived
+  // Newly unsealed (they just met the suspect it's about): a heads-up on The Line.
+  const v = agendaView(playerByToken(p.token));
+  const seen = playerByToken(p.token).agendaSeen || [];
+  const unsealed = [...(v.secret && !seen.includes('secret') ? ['secret'] : []), ...v.goals.filter((g) => g.text && !seen.includes(g.id)).map((g) => g.id)];
+  if (unsealed.length) {
+    updatePlayer(p.token, { agendaSeen: [...seen, ...unsealed] });
+    for (const id of unsealed) {
+      const text = id === 'secret' ? `Your secret: ${v.secret}` : v.goals.find((g) => g.id === id).text;
+      await deliver({ token: p.token, thread: 'line', from: 'system', kind: 'agenda', text: `📓 NEW IN YOUR NOTEBOOK: ${text}` });
     }
+  }
+  for (const id of p.agenda.goals) {
+    const g = GOALS[id];
+    const fresh = playerByToken(p.token);
+    if (sealed(fresh, g.who, false) || g.atVote || (fresh.agendaDone || []).includes(id) || !g.check(fresh)) continue;
+    updatePlayer(p.token, { agendaDone: [...(fresh.agendaDone || []), id] });
+    ledger.event('agenda_goal_done', { session: p.pid, goal: id });
+    await deliver({ token: p.token, thread: 'line', from: 'system', kind: 'agenda', text: `✓ AGENDA COMPLETE: ${g.text}` });
   }
 }
 
@@ -124,8 +143,10 @@ export async function deliverAgendas() {
   for (const p of players()) {
     const v = agendaView(p);
     if (!v) continue;
+    const LOCKED = '🔒 Sealed until you meet the right person.';
     await deliver({ token: p.token, thread: 'line', from: 'character', kind: 'secret',
-      text: `YOUR SECRET AGENDA\n\nYour secret: ${v.secret}\n\n${v.goals.map((g, i) => `${i + 1}. ${g.text}`).join('\n')}\n\nSolve the murder first. These are extra. They're in your Notebook.` });
+      text: `YOUR SECRET AGENDA\n\nYour secret: ${v.secret || LOCKED}\n\n${v.goals.map((g, i) => `${i + 1}. ${g.text || LOCKED}`).join('\n')}\n\nSolve the murder first. These are extra. They're in your Notebook.` });
+    updatePlayer(p.token, { agendaDelivered: true, agendaSeen: [...(v.secret ? ['secret'] : []), ...v.goals.filter((g) => g.text).map((g) => g.id)] });
   }
 }
 
@@ -155,6 +176,6 @@ export async function leakSecret() {
 
 // For the recap and host page: everyone's agenda, once it's all over (or for the host, any time).
 export function agendaSummary(p) {
-  const v = agendaView(p);
+  const v = agendaView(p, { all: true });
   return v && { secret: v.secret, leaked: v.leaked, goals: v.goals.map((g) => ({ text: g.text, done: g.status === 'done' })), done: v.goals.filter((g) => g.status === 'done').length };
 }

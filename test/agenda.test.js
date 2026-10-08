@@ -42,7 +42,19 @@ test('a goal completes when the player does it, and they hear about it once', as
   const det = ps.find((p) => fresh(p).role !== 'accomplice');
   const caseGoal = fresh(det).agenda.goals[0];
   const secretId = { case_bingo: 'bingo', case_diner: 'diner', case_speakers: 'speakers', case_911: 'call911', case_mud: 'mud', case_lullaby: 'lullaby' }[caseGoal];
+  const who = GOALS[caseGoal].who;
+  // Sealed until they meet the suspect it's about: hidden in the Notebook and the packet, and it can't complete.
+  assert.equal(agendaView(fresh(det)).goals[0].status, 'locked');
+  assert.equal(agendaView(fresh(det)).goals[0].text, null);
+  assert.ok(line(det).some((t) => /^YOUR SECRET AGENDA[\s\S]*🔒 Sealed/.test(t)), 'the packet shows it sealed');
+  assert.ok(!line(det).some((t) => t.includes(GOALS[caseGoal].text)), 'never named before they meet them');
   updatePlayer(det.token, { found: [...(fresh(det).found || []), secretId] });
+  await checkAgendas();
+  assert.equal(line(det).filter((t) => t.startsWith('✓ AGENDA COMPLETE')).length, 0);
+  // They meet the suspect: the mission appears (with a heads-up), and since it's already done, it completes.
+  const { unlock } = await import('../src/progress.js');
+  await unlock(fresh(det), who);
+  assert.ok(line(det).some((t) => t === `📓 NEW IN YOUR NOTEBOOK: ${GOALS[caseGoal].text}`));
   await checkAgendas();
   await checkAgendas();
   assert.equal(line(det).filter((t) => t.startsWith('✓ AGENDA COMPLETE')).length, 1);

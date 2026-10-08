@@ -12,6 +12,7 @@ import { mayAward } from './disclosure.js';
 import { prepare as prepareCaretaker } from './voice/caretaker.js';
 import { statusOf } from './cast.js';
 import { onSecretFound } from './initiative.js';
+import { checkAgenda } from './agenda.js';
 
 const { UNLOCK_ALL, CALL_MODE = 'app' } = process.env; // CALL_MODE=phone uses real Twilio calls when a player has a number
 
@@ -26,6 +27,7 @@ export async function unlock(p, key, reason = '') {
   emit(p.token, 'unlock', { ...t, status: statusOf(key) });
   await deliver({ token: p.token, thread: 'line', from: 'system', kind: 'contact',
     text: `NEW CONTACT: ${t.name}, ${t.tagline}.${reason ? ` ${reason}` : ''}` });
+  await checkAgenda(p).catch((err) => console.error('[agenda]', err.message)); // a mission about them may unseal
   return true;
 }
 
