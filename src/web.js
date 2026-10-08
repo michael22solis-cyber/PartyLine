@@ -455,7 +455,12 @@ export function registerWeb(app) {
     if (!requireAdmin(req, reply)) return;
     await warmCaretaker({ attempts: 1 });
     reply.send({ caretakerVoice: caretakerVoice(), music: musicStatus() });
-    warmMusic().catch(() => {});
+  });
+  // Make the music, once (the host's "Make music" button). Already-made tracks are skipped; a run in progress is joined.
+  app.post('/admin/music/make', (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    warmMusic().catch((err) => console.error('[music]', err.message));
+    reply.send({ music: musicStatus() });
   });
   app.post('/admin/schedule/clear', (req, reply) => {
     if (!requireAdmin(req, reply)) return;

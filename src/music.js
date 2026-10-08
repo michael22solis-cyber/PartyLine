@@ -3,6 +3,10 @@
 // cached on the data volume, and reused by every game. The phone crossfades to the next track as the story moves and
 // warps it more and more (see public/app.js). If the music API isn't available on the plan, a looping sound-effects
 // ambience is made instead. MUSIC=off disables it.
+//
+// Recorded once, looped forever: tracks are never made automatically. The host taps "Make music" once on /host
+// (or sets MUSIC_AUTO=on), and the files are kept on the data volume. Tracks committed to public/audio/music/
+// (early.mp3 … after.mp3, bed-ruth.mp3 …) take priority and never touch ElevenLabs at all.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -45,18 +49,22 @@ let lastError = null;
 const fileFor = (name) => `${name}-${crypto.createHash('sha256').update(JSON.stringify([TRACKS[name], LENGTH_MS])).digest('hex').slice(0, 12)}.mp3`;
 const pathFor = (name) => path.join(DIR, fileFor(name));
 const bedFile = (npc) => `bed-${crypto.createHash('sha256').update(BEDS[npc]).digest('hex').slice(0, 12)}.mp3`;
+const BUNDLED = path.resolve('public/audio/music');
+const bundled = (file) => (fs.existsSync(path.join(BUNDLED, file)) ? `/assets/audio/music/${file}` : null);
+const trackUrl = (n) => bundled(`${n}.mp3`) || (enabled() && fs.existsSync(pathFor(n)) ? `/assets/music/${fileFor(n)}` : null);
+const bedUrl = (n) => bundled(`bed-${n}.mp3`) || (enabled() && fs.existsSync(path.join(DIR, bedFile(n))) ? `/assets/music/${bedFile(n)}` : null);
 export const servedFile = (file) => (/^[a-z]+-[0-9a-f]{12}\.mp3$/.test(file) && fs.existsSync(path.join(DIR, file)) ? path.join(DIR, file) : null);
 
 // Tracks the phone can play now: { early: '/assets/music/…', … } (missing ones are left out).
 export function trackUrls() {
-  if (!enabled()) return {};
-  return Object.fromEntries(Object.keys(TRACKS).filter((n) => fs.existsSync(pathFor(n))).map((n) => [n, `/assets/music/${fileFor(n)}`]));
+  if (env.MUSIC === 'off') return {};
+  return Object.fromEntries(Object.keys(TRACKS).map((n) => [n, trackUrl(n)]).filter(([, u]) => u));
 }
 
 // Background sounds for calls that are ready: { ruth: '/assets/music/bed-…', … }.
 export function bedUrls() {
-  if (!enabled()) return {};
-  return Object.fromEntries(Object.keys(BEDS).filter((n) => fs.existsSync(path.join(DIR, bedFile(n)))).map((n) => [n, `/assets/music/${bedFile(n)}`]));
+  if (env.MUSIC === 'off') return {};
+  return Object.fromEntries(Object.keys(BEDS).map((n) => [n, bedUrl(n)]).filter(([, u]) => u));
 }
 
 async function post(url, body) {
@@ -115,7 +123,7 @@ export function warmUp() {
 async function warmAll() {
   await warmUpBeds(); // the call backgrounds first: small, and heard from the first call
   for (const name of Object.keys(TRACKS)) {
-    if (fs.existsSync(pathFor(name))) continue;
+    if (fs.existsSync(pathFor(name)) || bundled(`${name}.mp3`)) continue;
     for (let attempt = 1; attempt <= 2; attempt++) {
       try { await make(name); lastError = null; console.log(`[music] ${name} track ready`); break; }
       catch (err) { lastError = err.message; console.error(`[music] ${name} track failed (${err.message}), attempt ${attempt} of 2`); if (err.capped || [401, 402, 403].includes(err.status)) return; }
@@ -134,13 +142,18 @@ async function makeBed(npc) {
 export async function warmUpBeds() {
   if (!enabled()) return;
   for (const npc of Object.keys(BEDS)) {
-    if (fs.existsSync(path.join(DIR, bedFile(npc)))) continue;
+    if (fs.existsSync(path.join(DIR, bedFile(npc))) || bundled(`bed-${npc}.mp3`)) continue;
     try { await makeBed(npc); lastError = null; console.log(`[music] ${npc} call background ready`); }
     catch (err) { lastError = err.message; console.error(`[music] ${npc} call background failed (${err.message})`); if (err.capped || [401, 402, 403].includes(err.status)) return; }
   }
 }
 
 export function musicStatus() {
-  if (!enabled()) return { mode: 'off', reason: env.MUSIC === 'off' ? 'MUSIC=off' : 'ElevenLabs key not set' };
-  return { mode: 'on', ready: Object.keys(trackUrls()).length + Object.keys(bedUrls()).length, total: Object.keys(TRACKS).length + Object.keys(BEDS).length, error: lastError, working: warming(), generations };
+  const ready = Object.keys(trackUrls()).length + Object.keys(bedUrls()).length;
+  const total = Object.keys(TRACKS).length + Object.keys(BEDS).length;
+  if (env.MUSIC === 'off') return { mode: 'off', reason: 'MUSIC=off' };
+  if (!enabled() && ready < total) return { mode: 'off', reason: 'ElevenLabs key not set', ready, total };
+  // For the host to download and keep: every track that's ready, named the way public/audio/music/ expects.
+  const files = [...Object.entries(trackUrls()).map(([n, url]) => ({ name: `${n}.mp3`, url })), ...Object.entries(bedUrls()).map(([n, url]) => ({ name: `bed-${n}.mp3`, url }))];
+  return { mode: 'on', ready, total, error: lastError, working: warming(), generations, canMake: enabled(), files };
 }
