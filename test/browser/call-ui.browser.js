@@ -151,6 +151,37 @@ if (chromium) {
     await page.close();
   });
 
+  test('a ring that arrives twice stops ringing once the call is answered', async () => {
+    const p = addPlayer({ name: 'Bell' });
+    const page = await browser.newPage();
+    await page.addInitScript(FAKE_WEBRTC);
+    await page.addInitScript((token) => localStorage.setItem(`bw-on-${token}`, '1'), p.token);
+    // Count ring tones (440 Hz) the page plays.
+    await page.addInitScript(() => {
+      window.__rings = 0;
+      const make = AudioContext.prototype.createOscillator;
+      AudioContext.prototype.createOscillator = function () {
+        const o = make.call(this);
+        const set = o.frequency.setValueAtTime.bind(o.frequency);
+        o.frequency.setValueAtTime = (v, t) => { if (v === 440) window.__rings += 1; return set(v, t); };
+        return o;
+      };
+    });
+    await page.goto(`${base}/p/${p.token}`);
+    await page.click('body'); // a tap unlocks sound, as on a phone
+    await ringInApp(p, 'ruth', {});
+    await ringInApp(p, 'ruth', {}); // the same ring signal again (e.g. a reconnect)
+    await page.waitForSelector('#ringAnswer', { state: 'visible', timeout: 10_000 });
+    await page.waitForTimeout(300);
+    await page.click('#ringAnswer');
+    await page.waitForFunction(() => document.querySelector('#callState').textContent === 'ON THE LINE', null, { timeout: 10_000 });
+    const after = await page.evaluate(() => window.__rings);
+    await page.waitForTimeout(3000); // longer than one ring cycle (2.4 s)
+    assert.equal(await page.evaluate(() => window.__rings), after, 'no ringing during the call');
+    await page.click('#callEnd');
+    await page.close();
+  });
+
   test('an unanswered "ok thanks" shows as Read, so silence looks intentional', async () => {
     const { handlePlayerText } = await import('../../src/chat.js');
     const { threadHistory } = await import('../../src/store.js');
