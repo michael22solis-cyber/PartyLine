@@ -13,51 +13,82 @@
 @font-face { font-family: 'LCD'; src: url(/assets/fonts/vt323-latin-400-normal.woff2) format('woff2'); }
 @font-face { font-family: 'Elite'; src: url(/assets/fonts/special-elite-latin-400-normal.woff2) format('woff2'); }
 :root { --bg: #050706; --panel: #0c110e; --line: #1a231e; --ink: #c9d6c3; --dim: #6b7a66; --glow: #9fe0a0; --ember: #d0412e; --amber: #e6a23c; }
-* { box-sizing: border-box; }
-html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: Plex, ui-monospace, monospace; font-size: 15px; }
-button, input { font: inherit; color: inherit; }
-button { cursor: pointer; background: none; border: 1px solid var(--line); padding: 10px 12px; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { background: #050706; }
+body { margin: 0; min-height: 100vh; color: var(--ink); font-family: Plex, ui-monospace, monospace; font-size: 15px; background: #050706; }
+/* the same manor-at-night wallpaper as the players' phones, kept dim behind the controls */
+body::before { content: ''; position: fixed; inset: 0; z-index: -1; background: linear-gradient(rgba(5,7,6,0.82), rgba(5,7,6,0.9) 60%, rgba(5,7,6,0.97)), url(/assets/img/manor-wall.jpg) center bottom / cover no-repeat; filter: saturate(0.6); }
+button, input, select { font: inherit; color: inherit; }
+/* buttons like the phone's: rounded, soft depth, press in when tapped */
+button {
+  cursor: pointer; padding: 10px 14px; border-radius: 12px; border: 0;
+  background: linear-gradient(160deg, #18241d, #0b120e);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -1px 0 rgba(0,0,0,0.6), 0 4px 10px rgba(0,0,0,0.45), 0 0 0 1px rgba(159,224,160,0.12);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+button:active:not(:disabled) { transform: scale(0.96); }
+button:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 button:disabled { opacity: 0.4; cursor: default; }
+.primary { background: linear-gradient(160deg, #b6f0b6, #7fcf82); color: #06120a; font-weight: 600; box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 4px 14px rgba(159,224,160,0.25); }
+.danger { background: linear-gradient(160deg, #a52a1a, #6e1a10); color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 4px 12px rgba(208,65,46,0.25); }
+input, select { padding: 10px 12px; border-radius: 12px; background: rgba(5,7,6,0.8); border: 1px solid rgba(159,224,160,0.14); outline: none; }
+input:focus, select:focus { border-color: rgba(159,224,160,0.45); }
 main { max-width: 720px; margin: 0 auto; padding: calc(env(safe-area-inset-top) + 14px) 16px 60px; }
-header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
-h1 { margin: 0; font-family: Elite, serif; font-weight: 400; font-size: 26px; color: var(--glow); }
-.sub { font-family: LCD, monospace; font-size: 18px; letter-spacing: 0.14em; color: var(--dim); }
-h2 { font-family: LCD, monospace; font-weight: 400; font-size: 20px; letter-spacing: 0.2em; color: var(--dim); margin: 28px 0 10px; display: flex; justify-content: space-between; align-items: center; }
-h2 small { font-size: 15px; letter-spacing: 0.1em; }
-.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
-.stat { border: 1px solid var(--line); background: var(--panel); padding: 10px; }
-.stat b { display: block; font-family: LCD, monospace; font-size: 34px; font-weight: 400; color: var(--glow); line-height: 1; }
+header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0 12px; }
+h1 { margin: 0; font-family: Elite, serif; font-weight: 400; font-size: 26px; color: var(--glow); text-shadow: 0 0 14px rgba(159,224,160,0.35); }
+.sub { font-family: LCD, monospace; font-size: 17px; letter-spacing: 0.2em; color: var(--dim); }
+h2 { font-family: LCD, monospace; font-weight: 400; font-size: 19px; letter-spacing: 0.22em; color: var(--dim); margin: 30px 4px 10px; display: flex; justify-content: space-between; align-items: center; }
+h2 small { font-size: 14px; letter-spacing: 0.06em; }
+h2 small button { padding: 6px 12px; font-size: 12px; }
+/* rounded glass panels */
+.card, .stat { border-radius: 18px; background: rgba(12,17,14,0.82); border: 1px solid rgba(159,224,160,0.08); box-shadow: 0 10px 30px rgba(0,0,0,0.35); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.card { padding: 14px; }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 8px; }
+.stat { padding: 12px 14px; }
+.stat b { display: block; font-family: LCD, monospace; font-size: 36px; font-weight: 400; color: var(--glow); line-height: 1; text-shadow: 0 0 10px rgba(159,224,160,0.35); }
 .stat span { font-size: 11.5px; color: var(--dim); }
-.card { border: 1px solid var(--line); background: var(--panel); padding: 12px; }
-.player { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.player { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; padding: 12px 2px; border-bottom: 1px solid rgba(159,224,160,0.07); }
 .player:last-child { border-bottom: 0; }
 .player .name { font-weight: 600; }
 .player .meta { grid-column: 1 / -1; font-size: 12px; color: var(--dim); }
 .player .link { grid-column: 1 / -1; font-size: 11.5px; color: var(--dim); word-break: break-all; }
-.tag { font-family: LCD, monospace; font-size: 15px; letter-spacing: 0.1em; padding: 1px 6px; border: 1px solid var(--line); margin-left: 6px; }
+.player .row button { padding: 7px 12px; font-size: 13px; }
+.tag { font-family: LCD, monospace; font-size: 14px; letter-spacing: 0.1em; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); margin-left: 6px; }
 .tag.acc { color: var(--ember); border-color: var(--ember); }
 .tag.ok { color: var(--glow); border-color: rgba(159,224,160,0.4); }
-.row { display: flex; gap: 8px; flex-wrap: wrap; }
-.row input { flex: 1; min-width: 120px; padding: 10px 12px; background: var(--bg); border: 1px solid var(--line); }
-.primary { background: var(--glow); color: var(--bg); border-color: var(--glow); font-weight: 600; }
-.danger { border-color: var(--ember); color: var(--ember); }
-.beats { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
-.beat { text-align: left; background: var(--panel); }
-.beat b { display: block; font-family: LCD, monospace; font-weight: 400; font-size: 19px; letter-spacing: 0.08em; color: var(--glow); }
-.beat span { font-size: 12px; color: var(--dim); }
-.beat.armed { border-color: var(--amber); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.row input { flex: 1; min-width: 120px; }
+/* story beats: an app-icon grid, like the phone's home screen */
+.beats { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 18px 8px; }
+.beat { display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 0; background: none; box-shadow: none; border-radius: 0; }
+.beat:active:not(:disabled) { transform: none; }
+.beat .ico { position: relative; width: 60px; height: 60px; border-radius: 16px; display: grid; place-items: center; font-size: 26px;
+  background: linear-gradient(160deg, #18241d, #0b120e);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), inset 0 -1px 0 rgba(0,0,0,0.6), 0 6px 14px rgba(0,0,0,0.55), 0 0 0 1px rgba(159,224,160,0.10);
+  transition: transform 0.12s ease, box-shadow 0.2s ease; }
+.beat .ico span { filter: grayscale(1) sepia(1) hue-rotate(65deg) saturate(2.2) brightness(1.05) drop-shadow(0 0 5px rgba(159,224,160,0.4)); }
+.beat:active:not(:disabled) .ico { transform: scale(0.92); }
+.beat b { font-family: Plex, monospace; font-weight: 400; font-size: 11px; letter-spacing: 0.04em; color: var(--ink); text-align: center; line-height: 1.25; }
+.beat.armed .ico { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--amber), 0 0 22px rgba(230,162,60,0.5); animation: armed 1s ease-in-out infinite; }
 .beat.armed b { color: var(--amber); }
-.beat.done b::after { content: '  ✓'; color: var(--dim); }
-.group-label { font-size: 12px; color: var(--amber); letter-spacing: 0.12em; margin: 14px 0 6px; }
+@keyframes armed { 50% { transform: scale(1.06); } }
+.beat.done .ico::after { content: '✓'; position: absolute; top: -6px; right: -7px; width: 20px; height: 20px; border-radius: 10px; background: var(--glow); color: #06120a; font-size: 12px; font-weight: 600; line-height: 20px; text-align: center; box-shadow: 0 0 0 2px var(--bg); }
+.beat.done b { color: var(--dim); }
+.group-label { font-size: 11px; color: var(--amber); letter-spacing: 0.18em; margin: 6px 4px 12px; }
+.beats + .group-label { margin-top: 22px; }
+.beat-hint { min-height: 2.6em; margin: 14px 4px 0; font-size: 13px; color: var(--dim); }
+.beat-hint b { color: var(--amber); font-weight: 600; }
 .sched { font-size: 13px; }
-.sched div { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+.sched div { display: flex; justify-content: space-between; padding: 7px 2px; border-bottom: 1px dashed rgba(159,224,160,0.1); }
 .sched .done { color: var(--dim); text-decoration: line-through; }
-.toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 18px); transform: translateX(-50%); background: var(--panel); border: 1px solid var(--glow); padding: 10px 14px; max-width: 90vw; font-size: 13px; }
+.toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 18px); transform: translateX(-50%); background: rgba(12,17,14,0.95); border: 1px solid var(--glow); border-radius: 14px; padding: 10px 16px; max-width: 90vw; font-size: 13px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
 .toast.bad { border-color: var(--ember); }
 .note { font-size: 12.5px; color: var(--dim); line-height: 1.5; }
-.tally div { display: flex; justify-content: space-between; padding: 4px 0; }
+.tally div { display: flex; justify-content: space-between; padding: 5px 2px; }
 #login { max-width: 380px; margin: 18vh auto 0; }
+#login .card { margin-top: 14px; }
 [hidden] { display: none !important; }
+@media (prefers-reduced-motion: reduce) { .beat.armed .ico { animation: none; } }
 </style>
 </head>
 <body>
@@ -86,7 +117,7 @@ h2 small { font-size: 15px; letter-spacing: 0.1em; }
     <div class="card">
       <p class="note" id="gameState">No game yet. Create one and send the invite link to your group: friends join themselves, the first to join is the organizer, and the story runs on its own once they tap Start.</p>
       <div class="row">
-        <select id="len" style="flex:1;padding:10px;background:var(--bg);color:var(--ink);border:1px solid var(--line)">
+        <select id="len" style="flex:1">
           <option value="quick">One night · about 75 minutes</option>
           <option value="evening">Slow burn · about 2 hours</option>
         </select>
@@ -108,13 +139,13 @@ h2 small { font-size: 15px; letter-spacing: 0.1em; }
     </div>
 
     <h2>STORY BEATS</h2>
-    <p class="note">Tap once to arm, tap again to send. Everyone's phone reacts right away.</p>
-    <div id="beats"></div>
+    <p class="note" style="margin:0 4px 10px">Tap once to arm, tap again to send. Everyone's phone reacts right away.</p>
+    <div class="card"><div id="beats"></div><p class="beat-hint" id="beatHint">Tap a beat to see what it does.</p></div>
 
     <h2>SCHEDULE</h2>
     <div class="card">
       <p class="note">Pick when the night starts; the whole story (setup to the final call) runs on its own from there.</p>
-      <div class="row"><input id="startAt" type="datetime-local" style="flex:1" /><select id="schedLen" style="padding:10px;background:var(--bg);color:var(--ink);border:1px solid var(--line)"><option value="quick">~75 min</option><option value="evening">~2 hrs</option></select><button id="schedGame">Schedule</button></div>
+      <div class="row"><input id="startAt" type="datetime-local" style="flex:1" /><select id="schedLen"><option value="quick">~75 min</option><option value="evening">~2 hrs</option></select><button id="schedGame">Schedule</button></div>
       <div class="sched" id="sched" style="margin-top:12px"></div>
       <button id="clearSched" style="margin-top:10px">Clear upcoming</button>
     </div>
@@ -228,6 +259,11 @@ async function refresh() {
   line('Revealed', status.revealed ? 'yes' : 'not yet');
 }
 
+const GLYPH = {
+  setup: '⚙️', welcome: '✉️', accomplice: '🗝️', intro: '📜', calls: '☎️', clues: '🔍', cast: '👥', memo: '🎙️',
+  ruthWarning: '⚠️', twist: '🚨', planted: '🃏', caretakerHint: '🕯️', votesOpen: '🗳️', lineRinging: '🔔', reveal: '👁️',
+};
+const NICE = { ruthWarning: 'Ruth warns', caretakerHint: 'Caretaker hint', votesOpen: 'Votes open', lineRinging: 'Line ringing' };
 function drawBeats() {
   const wrap = $('beats'); wrap.replaceChildren();
   BEATS.forEach(([label, beats]) => {
@@ -235,11 +271,17 @@ function drawBeats() {
     const grid = el('div', 'beats');
     beats.forEach(([name, desc]) => {
       const b = el('button', `beat${armed === name ? ' armed' : ''}${fired.has(name) ? ' done' : ''}`);
-      b.append(el('b', null, armed === name ? `SEND ${name}?` : name), el('span', null, desc));
+      b.setAttribute('aria-label', `${name}: ${desc}`);
+      const ico = el('span', 'ico'); ico.append(el('span', null, GLYPH[name] || '•'));
+      const title = NICE[name] || name[0].toUpperCase() + name.slice(1);
+      b.append(ico, el('b', null, armed === name ? 'Tap to send' : title));
       b.onclick = async () => {
-        if (armed !== name) { armed = name; clearTimeout(armTimer); armTimer = setTimeout(() => { armed = null; drawBeats(); }, 4000); drawBeats(); return; }
+        if (armed !== name) {
+          armed = name; clearTimeout(armTimer); armTimer = setTimeout(() => { armed = null; drawBeats(); }, 4000);
+          drawBeats(); return;
+        }
         armed = null; b.disabled = true;
-        try { await api('POST', `/admin/beat/${name}`); fired.add(name); toast(`${name} sent`); refresh(); }
+        try { await api('POST', `/admin/beat/${name}`); fired.add(name); toast(`${title} sent`); refresh(); }
         catch (e) { toast(e.message, true); }
         drawBeats();
       };
@@ -247,6 +289,10 @@ function drawBeats() {
     });
     wrap.append(grid);
   });
+  const desc = armed && BEATS.flatMap(([, list]) => list).find(([n]) => n === armed);
+  const hint = $('beatHint'); hint.replaceChildren();
+  if (desc) hint.append(el('b', null, `${NICE[armed] || armed[0].toUpperCase() + armed.slice(1)}: `), `${desc[1]} Tap again to send.`);
+  else hint.textContent = 'Tap a beat to see what it does.';
 }
 
 $('go').onclick = async () => {
