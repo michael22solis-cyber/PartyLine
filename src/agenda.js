@@ -142,7 +142,7 @@ export async function checkAgenda(p) {
 export async function deliverAgendas() {
   for (const p of players()) {
     const v = agendaView(p);
-    if (!v) continue;
+    if (!v || p.agendaDelivered) continue; // once each
     const LOCKED = '🔒 Sealed until you meet the right person.';
     await deliver({ token: p.token, thread: 'line', from: 'character', kind: 'secret',
       text: `YOUR SECRET AGENDA\n\nYour secret: ${v.secret || LOCKED}\n\n${v.goals.map((g, i) => `${i + 1}. ${g.text || LOCKED}`).join('\n')}\n\nSolve the murder first. These are extra. They're in your Notebook.` });

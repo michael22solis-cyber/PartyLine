@@ -386,7 +386,7 @@ function drawBeats() {
           drawBeats(); return;
         }
         armed = null; b.disabled = true;
-        try { await api('POST', `/admin/beat/${name}`); fired.add(name); toast(`${title} sent`); refresh(); }
+        try { const r = await api('POST', `/admin/beat/${name}`); fired.add(name); toast(r?.skipped ? `${title}: already happened tonight` : `${title} sent`); refresh(); }
         catch (e) { toast(e.message, true); }
         drawBeats();
       };
