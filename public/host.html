@@ -233,7 +233,8 @@ async function refresh() {
   const vn = $('voiceNote'); vn.replaceChildren(); vn.className = 'note';
   if (v) {
     let text;
-    if (v.mode !== 'narrator') text = `Caretaker voice: OpenAI live voice (${v.reason}). Add ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID in Railway to use the intro narrator.`;
+    if (v.mode === 'recorded') text = `Caretaker voice: your recordings (all ${v.total} lines built into the game, no ElevenLabs needed).`;
+    else if (v.mode !== 'narrator') text = `Caretaker voice: OpenAI live voice (${v.reason}). Add ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID in Railway to use the intro narrator.`;
     else if (v.ready >= v.total) text = `Caretaker voice: the intro narrator (ElevenLabs ${v.voice}), all ${v.total} lines ready.`;
     else if (v.error) { text = `Caretaker voice NOT working: ElevenLabs said ${v.error.status}${v.error.message ? ` (“${v.error.message}”)` : ''}. ${v.error.hint} Until it's fixed he uses the OpenAI voice.`; vn.className = 'note bad'; }
     else text = `Caretaker voice: the intro narrator (ElevenLabs ${v.voice}), preparing lines (${v.ready}/${v.total})…`;

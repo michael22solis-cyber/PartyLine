@@ -63,7 +63,8 @@ test('with the narrator voice: his calls are recordings in that voice, generated
   assert.equal(r.status, 200);
   assert.equal(r.body.mode, 'recording');
   assert.equal(r.body.audio.length, 4, 'greeting, riddle, first hint, fading');
-  assert.match(r.body.captions[0], /Maya\.\.\. are you there/);
+  assert.match(r.body.captions[0], /hello\? \.\.\.are you there/, 'the same greeting for everyone: no per-player name clips');
+  assert.ok(!eleven.requests.some((q) => /Maya/.test(q.body.text)), 'names are never sent to ElevenLabs');
   assert.match(r.body.captions[1], /^Twenty steps down/);
   assert.ok(r.body.captions.every((c) => !c.includes('[')), 'delivery tags are never shown');
   assert.ok(eleven.requests.every((q) => q.key === 'xi-test' && q.url.includes('/narrator123') && q.body.model_id === 'eleven_v4'));
@@ -75,12 +76,12 @@ test('with the narrator voice: his calls are recordings in that voice, generated
   assert.ok(allLines().some((l) => l.pid === a.pid && /Twenty steps down/.test(l.text)), 'other characters can know he called');
   assert.equal(mock.log.clientSecrets.filter((s) => /CARETAKER/.test(s.session?.instructions || '')).length, 1, 'no new live session');
 
-  // Another player: only their name is new.
+  // Another player: nothing new to make, so it costs nothing.
   const b = addPlayer({ name: 'Theo' });
   await ringInApp(b, 'caretaker', {});
   const rb = await post(b, '/call', { character: 'caretaker' });
   assert.equal(rb.body.mode, 'recording');
-  assert.equal(eleven.requests.length, n + 1);
+  assert.equal(eleven.requests.length, n);
 
   // His second call to Maya brings a new hint, not the riddle again.
   await ringInApp(a, 'caretaker', {});
@@ -167,9 +168,9 @@ test('warm-up: every fixed line is made at startup, and the host page can see it
   const v = voiceStatus();
   assert.equal(v.mode, 'narrator');
   assert.equal(v.ready, v.total);
-  assert.equal(v.total, 7, 'riddle, 4 hints, sign-off, reveal');
+  assert.equal(v.total, 8, 'greeting, riddle, 4 hints, sign-off, reveal');
   const st = await app.inject({ method: 'GET', url: '/admin/status', headers: { 'x-admin-key': 'test-admin' } });
-  assert.equal(st.json().caretakerVoice.ready, 7);
+  assert.equal(st.json().caretakerVoice.ready, 8);
   assert.ok(!JSON.stringify(st.json().caretakerVoice).includes('narrator123'), 'only the last characters of the voice id are shown');
 });
 
@@ -203,7 +204,7 @@ test('music: five tracks composed once by ElevenLabs Music, each creepier, serve
     'downloadable, named the way public/audio/music/ expects');
 });
 
-test('out of ElevenLabs credits: a new player still gets his recorded lines, just without their name (never a live voice)', async () => {
+test('out of ElevenLabs credits: a new player still gets his recorded lines (never a live voice)', async () => {
   withEleven();
   eleven.status = 401; eleven.body = { detail: { status: 'quota_exceeded', message: 'This request exceeds your quota.' } };
   try {
@@ -211,8 +212,9 @@ test('out of ElevenLabs credits: a new player still gets his recorded lines, jus
     await ringInApp(p, 'caretaker', {});
     const r = await post(p, '/call', { character: 'caretaker' });
     assert.equal(r.body.mode, 'recording', 'his recorded lines, not a paid live call');
-    assert.equal(r.body.audio.length, 3, 'riddle, first hint, fading: the name is skipped');
-    assert.match(r.body.captions[0], /^Twenty steps down/);
+    assert.equal(r.body.audio.length, 4, 'greeting, riddle, first hint, fading: all already recorded');
+    assert.match(r.body.captions[1], /^Twenty steps down/);
+    assert.ok(!eleven.requests.some((q) => /Quinn/.test(q.body.text)));
   } finally { eleven.status = 0; eleven.body = null; }
 });
 

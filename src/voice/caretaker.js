@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { dataFile } from '../paths.js';
+import { dataFile, BUILTIN_AUDIO } from '../paths.js';
 import { ledger } from '../ai/ledger.js';
 import { allowChars } from '../eleven-guard.js';
 
@@ -27,7 +27,20 @@ export const LINES = {
   fading: `${TAG} The line is fading... [long pause] Find me before the line goes dead.`,
   reveal: `${TAG} Thirty years I've waited under that floor. [pause] She sang my wife to sleep... and then she buried me. [long pause] Ruth Calloway. [pause] Dana was going to find me... so Ruth made sure she never reached the bottom of the stairs alive. [long pause] Thank you for listening. [pause] Happy Halloween.`,
 };
-const greeting = (name) => `${TAG} ...${name}... [pause] are you there...?`;
+const HELLO = `${TAG} ...hello? [pause] ...are you there...?`;
+
+// Recorded by the host and built into the game (public/audio/): used instead of ElevenLabs, line by line, and they
+// play even without any ElevenLabs key.
+export const BUILT_FILES = {
+  'caretaker-hello.mp3': HELLO, 'caretaker-riddle.mp3': LINES.riddle,
+  'caretaker-hint1.mp3': LINES.hints[0], 'caretaker-hint2.mp3': LINES.hints[1], 'caretaker-hint3.mp3': LINES.hints[2], 'caretaker-hint4.mp3': LINES.hints[3],
+  'caretaker-fading.mp3': LINES.fading, 'caretaker-reveal.mp3': LINES.reveal,
+};
+const builtFor = (line) => {
+  const file = Object.keys(BUILT_FILES).find((f) => BUILT_FILES[f] === line);
+  return file && fs.existsSync(path.join(BUILTIN_AUDIO(), file)) ? `/assets/audio/${file}` : null;
+};
+const hasBuilt = (line) => Boolean(builtFor(line));
 export const spoken = (line) => line.replace(/\[[^\]]*\]\s*/g, '').trim();
 
 // Railway variables pasted with spaces or quotes around them still work.
@@ -79,25 +92,29 @@ function clip(text) {
 }
 
 // What the Caretaker says on this player's nth call (0-based): the riddle first, then a new hint each time.
-export function script(callIndex, name) {
+// He greets everyone the same way ("...hello? ...are you there?"): no per-player name clips, so his calls cost
+// nothing once his lines are recorded. (The suspects use players' names on their live calls.)
+export function script(callIndex) {
   const hints = LINES.hints;
   const body = callIndex === 0 ? [LINES.riddle, hints[0]] : [hints[callIndex % hints.length]];
-  return [greeting(name), ...body, LINES.fading];
+  return [HELLO, ...body, LINES.fading];
 }
 
 // The recorded call for this player, or null (then the call goes live). `character` is caretaker or caretaker_reveal.
 export async function recordedCall(character, player, callIndex = 0) {
+  let lines = character === 'caretaker_reveal' ? [LINES.reveal] : script(callIndex);
+  if (lines[0] === HELLO && !hasBuilt(HELLO) && lines.slice(1).every(hasBuilt)) lines = lines.slice(1); // no greeting recorded: skip it
+  // Everything built in: no ElevenLabs at all.
+  if (lines.every(hasBuilt)) return { audio: lines.map(builtFor), captions: lines.map(spoken) };
   if (!enabled()) return null;
-  let lines = character === 'caretaker_reveal' ? [LINES.reveal] : script(callIndex, player.name);
   try {
-    // The player's name is the only line made on the fly. If it can't be made (no credits left, a hiccup), he skips
-    // it and plays his recorded lines anyway, rather than switching to a different (paid, live) voice.
-    const named = lines[0] === greeting(player.name);
-    if (named) {
-      const hello = await clip(lines[0]).catch((err) => { console.warn('[caretaker] name clip unavailable, skipping it:', err.message); return null; });
+    // If the greeting can't be made (no credits left, a hiccup), he skips it and plays his recorded lines anyway,
+    // rather than switching to a different (paid, live) voice.
+    if (lines[0] === HELLO && !hasBuilt(HELLO)) {
+      const hello = await clip(HELLO).catch((err) => { console.warn('[caretaker] greeting unavailable, skipping it:', err.message); return null; });
       if (!hello) lines = lines.slice(1);
     }
-    const audio = await Promise.all(lines.map(clip));
+    const audio = await Promise.all(lines.map((l) => builtFor(l) || clip(l)));
     return { audio, captions: lines.map(spoken) };
   } catch (err) {
     console.error('[caretaker] recording unavailable, going live:', err.message);
@@ -108,16 +125,16 @@ export async function recordedCall(character, player, callIndex = 0) {
 
 // Start generating while the phone rings, so answering doesn't wait. Errors surface on answer.
 export function prepare(character, player, callIndex = 0) {
-  if (enabled()) recordedCall(character, player, callIndex).catch(() => {});
+  if (enabled() || hasBuilt(LINES.riddle)) recordedCall(character, player, callIndex).catch(() => {});
 }
 
 // Every fixed line (riddle, hints, sign-off, reveal), generated at startup so the Caretaker is in the narrator's voice
 // from the first call of the night and never has to fall back to a different voice mid-game. Names are made as rings go.
-const FIXED = () => [LINES.riddle, ...LINES.hints, LINES.fading, LINES.reveal];
+const FIXED = () => [HELLO, LINES.riddle, ...LINES.hints, LINES.fading, LINES.reveal];
 export async function warmUp({ attempts = 3 } = {}) {
   if (!enabled()) return;
   for (let attempt = 1; attempt <= attempts; attempt++) {
-    const results = await Promise.allSettled(FIXED().map(clip));
+    const results = await Promise.allSettled(FIXED().filter((l) => !hasBuilt(l)).map(clip));
     const failed = results.filter((r) => r.status === 'rejected');
     if (!failed.length) { console.log(`[caretaker] narrator voice ready (${results.length} lines)`); return; }
     console.error(`[caretaker] ${failed.length} line(s) not generated yet (${failed[0].reason?.message}); attempt ${attempt} of ${attempts}`);
@@ -135,6 +152,8 @@ const HINTS = {
 };
 // For the host page: is the Caretaker on the narrator's voice, are his lines ready, and if not, why?
 export function voiceStatus() {
+  const built = FIXED().filter(hasBuilt).length;
+  if (built === FIXED().length) return { mode: 'recorded', ready: built, total: built, builtIn: true };
   if (!enabled()) {
     const reason = env.CARETAKER_VOICE === 'live' ? 'CARETAKER_VOICE=live' : !KEY() && !VOICE() ? 'ElevenLabs keys not set'
       : !KEY() ? 'ELEVENLABS_API_KEY not set' : 'ELEVENLABS_VOICE_ID not set';
@@ -143,7 +162,7 @@ export function voiceStatus() {
   const lines = FIXED();
   return {
     mode: 'narrator', voice: `…${VOICE().slice(-4)}`, model: model(),
-    ready: lines.filter((t) => fs.existsSync(path.join(DIR, fileFor(t)))).length, total: lines.length,
+    ready: lines.filter((t) => hasBuilt(t) || fs.existsSync(path.join(DIR, fileFor(t)))).length, total: lines.length, builtIn: built,
     error: lastError ? { ...lastError, hint: HINTS[lastError.status] || 'ElevenLabs refused the request.' } : null,
   };
 }
