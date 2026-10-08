@@ -400,7 +400,7 @@ function tutorialVisual(v) {
     const bar = el('div', 'tv-segs');
     for (let i = 0; i < segs; i++) bar.append(el('i', i < lit ? 'on' : ''));
     const row = (label, value) => { const r = el('div', 'tv-row'); r.append(el('span', null, label), el('b', null, value)); return r; };
-    fig.append(row('☎ CALL TIME LEFT', v.max == null ? 'UNLIMITED' : `${v.left} / ${v.max} MIN`), bar, row('⏱ EACH CALL', `UP TO ${fmtSec(v.maxSeconds)}`),
+    fig.append(row(v.shared ? '☎ GROUP CALL TIME' : '☎ CALL TIME LEFT', v.max == null ? 'UNLIMITED' : `${v.left} / ${v.max} MIN`), bar, row('⏱ EACH CALL', `UP TO ${fmtSec(v.maxSeconds)}`),
       el('figcaption', null, 'Out of call time? Texting always works.'));
   } else if (v.type === 'share') {
     const card = el('div', 'tv-card'); card.append(el('small', null, 'CLUE'), el('span', null, '▤ ▤▤▤ ▤▤'), el('b', null, '↗ SHARE'));
@@ -675,8 +675,8 @@ function renderConvo(screen, thread) {
     if (calls) {
       const box = el('div', 'callbox');
       const out = calls.minutesLeft === 0;
-      box.append(call, el('div', `callsleft${out ? ' out' : ''}`, out ? 'NO CALL TIME LEFT'
-        : calls.minutesLeft == null ? `UP TO ${fmtSec(calls.maxSeconds)}` : `${calls.minutesLeft} MIN LEFT · ${fmtSec(calls.maxSeconds)} MAX`));
+      box.append(call, el('div', `callsleft${out ? ' out' : ''}`, out ? (calls.shared ? 'GROUP IS OUT OF CALL TIME' : 'NO CALL TIME LEFT')
+        : calls.minutesLeft == null ? `UP TO ${fmtSec(calls.maxSeconds)}` : `${calls.shared ? 'GROUP: ' : ''}${calls.minutesLeft} MIN LEFT · ${fmtSec(calls.maxSeconds)} MAX`));
       head.append(box);
     } else head.append(call);
   }
@@ -1349,7 +1349,7 @@ async function startCall(character) {
     callBed(character).then((stop) => { if (stop && call === c0) c0.stopBed = stop; else stop?.(); });
   } catch (ex) {
     $('#callState').textContent = ex.name === 'NotAllowedError' ? 'MICROPHONE BLOCKED' : /busy/i.test(ex.message) ? 'LINE BUSY'
-      : /picking up|can't talk right now/i.test(ex.message) ? 'NO ANSWER' : /line is dead/i.test(ex.message) ? 'NO SIGNAL' : 'CALL FAILED';
+      : /picking up|can't talk right now/i.test(ex.message) ? 'NO ANSWER' : /line is dead|out of call time/i.test(ex.message) ? 'NO SIGNAL' : 'CALL FAILED';
     $('#callTime').textContent = ex.name === 'NotAllowedError' ? 'Allow the microphone to talk to them.'
       : ex instanceof TypeError ? 'The line dropped. Try again.' : ex.message;
     setTimeout(() => endCall('connect_failed'), 3200);

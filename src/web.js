@@ -27,9 +27,10 @@ import { callTiming, openingItem, realtimeModel, voiceFor } from './voice/sessio
 import { mintClientSecret, createSidebandCall } from './voice/realtime-api.js';
 import { attachSideband } from './voice/sideband.js';
 import { openCall, getCall, closeCall, callTranscript, callUsage, callDisclose } from './voice/calls.js';
-import { checkCall, chargeCall, resetAllowances, callAllowance, holdOff } from './voice/allowance.js';
+import { checkCall, chargeCall, resetAllowances, callAllowance, holdOff, poolView } from './voice/allowance.js';
 import { resetInitiative } from './initiative.js';
 import { liveView } from './hostview.js';
+import { overBudget, budgetView } from './budget.js';
 import { normalizePhone } from './phonenumber.js';
 import { dataSince } from './paths.js';
 import { sendHint, nextHint } from './hints.js';
@@ -249,6 +250,11 @@ export function registerWeb(app) {
     }
 
     if (!OPENAI_API_KEY) return reply.code(500).send({ error: 'Calls are not set up on this server.' });
+    // This game hit its AI budget (budget.js): no more live calls. Texting still works.
+    if (overBudget()) {
+      ledger.event('call_refused', { session: p.pid, npc: character, reason: 'budget' });
+      return reply.code(429).send({ error: 'The line is dead for tonight. You can still text.', reason: 'budget' });
+    }
     const opening = openingItem((answering && ring.opening) || (answering
       ? c.opening(p.name)
       : `${p.name} has just called you. Answer the phone in character, like you were not expecting a call.`));
@@ -402,6 +408,8 @@ export function registerWeb(app) {
         callMinutes: Math.round((p.callSeconds || 0) / 6) / 10, ...live.players[p.token], hintLeft: Boolean(nextHint(p)), agenda: agendaSummary(p),
       })),
       spend: { usd: live.usd, since: live.since },
+      budget: budgetView(),
+      callPool: poolView(),
       voices: Object.fromEntries(['ruth', 'marcus', 'lily', 'teddy'].map((k) => [CHARACTERS[k].name.split(' ')[0], voiceFor(k)])),
       revealed: getDb().revealed,
       caretakerVoice: caretakerVoice(),

@@ -11,6 +11,7 @@ import { buildNudgePrompt } from './context.js';
 import { chatComplete } from './ai/openai.js';
 import { isUnlocked } from './progress.js';
 import { ledger } from './ai/ledger.js';
+import { overBudget } from './budget.js';
 
 const env = process.env;
 const PER_CHARACTER = 2;
@@ -39,7 +40,7 @@ function count(p, npc) {
 // One unprompted text from `npc` to player `p`, following `direction` (a stage direction the player never sees).
 export async function reachOut(p, npc, direction, why) {
   const target = playerByToken(p.token);
-  if (!target || !initiativeOn() || !CHARACTERS[npc]?.textable || !isUnlocked(target, npc) || !allowed(target, npc)) return null;
+  if (!target || !initiativeOn() || overBudget() || !CHARACTERS[npc]?.textable || !isUnlocked(target, npc) || !allowed(target, npc)) return null;
   count(target, npc);
   const { text } = await chatComplete(buildNudgePrompt({ npc, player: target, direction }), {
     meta: { session: target.pid, npc, capability: 'initiative', purpose: why },

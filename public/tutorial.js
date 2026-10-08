@@ -42,8 +42,9 @@ export function tutorialStep(index, state) {
     },
     {
       icon: 'calls', tag: '02', title: TUTORIAL_TITLES[2],
-      intro: 'Text a suspect, or tap ☎ CALL to talk out loud. Some secrets only come out on a call.',
-      visual: { type: 'calls', left: calls.minutesLeft, max: calls.minutesMax, maxSeconds: calls.maxSeconds },
+      intro: calls.shared ? 'Text a suspect, or tap ☎ CALL to talk out loud. Some secrets only come out on a call. Call time is shared by the whole group, so choose well.'
+        : 'Text a suspect, or tap ☎ CALL to talk out loud. Some secrets only come out on a call.',
+      visual: { type: 'calls', left: calls.minutesLeft, max: calls.minutesMax, maxSeconds: calls.maxSeconds, shared: calls.shared },
       points: [],
       tip: contacts ? 'You have a contact ready. Ask your first question.'
         : 'No contacts yet. Your clue unlocks your first one.',

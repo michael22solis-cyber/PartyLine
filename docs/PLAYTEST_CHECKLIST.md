@@ -69,6 +69,10 @@ few minutes of setup makes it count.
 
 ## During
 
+- **Costs are capped.** The group shares 40 minutes of calls (`CALL_POOL_MINUTES`), and each game has a hard AI budget of
+  $5 (`GAME_BUDGET_USD`): at the cap the line goes dead for live calls in-story, texting continues; at $6.25 replies
+  stop. `/host` shows spend against the budget and the group's call time left.
+
 - **The host page (`/host`) is the live view:** each player's contacts, secrets (☎ = on a call), calls, call minutes
   and AI spend, plus the total spend this game. Anyone silent for 10+ minutes gets a yellow **QUIET** tag.
 - **Stuck players:** tap **Send hint** on their row. They get a whisper on The Line about who to ask and how (never the

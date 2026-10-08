@@ -2,16 +2,10 @@
 // Built from the game file and the in-memory usage ledger (no dialogue).
 import { messagesFor, getDb, getGame } from './store.js';
 import { ledger } from './ai/ledger.js';
+import { gameStart } from './budget.js';
 
 export const QUIET_MS = 10 * 60_000;
 
-// When this game began: the start of auto mode, else the first player joining.
-function gameStart() {
-  const g = getGame();
-  if (g?.startedAt) return Date.parse(g.startedAt);
-  const joined = getDb().players.map((p) => Date.parse(p.joinedAt)).filter(Number.isFinite);
-  return joined.length ? Math.min(...joined) : Date.now();
-}
 
 export function liveView(now = Date.now()) {
   const since = gameStart();
