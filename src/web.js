@@ -31,6 +31,7 @@ import { checkCall, chargeCall, resetAllowances, callAllowance, holdOff } from '
 import { resetInitiative } from './initiative.js';
 import { liveView } from './hostview.js';
 import { sendHint, nextHint } from './hints.js';
+import { agendaView, agendaSummary, checkAgendas } from './agenda.js';
 import { recordedCall, servedFile as caretakerClip, voiceStatus as caretakerVoice, warmUp as warmCaretaker } from './voice/caretaker.js';
 import { statusOf, phase, busyAs, excuseFor } from './cast.js';
 import { trackUrls, bedUrls, servedFile as musicFile, musicStatus, warmUp as warmMusic } from './music.js';
@@ -117,6 +118,7 @@ export function registerWeb(app) {
       lobby: lobbyView(p),
       peers: players().filter((x) => x.token !== p.token).map((x) => ({ pid: x.pid, name: x.name })),
       vote: votes()[p.token] || null,
+      agenda: agendaView(p),
       revealed: getDb().revealed,
       vapidPublicKey,
     });
@@ -270,6 +272,7 @@ export function registerWeb(app) {
       }
       if (answering) answerRing(p.token);
       callCounts.set(p.token, n);
+      if (c.textable && !(p.called || []).includes(character)) updatePlayer(p.token, { called: [...(p.called || []), character] });
       reply.send(out);
     } catch (err) {
       closeCall(call.id, 'connect_failed');
@@ -391,7 +394,7 @@ export function registerWeb(app) {
       players: players().map((p) => ({
         name: p.name, role: p.role, pid: p.pid, phone: Boolean(p.phone), callsOff: p.callsOff, link: linkFor(p.token),
         voted: Boolean(votes()[p.token]), found: (p.found || []).length, contacts: (p.unlocked || []).length,
-        callMinutes: Math.round((p.callSeconds || 0) / 6) / 10, ...live.players[p.token], hintLeft: Boolean(nextHint(p)),
+        callMinutes: Math.round((p.callSeconds || 0) / 6) / 10, ...live.players[p.token], hintLeft: Boolean(nextHint(p)), agenda: agendaSummary(p),
       })),
       spend: { usd: live.usd, since: live.since },
       voices: Object.fromEntries(['ruth', 'marcus', 'lily', 'teddy'].map((k) => [CHARACTERS[k].name.split(' ')[0], voiceFor(k)])),
@@ -507,6 +510,7 @@ export function registerWeb(app) {
 
   // ---------- scheduler: fires due beats every 15 seconds ----------
   const scheduler = setInterval(async () => {
+    checkAgendas().catch((err) => console.error('[agenda]', err.message));
     const now = Date.now();
     for (const s of scheduled()) {
       if (!s.done && Date.parse(s.at) <= now) {

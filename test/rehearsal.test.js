@@ -102,6 +102,7 @@ test('a whole night, start to reveal, with five players', async () => {
     }
 
     assert.deepEqual(plan.filter((b) => !firedBeats().includes(b)), [], 'every beat fired');
+    assert.equal(ps.filter((p) => playerByToken(p.token).leaked).length, 2, 'two secrets leaked with five players');
     assert.ok(ledger.records().some((r) => r.type === 'game_completed'));
     for (const p of ps) {
       assert.ok(thread(p, 'line').some((m) => m.kind === 'reveal'), `${p.name} saw the reveal`);
@@ -111,6 +112,8 @@ test('a whole night, start to reveal, with five players', async () => {
       assert.equal(recap.group.length, 5);
       assert.equal(recap.groupVote.killer, 'Ruth Calloway');
       if (p === ava) assert.ok(recap.heardOnCalls >= 1);
+      assert.ok(thread(p, 'line').some((m) => /^YOUR SECRET AGENDA/.test(m.text)), `${p.name} got an agenda`);
+      assert.ok(recap.group.every((g) => g.agenda?.goals.length === 3), 'the recap reveals every agenda');
     }
     const s = (await app.inject({ method: 'GET', url: '/admin/status', headers: admin })).json();
     assert.ok(s.spend.usd > 0, 'the host sees what the night cost');

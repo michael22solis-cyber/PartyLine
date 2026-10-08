@@ -304,7 +304,7 @@ function renderHome(screen) {
     appButton('messages', 'Messages', 'messages', unreadThreads()),
     appButton('calls', 'Calls', 'calls', unreadCalls()),
     appButton('evidence', 'Evidence', 'evidence', unreadEvidence()),
-    appButton('notes', 'Notes', 'notes'),
+    appButton('notes', 'Notebook', 'notes', (state.agenda?.goals || []).filter((g) => g.status === 'done').length > seenAgenda() ? 1 : 0),
     appButton('vote', 'Vote', 'vote'),
     appButton('recap', 'The End', 'recap', 0, !state.revealed),
   );
@@ -764,9 +764,29 @@ function renderEvidence(screen) {
 const boardKey = `bw-board-${token}`, notesKey = `bw-notes-${token}`;
 let board = {}; try { board = JSON.parse(store.get(boardKey, '{}')); } catch { board = {}; }
 const BOARD_LABEL = ['?', 'SUSPICIOUS', 'CLEARED'];
+const agendaKey = `bw-agenda-seen-${token}`;
+const seenAgenda = () => Number(store.get(agendaKey, '0')) || 0;
+const markAgendaSeen = () => store.set(agendaKey, String((state.agenda?.goals || []).filter((g) => g.status === 'done').length));
 function renderNotes(screen) {
-  screen.append(el('div', 'app-title', 'NOTES'));
+  screen.append(el('div', 'app-title', 'NOTEBOOK'));
   const box = el('div', 'notes');
+  const ag = state.agenda;
+  if (ag) {
+    markAgendaSeen();
+    box.append(el('div', 'section-label', 'SECRET AGENDA'));
+    const sec = el('div', `agenda-secret${ag.leaked ? ' leaked' : ''}`);
+    sec.append(el('span', 'tag', ag.leaked ? 'YOUR SECRET · PEOPLE ARE TALKING' : 'YOUR SECRET'), el('div', null, ag.secret));
+    box.append(sec);
+    const ul = el('ul', 'agenda');
+    const MARK = { done: '✓', failed: '✗', vote: '⧗', open: '' };
+    ag.goals.forEach((g) => {
+      const li = el('li', `st-${g.status}`);
+      li.append(el('span', 'box', MARK[g.status]), el('span', null, g.text));
+      if (g.status === 'vote') li.append(el('em', null, 'decided at the vote'));
+      ul.append(li);
+    });
+    box.append(ul, el('p', 'fine', 'Solving the murder comes first. These are extra, and nobody else can see them until the end.'));
+  }
   box.append(el('div', 'section-label', 'SUSPECT BOARD'));
   const grid = el('div', 'board');
   state.suspects.forEach((name) => {
@@ -869,6 +889,20 @@ function renderRecap(screen) {
       gl.append(li);
     });
     box.append(gl);
+  }
+  if (r.group?.some((g) => g.agenda)) {
+    box.append(el('div', 'section-label', 'HIDDEN AGENDAS'));
+    const best = Math.max(...r.group.map((g) => g.agenda?.done || 0));
+    r.group.filter((g) => g.agenda).forEach((g) => {
+      const card = el('div', `agenda-recap${g.you ? ' you' : ''}`);
+      const head = el('div', 'head');
+      head.append(el('b', null, `${g.name}${g.you ? ' (you)' : ''}`), el('span', null, `${g.agenda.done}/3${best > 0 && g.agenda.done === best ? ' · PUPPET MASTER' : ''}`));
+      card.append(head, el('div', 'secret-line', `${g.agenda.leaked ? '🗣 leaked · ' : ''}${g.agenda.secret}`));
+      const ul = el('ul', 'agenda small');
+      g.agenda.goals.forEach((x) => { const li = el('li', x.done ? 'st-done' : 'st-failed'); li.append(el('span', 'box', x.done ? '✓' : '✗'), el('span', null, x.text)); ul.append(li); });
+      card.append(ul);
+      box.append(card);
+    });
   }
   const share = el('button', 'wide', 'SAVE SHARE CARD');
   share.onclick = () => shareCard(r);
@@ -1404,6 +1438,7 @@ function connect() {
     state.messages.push(m);
     state.arrived[m.id] = Date.now();
     if (m.kind === 'reveal') { state.revealed = true; loadRecap(); }
+    if (m.kind === 'agenda' || /^YOUR SECRET AGENDA/.test(m.text || '')) refresh();
     if (m.from !== 'player') {
       state.typing[m.thread] = false;
       const viewing = (state.view === 'convo' && state.open === m.thread) || (state.view === 'calls' && m.thread === 'unknown');
@@ -1643,7 +1678,7 @@ async function refresh() {
     Object.assign(state.me, fresh.me);
     state.threads = fresh.threads;
     state.phase = fresh.phase; state.music = fresh.music; state.callBeds = fresh.callBeds;
-    state.revealed = fresh.revealed; state.vote = fresh.vote; state.players = fresh.players; state.peers = fresh.peers; state.groups = fresh.groups; state.lobby = fresh.lobby;
+    state.revealed = fresh.revealed; state.vote = fresh.vote; state.players = fresh.players; state.peers = fresh.peers; state.groups = fresh.groups; state.lobby = fresh.lobby; state.agenda = fresh.agenda;
     if (state.revealed && !state.recap) loadRecap();
     render();
     if ($('#power').hidden && !roleSeen() && state.me.assigned) showRole();

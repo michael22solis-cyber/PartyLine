@@ -176,12 +176,14 @@ const BEATS = [
   ]],
   ['The night', [
     ['accomplice', 'Secret orders to the accomplice.'],
+    ['agendas', 'Everyone’s sealed secret and three goals (dealt at setup).'],
     ['intro', 'The story arrives on The Line.'],
     ['calls', 'The Caretaker rings everyone, then each clue arrives.'],
     ['clues', 'Just the clues, no calls.'],
     ['cast', 'Everyone gets every suspect’s number (backup).'],
     ['memo', 'Dana’s voice memo.'],
     ['ruthWarning', 'Ruth calls whoever dug into the cellar most.'],
+    ['leak', 'Teddy leaks one player’s secret to two others (2 a night with 5+ players).'],
     ['twist', 'The anonymous 911 call.'],
     ['planted', 'Planted evidence for the accomplice.'],
     ['lilyCalls', 'Lily calls everyone, ready to talk. Miss her and she shuts down for 10 minutes.'],
@@ -272,7 +274,7 @@ async function refresh() {
       btns.append(share);
     }
     row.append(name, btns,
-      el('div', 'meta', `${p.contacts} contacts · ${p.found} secrets${p.foundOnCall ? ` (${p.foundOnCall} ☎)` : ''} · ${p.calls ?? 0} calls, ${p.callMinutes ?? 0} min · ${usd(p.usd)}${p.hinted ? ` · ${p.hinted} hint${p.hinted > 1 ? 's' : ''}` : ''}${p.callsOff ? ' · calls off' : ''}${p.phone ? ' · phone on file' : ''}`),
+      el('div', 'meta', `${p.contacts} contacts · ${p.found} secrets${p.foundOnCall ? ` (${p.foundOnCall} ☎)` : ''} · ${p.calls ?? 0} calls, ${p.callMinutes ?? 0} min · ${usd(p.usd)}${p.hinted ? ` · ${p.hinted} hint${p.hinted > 1 ? 's' : ''}` : ''}${p.agenda ? ` · agenda ${p.agenda.done}/3${p.agenda.leaked ? ' · secret leaked' : ''}` : ''}${p.callsOff ? ' · calls off' : ''}${p.phone ? ' · phone on file' : ''}`),
       el('div', 'link', p.link));
     box.append(row);
   });
@@ -291,9 +293,9 @@ async function refresh() {
 
 const GLYPH = {
   setup: '⚙️', welcome: '✉️', accomplice: '🗝️', intro: '📜', calls: '☎️', clues: '🔍', cast: '👥', memo: '🎙️',
-  ruthWarning: '⚠️', twist: '🚨', planted: '🃏', lilyCalls: '📱', caretakerHint: '🕯️', votesOpen: '🗳️', lineRinging: '🔔', reveal: '👁️',
+  ruthWarning: '⚠️', agendas: '📓', leak: '🗣️', twist: '🚨', planted: '🃏', lilyCalls: '📱', caretakerHint: '🕯️', votesOpen: '🗳️', lineRinging: '🔔', reveal: '👁️',
 };
-const NICE = { lilyCalls: 'Lily calls', ruthWarning: 'Ruth warns', caretakerHint: 'Caretaker hint', votesOpen: 'Votes open', lineRinging: 'Line ringing' };
+const NICE = { agendas: 'Agendas', lilyCalls: 'Lily calls', ruthWarning: 'Ruth warns', caretakerHint: 'Caretaker hint', votesOpen: 'Votes open', lineRinging: 'Line ringing' };
 function drawBeats() {
   const wrap = $('beats'); wrap.replaceChildren();
   BEATS.forEach(([label, beats]) => {

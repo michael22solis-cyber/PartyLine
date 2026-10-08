@@ -4,6 +4,7 @@ import { tallyVotes } from './beats.js';
 import { KEY_BY_NAME } from './characters/index.js';
 import { allLines } from './memory.js';
 import { mayAward } from './disclosure.js';
+import { agendaSummary } from './agenda.js';
 
 const TRUTH = { killer: 'Ruth Calloway' };
 
@@ -59,10 +60,11 @@ export function recapFor(player) {
     myVote: v, groupVote: { killer: tally.killer, accomplice: tally.accomplice },
     found: found.map((f) => (onCall.includes(f) ? `${f.label} ☎` : f.label)), heardOnCalls: onCall.length, missed: FOUND.filter((f) => !found.includes(f)).map((f) => f.label),
     totalClues: FOUND.length, textsSent: asked,
+    agenda: agendaSummary(player),
     // Everyone's night, side by side (roles are public by now: the reveal names the accomplice).
     group: players().map((p) => {
       const f = p.token === player.token ? { found, onCall } : findsFor(p);
-      return { name: p.name, you: p.token === player.token, accomplice: p.role === 'accomplice', found: f.found.length, onCall: f.onCall.length, vote: votes()[p.token]?.killer || null };
+      return { name: p.name, you: p.token === player.token, accomplice: p.role === 'accomplice', found: f.found.length, onCall: f.onCall.length, vote: votes()[p.token]?.killer || null, agenda: agendaSummary(p) };
     }).sort((a, b) => b.found - a.found),
   };
 }

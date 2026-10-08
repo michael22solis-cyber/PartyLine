@@ -47,6 +47,11 @@ few minutes of setup makes it count.
 - **Busy means busy.** Teddy is live during the early part and the deep part of the night, Marcus is driving late, Lily is
   on shift early. The first call goes unanswered with a text excuse; try again in two minutes. Their texts come a little
   slower too.
+- **Secret agendas (pilot).** Everyone gets a sealed secret and three goals in their **Notebook**: something to
+  uncover, something social (share clues, start a group chat, call three suspects, swing the vote), and *keep your
+  secret: don't let anyone name you as the accomplice*. The accomplice gets misdirection goals. About 37 and 57 minutes
+  in, Teddy leaks someone's secret to two other players (once with fewer than 5 players) and Ruth warns that player.
+  The end screen reveals every agenda, and whoever completed the most is **Puppet Master**.
 - **Characters text first.** Accuse someone and they come back to it a few minutes later; uncover a secret and they ask
   you to keep it quiet; word gets around and another suspect gossips to someone else. Capped at 2 per character and 5
   per player a night. `INITIATIVE=off` turns it off.
@@ -79,6 +84,8 @@ few minutes of setup makes it count.
    - Did anyone notice that texting "ok" or "thanks" gets no reply?
    - Did people call on their own, or only answer? Did the busy excuses and unprompted texts feel alive, or annoying?
    - Did the hints arrive too early, too late, or not at all? Was anyone tagged QUIET who was actually busy?
+   - Agendas: did people chase their goals, or ignore them? Did the leaks cause drama or just confusion? Which goals felt
+     impossible or too easy?
 
 `data/usage.jsonl` contains no dialogue, so it is safe to share for tuning.
 
