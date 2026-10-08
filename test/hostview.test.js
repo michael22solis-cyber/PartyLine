@@ -78,3 +78,15 @@ test('character voices can be changed from Railway variables; a typo falls back 
   assert.equal((out.session || out).audio.output.voice, 'shimmer', 'the live call uses it');
   delete process.env.VOICE_RUTH; delete process.env.VOICE_TEDDY;
 });
+
+test('the host can type a phone number any normal way', async () => {
+  const { normalizePhone } = await import('../src/phonenumber.js');
+  for (const raw of ['8066328929', '(806) 632-8929', '806.632.8929', '1 806 632 8929', '+18066328929']) assert.equal(normalizePhone(raw), '+18066328929', raw);
+  assert.equal(normalizePhone('+44 20 7946 0958'), '+442079460958');
+  assert.equal(normalizePhone('12345'), null);
+  const ok = await app.inject({ method: 'POST', url: '/admin/players', headers: admin, payload: { name: 'Pat', phone: '8066328929' } });
+  assert.equal(ok.statusCode, 200);
+  assert.equal(getDb().players.find((p) => p.name === 'Pat').phone, '+18066328929');
+  const bad = await app.inject({ method: 'POST', url: '/admin/players', headers: admin, payload: { name: 'Q', phone: '555' } });
+  assert.equal(bad.statusCode, 400);
+});
