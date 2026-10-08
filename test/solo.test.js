@@ -39,3 +39,13 @@ test('every beat runs with one or two players without failing', async () => {
     assert.equal(r.statusCode, 200, `${name}: ${r.body}`);
   }
 });
+
+test('a beat fired twice (by hand, or by hand and on schedule) sends nothing twice', async () => {
+  const { messagesFor: msgs } = await import('../src/store.js');
+  const p = addPlayer({ name: 'Twice' });
+  const count = () => msgs(p.token).filter((m) => m.kind === 'memo').length;
+  const before = count();
+  const r = await app.inject({ method: 'POST', url: '/admin/beat/memo', headers: admin });
+  assert.match(r.json().skipped || '', /already happened/, 'memo already ran in the earlier test');
+  assert.equal(count(), before);
+});

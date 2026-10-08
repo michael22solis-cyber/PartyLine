@@ -1,6 +1,6 @@
 // The scripted moments of The Blackwood Line: one night, about 75 minutes (timetables in modes.js).
 // Fire them by hand during a playtest (`npm run admin -- beat <name>`) or schedule them.
-import { players, updatePlayer, votes, setRevealed, markBeat } from './store.js';
+import { players, updatePlayer, votes, setRevealed, markBeat, messagesFor, firedBeats, playerByToken } from './store.js';
 import { deliver, emit } from './live.js';
 import { callPlayer, ringInApp, unlock, unlockMentions, unlockAll, audioIf, unlockedFor } from './progress.js';
 import { getDb } from './store.js';
@@ -49,7 +49,10 @@ async function callEach(character, gapMs = 0) {
 // A player's starting clue: it also puts Ruth, and anyone the clue names, in their phone.
 async function giveClue(p) {
   const clue = p.clue || STARTING_CLUES[0];
-  await deliver({ token: p.token, thread: 'line', from: 'character', kind: 'clue', text: clue });
+  // Once per player: the calls beat and the clues beat both hand out clues, so never send it twice.
+  if (!messagesFor(p.token).some((m) => m.kind === 'clue' && m.text === clue)) {
+    await deliver({ token: p.token, thread: 'line', from: 'character', kind: 'clue', text: clue });
+  }
   await unlock(p, 'ruth', 'She was the family’s night nurse. She wants to help.');
   await unlockMentions(p, clue);
 }
@@ -67,12 +70,12 @@ export const BEATS = {
         clue: STARTING_CLUES[i % STARTING_CLUES.length],
       });
     });
-    // With fewer than 6 players, double up so every clue reaches someone.
-    if (ps.length < STARTING_CLUES.length) {
-      for (let i = ps.length; i < STARTING_CLUES.length; i++) {
-        const p = ps[i % ps.length];
-        updatePlayer(p.token, { clue: `${p.clue}\n\n${STARTING_CLUES[i]}` });
-      }
+    // With fewer than 6 players, the leftover clues still reach someone, but later (the nudge beat, a few minutes
+    // in), so nobody meets half the cast in their very first message.
+    ps.forEach((p) => updatePlayer(p.token, { extraClues: [] }));
+    for (let i = ps.length; i < STARTING_CLUES.length; i++) {
+      const p = playerByToken(ps[i % ps.length].token);
+      updatePlayer(p.token, { extraClues: [...(p.extraClues || []), STARTING_CLUES[i]] });
     }
     dealAgendas(); // everyone's secret and three goals (see agenda.js)
     return { players: ps.length, accomplice: ps.length >= 4 ? accomplice.name : '(none, fewer than 4 players)', ...(ps.length < 3 ? { note: 'Fewer than 3 players: fine for testing, too few for a real game.' } : {}) };
@@ -119,6 +122,14 @@ export const BEATS = {
 
   // Anyone still down to one contact a few minutes in: a suspect finds them first, so nobody sits waiting.
   async nudge() {
+    // First, the leftover starting clues (small groups): another lead turns up.
+    for (const p of everyone()) {
+      for (const clue of p.extraClues || []) {
+        if (messagesFor(p.token).some((m) => m.kind === 'clue' && m.text.endsWith(clue))) continue;
+        await deliver({ token: p.token, thread: 'line', from: 'character', kind: 'clue', text: `ANOTHER LEAD TURNED UP:\n${clue}` });
+        await unlockMentions(p, clue);
+      }
+    }
     let nudged = 0;
     for (const p of everyone()) {
       if (unlockedFor(p).length > 1) continue;
@@ -259,9 +270,14 @@ async function sendPhoto({ npc, image, text, remember: what }) {
   }
 }
 
+const REPEATABLE = new Set(['leak', 'caretakerHint', 'nudge', 'agendas']); // agendas: deals only players without one
+
 export async function runBeat(name) {
   const fn = BEATS[name];
   if (!fn) throw Object.assign(new Error(`Unknown beat "${name}". Options: ${Object.keys(BEATS).join(', ')}`), { status: 400 });
+  // Each moment of the story happens once a night: firing it again (by hand, or when it's also scheduled) would send
+  // its clues, evidence and photos a second time. A few are meant to repeat.
+  if (!REPEATABLE.has(name) && firedBeats().includes(name)) return { skipped: `${name} already happened tonight` };
   console.log(`[beat] ${name}`);
   const result = (await fn()) || { ok: true };
   markBeat(name);
