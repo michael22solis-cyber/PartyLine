@@ -183,14 +183,9 @@ const icon = (name) => {
   const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = ICONS[name]; return s;
 };
-const MANOR = `<svg class="manor" viewBox="0 0 400 180" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
-  <defs><linearGradient id="fog" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0c140f" stop-opacity="0"/><stop offset="1" stop-color="#0c140f"/></linearGradient></defs>
-  <path d="M0 180V150l40-8 30 10 22-12 30 8v-14l20-20 24-30 14-10 14 10 8-18 10 18 16-6 12 24 30 6 14 20v62z" fill="#0a0f0c" stroke="#1a231e"/>
-  <path d="M110 180v-60l30-34 30 34v60zM240 180v-54l40-30 40 30v54z" fill="#060908" stroke="#1a231e"/>
-  <rect class="win" x="134" y="128" width="9" height="13"/><rect class="win b" x="154" y="128" width="9" height="13"/>
-  <rect class="win b" x="266" y="124" width="9" height="13"/><rect class="win" x="292" y="124" width="9" height="13"/>
-  <path d="M0 150h400v30H0z" fill="url(#fog)"/>
-</svg>`;
+// The wallpaper: Blackwood Manor at night (from the intro), with drifting fog and lights that flicker. Its mood
+// follows the night (see the data-phase styles): warm at first, colder after dark, red near the end, grey at dawn.
+const WALL = '<div class="wall" aria-hidden="true"><i class="fog a"></i><i class="fog b"></i><i class="grain"></i></div>';
 
 // ============ navigation ============
 function go(view, open = null) {
@@ -321,7 +316,8 @@ function renderHome(screen) {
     guide.onclick = () => startTutorial();
     home.append(guide);
   }
-  home.insertAdjacentHTML('beforeend', MANOR);
+  home.dataset.phase = state.phase || 'before';
+  home.insertAdjacentHTML('afterbegin', WALL);
   screen.append(home);
 }
 
