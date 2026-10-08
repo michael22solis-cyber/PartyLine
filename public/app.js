@@ -138,6 +138,21 @@ const sfx = (() => {
     unlock: ensure,
     click: () => tone(1400, 0, 0.03, 'square', 0.02),
     msg: () => { tone(880, 0, 0.12); tone(660, 0.14, 0.18); buzz(60); },
+    // Each suspect has their own text tone, so you know who it is before you look.
+    from: (npc) => {
+      const t = { ruth: [[523, 0, 0.22, 'sine'], [392, 0.24, 0.3, 'sine']], lily: [[740, 0, 0.1, 'triangle'], [740, 0.16, 0.1, 'triangle']],
+        marcus: [[330, 0, 0.09, 'square'], [440, 0.1, 0.09, 'square']], teddy: [[988, 0, 0.07], [1319, 0.08, 0.07], [1568, 0.16, 0.1]] }[npc];
+      if (!t) return sfx.msg();
+      t.forEach(([f, at, dur, type = 'square']) => tone(f, at, dur, type)); buzz(60);
+    },
+    // The line goes dead: a short burst of static.
+    static: () => {
+      const c = ensure(); if (!c || !enabled()) return;
+      const len = Math.floor(c.sampleRate * 0.45); const buf = c.createBuffer(1, len, c.sampleRate); const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      const src = c.createBufferSource(); const g = c.createGain(); g.gain.value = 0.06; src.buffer = buf; src.connect(g).connect(c.destination); src.start();
+    },
+    tick: () => tone(1800, 0, 0.04, 'square', 0.03),
     hum: () => { tone(55, 0, 1.6, 'sawtooth', 0.05, 110); tone(82, 0.2, 1.4, 'sine', 0.05, 164); },
     creak: () => tone(140, 0, 0.5, 'sawtooth', 0.02, 70),
     ring: () => {
@@ -168,6 +183,17 @@ function tick() {
   $('#clock').textContent = fmtTime(now);
   const big = $('#bigClock'); if (big) big.textContent = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s?[AP]M/i, '');
   const d = $('#bigDate'); if (d) d.textContent = now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '').toUpperCase();
+  const nc = $('#nightClock'); if (nc) { const t = nightClockText(); nc.textContent = t; nc.hidden = !t; }
+}
+// "Votes open in 18 min", then "Final call in 5 min": the pace of the night, on the home screen.
+function nightClockText(now = Date.now()) {
+  const c = state.clock;
+  if (!c || state.revealed) return '';
+  if (c.paused) return '⏸ PAUSED BY THE HOST';
+  const mins = (iso) => Math.max(0, Math.ceil((Date.parse(iso) - now) / 60_000));
+  if (c.votesAt && Date.parse(c.votesAt) > now) return `VOTES OPEN IN ${mins(c.votesAt)} MIN`;
+  if (c.finalAt) return Date.parse(c.finalAt) > now ? `FINAL CALL IN ${mins(c.finalAt)} MIN` : 'THE FINAL CALL IS COMING';
+  return '';
 }
 setInterval(tick, 10_000);
 
@@ -309,7 +335,10 @@ function renderHome(screen) {
     appButton('recap', 'The End', 'recap', 0, !state.revealed),
   );
   if (state.lobby?.status === 'lobby') home.append(clock, lobbyPanel(), grid);
-  else home.append(clock, line, castStrip(), grid);
+  else {
+    const nc = el('div', `night-clock${state.clock?.paused ? ' paused' : ''}`, nightClockText()); nc.id = 'nightClock'; nc.hidden = !nc.textContent;
+    home.append(clock, line, nc, castStrip(), grid);
+  }
   // The field guide stays on the home screen until it's done; after that it lives in the ⋮ menu.
   if (tutorial.status !== 'complete') {
     const guide = el('button', 'home-guide');
@@ -947,6 +976,69 @@ async function shareCard(r) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'blackwood-line.png'; a.click();
 }
 
+// ============ the votes, counted out before the final call ============
+function showVotes({ rows, total }) {
+  document.querySelector('.votes-overlay')?.remove();
+  const box = el('div', 'votes-overlay'); box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', 'The votes');
+  const inner = el('div', 'votes-inner');
+  inner.append(el('div', 'votes-title', 'THE VOTES ARE IN'));
+  const list = el('div', 'votes-rows');
+  inner.append(list);
+  const foot = el('div', 'votes-foot', total ? '' : 'Nobody voted.');
+  inner.append(foot);
+  box.append(inner);
+  box.onclick = () => box.remove();
+  document.body.append(box);
+  music.sync();
+  // Names appear, then each vote lands one at a time.
+  let at = 600;
+  rows.forEach((r) => {
+    const row = el('div', 'votes-row'); const dots = el('span', 'dots');
+    row.append(el('b', null, r.name), dots); row.style.opacity = '0';
+    list.append(row);
+    setTimeout(() => { row.style.opacity = '1'; }, at);
+    at += 500;
+    for (let i = 0; i < r.count; i++) { setTimeout(() => { dots.append(el('i')); sfx.tick(); }, at); at += 700; }
+  });
+  setTimeout(() => { foot.textContent = 'The line is ringing…'; }, at + 600);
+  setTimeout(() => box.remove(), at + 15_000);
+}
+
+// ============ while you were away ============
+const awayKey = `bw-away-${token}`;
+const markHere = () => store.set(awayKey, new Date().toISOString());
+function catchUp() {
+  const since = store.get(awayKey, '');
+  markHere();
+  if (!since || Date.now() - Date.parse(since) < 2 * 60_000 || state.lobby?.status === 'lobby') return;
+  const fresh = state.messages.filter((m) => m.at > since && m.from !== 'player');
+  if (!fresh.length) return;
+  const lines = [];
+  const by = {};
+  fresh.filter((m) => CAST[m.thread] && m.kind !== 'contact').forEach((m) => { by[m.thread] = (by[m.thread] || 0) + 1; });
+  Object.entries(by).forEach(([k, n]) => lines.push([`💬 ${n} message${n > 1 ? 's' : ''} from ${CAST[k].split(' ')[0]}`, 'messages', k]));
+  fresh.filter((m) => m.kind === 'contact').forEach((m) => lines.push([`👤 ${m.text.replace(/^NEW CONTACT: /, '').split(',')[0]} is in your phone`, 'messages', 'line']));
+  const ev = fresh.filter((m) => EVIDENCE_KINDS.has(m.kind)).length;
+  if (ev) lines.push([`🗂 ${ev} new piece${ev > 1 ? 's' : ''} of evidence`, 'evidence', null]);
+  fresh.filter((m) => m.kind === 'missed' || m.kind === 'voicemail').forEach((m) => lines.push([`☎ ${m.kind === 'voicemail' ? 'Voicemail' : 'Missed call'}${CAST[m.npc] ? ` from ${CAST[m.npc].split(' ')[0]}` : ''}`, 'calls', null]));
+  const agenda = fresh.filter((m) => m.kind === 'agenda').length;
+  if (agenda) lines.push(['📓 Your Notebook changed', 'notes', null]);
+  if (!lines.length) return;
+  const box = el('div', 'catchup'); box.setAttribute('role', 'dialog');
+  const card = el('div', 'catchup-card');
+  card.append(el('div', 'catchup-title', 'WHILE YOU WERE AWAY'));
+  lines.slice(0, 6).forEach(([text, view, open]) => {
+    const b = el('button', 'catchup-row', text);
+    b.onclick = () => { box.remove(); go(view, open); };
+    card.append(b);
+  });
+  const ok = el('button', 'wide', 'GOT IT'); ok.onclick = () => box.remove();
+  card.append(ok);
+  box.append(card);
+  document.body.append(box);
+}
+setInterval(() => { if (document.visibilityState === 'visible') markHere(); }, 30_000);
+
 // ============ incoming call overlay ============
 let ringTimeout = null;
 let ringFor = null; // character key when the call can be answered in the app
@@ -982,6 +1074,7 @@ let declined = null; // the ring the player turned down, so catching up doesn't 
 $('#ringDismiss').onclick = () => { declined = ringFor; hideRing(); };
 $('#ringAnswer').onclick = () => { const c = ringFor; hideRing(); if (c) startCall(c); };
 function incoming({ character, from }) {
+  document.querySelector('.votes-overlay')?.remove();
   declined = null;
   const ghost = character.startsWith('caretaker');
   const t = state.threads.find((x) => x.key === character);
@@ -1125,7 +1218,7 @@ const music = (() => {
     while (i >= 0 && !tracks[MUSIC_ORDER[i]]) i -= 1; // not composed yet: keep the latest one that is
     return i >= 0 ? { name: MUSIC_ORDER[i], url: tracks[MUSIC_ORDER[i]] } : null;
   }
-  const shouldPlay = () => musicOn() && !call && $('#ring').hidden && $('#power').hidden && $('#intro').hidden && !document.hidden && audioEl.paused;
+  const shouldPlay = () => musicOn() && !call && $('#ring').hidden && !document.querySelector('.votes-overlay') && $('#power').hidden && $('#intro').hidden && !document.hidden && audioEl.paused;
   function fadeOut(t, secs = 1.2) {
     if (!t) return;
     const ctx = t.gain.context;
@@ -1349,7 +1442,7 @@ async function startCall(character) {
     callBed(character).then((stop) => { if (stop && call === c0) c0.stopBed = stop; else stop?.(); });
   } catch (ex) {
     $('#callState').textContent = ex.name === 'NotAllowedError' ? 'MICROPHONE BLOCKED' : /busy/i.test(ex.message) ? 'LINE BUSY'
-      : /picking up|can't talk right now/i.test(ex.message) ? 'NO ANSWER' : /line is dead|out of call time/i.test(ex.message) ? 'NO SIGNAL' : 'CALL FAILED';
+      : /picking up|can't talk right now/i.test(ex.message) ? 'NO ANSWER' : /line is dead|out of call time/i.test(ex.message) ? (sfx.static(), 'NO SIGNAL') : 'CALL FAILED';
     $('#callTime').textContent = ex.name === 'NotAllowedError' ? 'Allow the microphone to talk to them.'
       : ex instanceof TypeError ? 'The line dropped. Try again.' : ex.message;
     setTimeout(() => endCall('connect_failed'), 3200);
@@ -1456,7 +1549,7 @@ function connect() {
       const isRinging = m.thread === 'line' && /line is ringing/i.test(m.text);
       if (isCall) showRing('BLACKWOOD MANOR', 'Your real phone is ringing. Pick it up.');
       else if (isRinging) showRing('THE LINE', 'It’s ringing. Everyone’s phone is ringing.');
-      else if (!['missed', 'calllog'].includes(m.kind)) { sfx.msg(); if (!viewing) toast(m); }
+      else if (!['missed', 'calllog'].includes(m.kind)) { if (/^No signal/.test(m.text || '')) sfx.static(); else if (CAST[m.thread]) sfx.from(m.thread); else sfx.msg(); if (!viewing) toast(m); }
     }
     render();
     setTimeout(() => { if (Object.values(state.arrived).some((t) => Date.now() - t < 1000)) render(); }, 1000);
@@ -1484,6 +1577,8 @@ function connect() {
     state.messages.forEach((m) => { if (m.thread === thread && m.from === 'player' && !m.readAt) m.readAt = at; });
     render();
   });
+  es.addEventListener('clock', (e) => { state.clock = JSON.parse(e.data); render(); });
+  es.addEventListener('votes', (e) => showVotes(JSON.parse(e.data)));
   es.addEventListener('status', (e) => {
     const statuses = JSON.parse(e.data);
     state.threads.forEach((t) => { if (statuses[t.key] != null) t.status = statuses[t.key]; });
@@ -1691,7 +1786,7 @@ async function refresh() {
     Object.assign(state.me, fresh.me);
     state.threads = fresh.threads;
     state.phase = fresh.phase; state.music = fresh.music; state.callBeds = fresh.callBeds;
-    state.revealed = fresh.revealed; state.vote = fresh.vote; state.players = fresh.players; state.peers = fresh.peers; state.groups = fresh.groups; state.lobby = fresh.lobby; state.agenda = fresh.agenda;
+    state.revealed = fresh.revealed; state.vote = fresh.vote; state.players = fresh.players; state.peers = fresh.peers; state.groups = fresh.groups; state.lobby = fresh.lobby; state.agenda = fresh.agenda; state.clock = fresh.clock;
     if (state.revealed && !state.recap) loadRecap();
     // A call that started ringing while this screen wasn't listening.
     if (fresh.ringing && $('#ring').hidden && !call && declined !== fresh.ringing.character) incoming({ character: fresh.ringing.character, from: '' });
@@ -1699,7 +1794,7 @@ async function refresh() {
     if ($('#power').hidden && !roleSeen() && state.me.assigned) showRole();
   } catch { /* offline: try again next time */ }
 }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh().then(catchUp); else markHere(); });
 // Safety net: if live updates quietly stall (some networks hold them back), check in every 20 seconds anyway.
 setInterval(() => { if (document.visibilityState === 'visible' && token) refresh(); }, 20_000);
 
@@ -1740,6 +1835,7 @@ async function boot() {
     if (state.ringing) incoming({ character: state.ringing.character, from: '' });
     if (!roleSeen() && state.me.assigned) await showRole();
     if (!fromHash && !state.revealed && !state.ringing && !organizerWaiting() && ['new', 'active'].includes(tutorial.status)) startTutorial();
+    else if (!state.ringing) catchUp();
   } else {
     $('#pwrBtn').onclick = (e) => { e.stopPropagation(); $('#pwrBtn').disabled = true; firstRun(); };
   }

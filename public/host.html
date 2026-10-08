@@ -117,6 +117,8 @@ h2 small button { padding: 6px 12px; font-size: 12px; }
       <div class="stat"><b id="sNext">—</b><span id="sNextLabel">next beat</span></div>
       <div class="stat"><b id="sSpend">$0</b><span id="sSpendLabel">AI spend this game</span></div>
     </div>
+    <div class="row" style="margin-top:10px"><button id="pause" style="flex:1">⏸ Pause the night</button></div>
+    <div class="card" id="rejoinCard" style="margin-top:10px" hidden><div id="rejoins"></div></div>
     <p class="note" id="voiceNote"></p>
 
     <h2>AUTO MODE</h2>
@@ -267,6 +269,20 @@ async function refresh() {
       vn.append(retry);
     }
   }
+  // Pause / resume
+  $('pause').textContent = status.paused ? '▶ Resume the night' : '⏸ Pause the night';
+  $('pause').classList.toggle('primary', Boolean(status.paused));
+  // Someone lost their link and asked to get back in from the invite page.
+  const rj = $('rejoins'); rj.replaceChildren();
+  $('rejoinCard').hidden = !status.rejoins?.length;
+  (status.rejoins || []).forEach((r) => {
+    const row = el('div', 'row'); row.style.alignItems = 'center';
+    const yes = el('button', 'primary', 'Let in'); const no = el('button', null, 'No');
+    const decide = async (approve) => { try { await api('POST', `/admin/rejoin/${r.rid}`, { approve }); toast(approve ? `${r.name} is back in` : 'Request turned down'); } catch (e) { toast(e.message, true); } refresh(); };
+    yes.onclick = () => decide(true); no.onclick = () => decide(false);
+    row.append(el('span', null, `${r.name} wants back in (lost their link).`), yes, no);
+    rj.append(row);
+  });
   const g = status.game;
   $('inviteRow').hidden = !g?.invite; $('startRow').hidden = !(g && g.status === 'lobby');
   if (g?.invite) $('invite').value = g.invite;
@@ -379,6 +395,11 @@ $('newGame').onclick = async () => {
   try { await api('POST', '/admin/reset'); const g = await api('POST', '/admin/game', { length: $('len').value }); fired.clear(); toast('Game created. Send the invite link.'); $('invite').value = g.invite; refresh(); drawBeats(); }
   catch (e) { toast(e.message, true); }
 };
+$('pause').onclick = async () => {
+  try { const r = await api('POST', status?.paused ? '/admin/resume' : '/admin/pause'); toast(r.paused ? 'Paused. Beats hold until you resume.' : `Resumed${r.shiftedMinutes ? `: the rest of the night moved ${r.shiftedMinutes} min later` : ''}.`); }
+  catch (e) { toast(e.message, true); }
+  refresh();
+};
 $('copyInvite').onclick = async () => { try { await navigator.clipboard.writeText($('invite').value); toast('Invite link copied'); } catch { $('invite').select(); } };
 $('startGame').onclick = async () => { try { await api('POST', '/admin/start'); toast('The line is open'); refresh(); } catch (e) { toast(e.message, true); } };
 
@@ -388,7 +409,7 @@ $('startGame').onclick = async () => { try { await api('POST', '/admin/start'); 
 }
 drawBeats();
 if (key) refresh(); else $('login').hidden = false;
-setInterval(() => { if (key && !document.hidden) refresh(); }, 10000);
+setInterval(() => { if (key && !document.hidden) refresh(); }, 5000);
 </script>
 </body>
 </html>
