@@ -235,12 +235,30 @@ async function refresh() {
     else if (v.error) { text = `Caretaker voice NOT working: ElevenLabs said ${v.error.status}${v.error.message ? ` (“${v.error.message}”)` : ''}. ${v.error.hint} Until it's fixed he uses the OpenAI voice.`; vn.className = 'note bad'; }
     else text = `Caretaker voice: the intro narrator (ElevenLabs ${v.voice}), preparing lines (${v.ready}/${v.total})…`;
     vn.append(text);
-    if (mu) vn.append(mu.mode !== 'on' ? ` Music: off (${mu.reason}).` : mu.ready >= mu.total ? ` Music: all ${mu.total} tracks ready.`
-      : mu.error && !mu.working ? ` Music: not working yet (${mu.error}).` : ` Music: composing tracks (${mu.ready}/${mu.total})…`);
+    if (mu) {
+      vn.append(mu.mode !== 'on' ? ` Music: off (${mu.reason}).` : mu.ready >= mu.total ? ` Music: all ${mu.total} tracks ready (recorded once, looped every game).`
+        : mu.working ? ` Music: composing tracks (${mu.ready}/${mu.total})…` : ` Music: ${mu.ready} of ${mu.total} tracks made${mu.error ? ` (last try: ${mu.error})` : ''}.`);
+      // Music is only ever made when you tap this, once. Deploys and restarts never spend credits on it.
+      if (mu.mode === 'on' && mu.canMake && !mu.working && mu.ready < mu.total) {
+        const make = el('button', null, 'Make music (one time)');
+        make.style.marginLeft = '8px'; make.style.padding = '6px 12px'; make.style.fontSize = '12px';
+        make.onclick = async () => {
+          if (!confirm(`This uses ElevenLabs credits once to record the ${mu.total - mu.ready} missing track(s). After that they loop every game for free. Continue?`)) return;
+          make.disabled = true; try { await api('POST', '/admin/music/make'); toast('Recording music…'); } catch (e) { toast(e.message, true); } refresh();
+        };
+        vn.append(make);
+      }
+      if (mu.files?.length) {
+        const d = el('details'); d.style.marginTop = '6px';
+        d.append(el('summary', null, `Download the music (${mu.files.length} files, keep a copy)`));
+        mu.files.forEach((f) => { const a = el('a', null, f.name); a.href = f.url; a.download = f.name; a.style.display = 'block'; a.style.color = 'var(--glow)'; d.append(a); });
+        vn.append(d);
+      }
+    }
     if (status.dataSince) vn.append(el('div', null, `Saved audio kept since ${fmt(status.dataSince)}. If this resets after a deploy, the storage volume isn't attached and ElevenLabs remakes (and charges for) everything.`));
     if (status.voices) vn.append(el('div', null, `Call voices: ${Object.entries(status.voices).map(([n, x]) => `${n} ${x}`).join(' · ')} (change with VOICE_RUTH etc. in Railway).`));
     // Only offer a retry when something actually failed and nothing is being made right now (each retry costs credits).
-    if (v.mode === 'narrator' && !mu?.working && (v.error || (mu?.mode === 'on' && mu.error && mu.ready < mu.total))) {
+    if (v.mode === 'narrator' && v.error) {
       const retry = el('button', null, 'Try again now');
       retry.style.marginLeft = '8px'; retry.style.padding = '6px 12px'; retry.style.fontSize = '12px';
       retry.onclick = async () => { retry.disabled = true; try { await api('POST', '/admin/voice/retry'); } catch (e) { toast(e.message, true); } refresh(); };

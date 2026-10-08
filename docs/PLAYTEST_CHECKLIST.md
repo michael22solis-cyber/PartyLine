@@ -31,6 +31,11 @@ few minutes of setup makes it count.
      and 4 call backgrounds (generated once, then cached on the `/data` volume).
    - On `/host`, the note under the stats should read *"all 7 lines ready"* and *"Music: all 9 tracks ready"*. If not,
      it shows what ElevenLabs said and a **Try again now** button.
+   - Music is never made automatically. Tap **Make music (one time)** on `/host` once; the tracks are then looped in
+     every game for free. Download them from the same note and drop them in `public/audio/music/` (named `early.mp3`,
+     `late.mp3`, `deep.mp3`, `final.mp3`, `after.mp3`, `bed-ruth.mp3`, `bed-lily.mp3`, `bed-marcus.mp3`,
+     `bed-teddy.mp3`) to build them into the game for good, with no ElevenLabs needed. `MUSIC_AUTO=on` restores
+     automatic generation.
    - Credits: each track is made once and kept on the `/data` volume. The host page shows *"Saved audio kept since …"*;
      if that date resets after a deploy, the volume isn't attached and everything is regenerated (and charged) each
      time. A server start never makes more than `MUSIC_MAX_GENERATIONS` (default 12) tracks, and **Try again now** only

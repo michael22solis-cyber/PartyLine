@@ -37,3 +37,27 @@ test('never more than MUSIC_MAX_GENERATIONS paid generations per server start', 
   await music.warmUp();
   assert.equal(seen.length, 12);
 });
+
+test('tracks built into the game (public/audio/music) are used as-is and never generated', async () => {
+  const dir = path.resolve('public/audio/music');
+  const made = !fs.existsSync(dir);
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, 'final.mp3');
+  const existed = fs.existsSync(file);
+  if (!existed) fs.writeFileSync(file, 'ID3fake');
+  try {
+    assert.equal(music.trackUrls().final, '/assets/audio/music/final.mp3');
+    process.env.ELEVENLABS_API_KEY = ''; // no key at all: built-in tracks still play
+    assert.equal(music.trackUrls().final, '/assets/audio/music/final.mp3');
+    assert.equal(music.trackUrls().early, undefined);
+  } finally {
+    process.env.ELEVENLABS_API_KEY = 'xi-test';
+    if (!existed) fs.rmSync(file);
+    if (made) fs.rmSync(dir, { recursive: true });
+  }
+});
+
+test('nothing is generated when the server starts unless MUSIC_AUTO=on', async () => {
+  const src = fs.readFileSync(path.resolve('src/server.js'), 'utf8');
+  assert.match(src, /MUSIC_AUTO === 'on' \? warmMusic\(\)/);
+});
