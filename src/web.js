@@ -35,6 +35,7 @@ import { liveView } from './hostview.js';
 import { overBudget, budgetView } from './budget.js';
 import { normalizePhone } from './phonenumber.js';
 import { dataSince } from './paths.js';
+import { madeFile, makeRecordings, recordingsStatus } from './recordings.js';
 import { sendHint, nextHint } from './hints.js';
 import { agendaView, agendaSummary, checkAgendas } from './agenda.js';
 import { recordedCall, servedFile as caretakerClip, voiceStatus as caretakerVoice, warmUp as warmCaretaker } from './voice/caretaker.js';
@@ -188,6 +189,19 @@ export function registerWeb(app) {
       .send(fs.readFileSync(path.join(SHARED_DIR, 'call-controller.js'), 'utf8'));
   });
   // Background music (generated once by ElevenLabs, cached on the data volume).
+  // Evidence recordings the host made on the server (recordings.js).
+  app.get('/assets/made/:file', (req, reply) => {
+    const file = madeFile(req.params.file);
+    if (!file) return reply.code(404).send({ error: 'Not found' });
+    reply.type('audio/mpeg').header('Cache-Control', 'public, max-age=86400').send(fs.createReadStream(file));
+  });
+  // Make the missing evidence recordings, once (the host's button; about 1 cent of OpenAI text-to-speech).
+  app.post('/admin/recordings/make', (req, reply) => {
+    if (!requireAdmin(req, reply)) return;
+    makeRecordings().catch(() => {});
+    reply.send({ recordings: recordingsStatus() });
+  });
+
   app.get('/assets/music/:file', (req, reply) => {
     const file = musicFile(req.params.file);
     if (!file) return reply.code(404).send({ error: 'Not found' });
@@ -418,6 +432,7 @@ export function registerWeb(app) {
       spend: { usd: live.usd, since: live.since },
       budget: budgetView(),
       callPool: poolView(),
+      recordings: recordingsStatus(),
       paused: Boolean(pausedAt()),
       rejoins: pendingRejoins(),
       voices: Object.fromEntries(['ruth', 'marcus', 'lily', 'teddy'].map((k) => [CHARACTERS[k].name.split(' ')[0], voiceFor(k)])),

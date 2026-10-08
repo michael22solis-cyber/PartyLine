@@ -14,6 +14,7 @@ import { statusOf } from './cast.js';
 import { onSecretFound } from './initiative.js';
 import { checkAgenda } from './agenda.js';
 import { overBudget } from './budget.js';
+import { madeFile } from './recordings.js';
 
 const { UNLOCK_ALL, CALL_MODE = 'app' } = process.env; // CALL_MODE=phone uses real Twilio calls when a player has a number
 
@@ -78,7 +79,8 @@ export function answerRing(token) {
 }
 
 const AUDIO_DIR = path.resolve('public/audio');
-export const audioIf = (file) => (fs.existsSync(path.join(AUDIO_DIR, file)) ? `/assets/audio/${file}` : null);
+// Built into the game (public/audio/), or made once on the server by the host (see recordings.js).
+export const audioIf = (file) => (fs.existsSync(path.join(AUDIO_DIR, file)) ? `/assets/audio/${file}` : madeFile(file) ? `/assets/made/${file}` : null);
 
 // Ring a player's Blackwood phone. If they don't pick up in 40 s it becomes a missed call (or a voicemail).
 // `onMissed`: what happens if they don't pick up (besides the missed call), e.g. the caller giving up on them.
