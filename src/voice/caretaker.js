@@ -8,6 +8,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { dataFile } from '../paths.js';
 import { ledger } from '../ai/ledger.js';
+import { allowChars } from '../eleven-guard.js';
 
 const env = process.env;
 const DIR = dataFile('voice');
@@ -49,6 +50,8 @@ function clip(text) {
   if (fs.existsSync(file)) return Promise.resolve(url);
   if (inFlight.has(name)) return inFlight.get(name);
   const job = (async () => {
+    // Daily credit cap (eleven-guard.js): over it, nothing is sent.
+    if (!allowChars(spoken(text).length)) throw Object.assign(new Error('elevenlabs_daily_cap: ELEVENLABS_MAX_CHARS_PER_DAY reached'), { capped: true });
     const say = async (modelId, words) => fetch(`${env.ELEVENLABS_BASE_URL || 'https://api.elevenlabs.io'}/v1/text-to-speech/${encodeURIComponent(VOICE())}?output_format=mp3_44100_128`, {
       method: 'POST',
       headers: { 'xi-api-key': KEY(), 'Content-Type': 'application/json', Accept: 'audio/mpeg' },

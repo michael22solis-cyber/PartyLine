@@ -258,6 +258,7 @@ async function refresh() {
         vn.append(d);
       }
     }
+    if (status.elevenToday) vn.append(el('div', null, `ElevenLabs used by the game today: ${status.elevenToday.chars} of ${status.elevenToday.cap} characters (hard daily cap).`));
     const rec = status.recordings;
     if (rec) {
       const names = { 'call911.mp3': 'the 911 call', 'ruth-voicemail.mp3': 'Ruth’s voicemail' };
