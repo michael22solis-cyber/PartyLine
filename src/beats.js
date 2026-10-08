@@ -2,7 +2,7 @@
 // Fire them by hand during a playtest (`npm run admin -- beat <name>`) or schedule them.
 import { players, updatePlayer, votes, setRevealed, markBeat } from './store.js';
 import { deliver, emit } from './live.js';
-import { callPlayer, ringInApp, unlock, unlockMentions, unlockAll, audioIf } from './progress.js';
+import { callPlayer, ringInApp, unlock, unlockMentions, unlockAll, audioIf, unlockedFor } from './progress.js';
 import { getDb } from './store.js';
 import { summary, remember } from './memory.js';
 import { PHOTOS, statusOf, phase } from './cast.js';
@@ -26,6 +26,13 @@ const STARTING_CLUES = [
 ];
 
 export const SUSPECTS = ['Ruth Calloway', 'Marcus Vane', 'Lily Blackwood', 'Teddy Fisk'];
+
+// What a suspect says when they text a stuck player first (the nudge beat).
+const FIRST_CONTACT = {
+  teddy: 'heyyy heard ur investigating the manor 👀 i might have a tip for u. text me',
+  marcus: 'This is Marcus Vane. I hear you’re asking questions about the Blackwood house. Let’s keep this professional.',
+  lily: 'is this the person asking about my family’s house?',
+};
 
 async function toAll(thread, text, kind = 'text', audio = null) {
   await Promise.all(everyone().map((p) => deliver({ token: p.token, thread, from: 'character', text, kind, audio })));
@@ -108,6 +115,22 @@ export const BEATS = {
   // Skip the calls (e.g. testing without phones) and just send the clues.
   async clues() {
     for (const p of everyone()) await giveClue(p);
+  },
+
+  // Anyone still down to one contact a few minutes in: a suspect finds them first, so nobody sits waiting.
+  async nudge() {
+    let nudged = 0;
+    for (const p of everyone()) {
+      if (unlockedFor(p).length > 1) continue;
+      const key = ['teddy', 'marcus', 'lily'].find((k) => !unlockedFor(p).includes(k));
+      if (!key) continue;
+      await unlock(p, key, 'They found you first.');
+      const text = FIRST_CONTACT[key];
+      await deliver({ token: p.token, thread: key, from: 'character', text });
+      remember({ player: p.name, pid: p.pid, npc: key, character: TEXTABLE.find((t) => t.key === key).name, speaker: 'character', text: `(text, you reached out first) ${text}`, channel: 'text' });
+      nudged++;
+    }
+    return { nudged };
   },
 
   // Backup for anyone who hasn't found every suspect yet.

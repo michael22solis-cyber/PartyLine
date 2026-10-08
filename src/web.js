@@ -359,6 +359,8 @@ export function registerWeb(app) {
     if (getDb().revealed) return reply.code(409).send({ error: 'Voting is closed.' });
     const { killer, accomplice } = req.body || {};
     if (!SUSPECTS.includes(killer)) return reply.code(400).send({ error: 'Pick a killer.' });
+    const suspect = TEXTABLE.find((t) => t.name === killer);
+    if (suspect && !isUnlocked(p, suspect.key)) return reply.code(400).send({ error: 'You haven’t met them yet.' });
     if (accomplice && !players().some((x) => x.name === accomplice)) return reply.code(400).send({ error: 'Pick a player.' });
     castVote(p.token, killer, accomplice || null);
     reply.send({ ok: true });

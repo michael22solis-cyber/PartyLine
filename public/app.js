@@ -766,6 +766,8 @@ const BOARD_LABEL = ['?', 'SUSPICIOUS', 'CLEARED'];
 const agendaKey = `bw-agenda-seen-${token}`;
 const seenAgenda = () => Number(store.get(agendaKey, '0')) || 0;
 const markAgendaSeen = () => store.set(agendaKey, String((state.agenda?.goals || []).filter((g) => g.status === 'done').length));
+// Has this player met (unlocked) the suspect with this name?
+const met = (name) => (state.threads || []).some((t) => t.name === name);
 function renderNotes(screen) {
   screen.append(el('div', 'app-title', 'NOTEBOOK'));
   const box = el('div', 'notes');
@@ -790,6 +792,7 @@ function renderNotes(screen) {
   box.append(el('div', 'section-label', 'SUSPECT BOARD'));
   const grid = el('div', 'board');
   state.suspects.forEach((name) => {
+    if (!met(name)) { const b = el('button', 'locked'); b.disabled = true; b.append(el('span', null, '???'), el('em', null, 'NOT MET')); grid.append(b); return; }
     const s = board[name] || 0;
     const b = el('button'); b.dataset.s = s;
     b.append(el('span', null, name), el('em', null, BOARD_LABEL[s]));
@@ -815,6 +818,9 @@ function renderVote(screen) {
     box.append(el('h2', null, label));
     const grid = el('div', 'choices');
     options.forEach((name) => {
+      if (field === 'killer' && !met(name)) { // suspects you haven't met yet stay a mystery here too
+        const b = el('button', 'choice locked', '???'); b.disabled = true; grid.append(b); return;
+      }
       const b = el('button', `choice${state.pick[field] === name ? ' on' : ''}`, name);
       b.onclick = () => { state.pick[field] = name; sfx.click(); render(); };
       grid.append(b);
@@ -822,6 +828,7 @@ function renderVote(screen) {
     box.append(grid);
   };
   group('WHO KILLED DANA?', state.suspects, 'killer');
+  if (state.suspects.some((n) => !met(n))) box.append(el('p', 'fine', 'Meet more suspects to add them here.'));
   group('WHO IS THE ACCOMPLICE?', state.players.filter((n) => n !== state.me.name), 'accomplice');
 
   const note = el('p', 'note');
@@ -829,7 +836,7 @@ function renderVote(screen) {
     note.textContent = `Your vote: ${state.vote.killer}${state.vote.accomplice ? `, accomplice ${state.vote.accomplice}` : ''}. You can change it until voting closes.`;
     note.className = 'note ok';
   } else {
-    note.textContent = 'Votes close at 11:30 pm on Night 2. You can change your vote until then.';
+    note.textContent = 'Votes close at the final call. You can change your vote until then.';
   }
   const submit = el('button', 'wide', state.vote ? 'UPDATE VOTE' : 'LOCK IN VOTE');
   submit.onclick = async () => {
