@@ -31,7 +31,10 @@ few minutes of setup makes it count.
      and 4 call backgrounds (generated once, then cached on the `/data` volume).
    - On `/host`, the note under the stats should read *"all 7 lines ready"* and *"Music: all 9 tracks ready"*. If not,
      it shows what ElevenLabs said and a **Try again now** button.
-7. **Rehearse the night offline:** `node --test test/rehearsal.test.js` plays a whole 75-minute game (every beat, five
+7. **Character voices (optional).** In Railway → Variables, set `VOICE_RUTH`, `VOICE_MARCUS`, `VOICE_LILY` or
+   `VOICE_TEDDY` to any of: alloy, ash, ballad, cedar, coral, echo, marin, sage, shimmer, verse. `/host` shows which
+   voice each character is using. A misspelled name is ignored.
+8. **Rehearse the night offline:** `node --test test/rehearsal.test.js` plays a whole 75-minute game (every beat, five
    players) against the mock AI in about a second.
 
 ## What players should notice (worth watching for)

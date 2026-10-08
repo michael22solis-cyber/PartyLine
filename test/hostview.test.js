@@ -64,3 +64,17 @@ test('at the 911 twist, detectives with nothing found get a nudge; others do not
   assert.ok(line(d).some((t) => t.startsWith('A WHISPER')));
   assert.ok(!line(e).some((t) => t.startsWith('A WHISPER')));
 });
+
+test('character voices can be changed from Railway variables; a typo falls back safely', async () => {
+  const { voiceFor } = await import('../src/voice/session.js');
+  process.env.VOICE_RUTH = 'Shimmer';
+  process.env.VOICE_TEDDY = 'banana';
+  assert.equal(voiceFor('ruth'), 'shimmer');
+  assert.equal(voiceFor('teddy'), 'verse', 'unknown voice: keeps the default');
+  assert.equal((await status()).voices.Ruth, 'shimmer');
+  const { realtimeSession } = await import('../src/voice/session.js');
+  const p = addPlayer({ name: 'Vi' });
+  const out = realtimeSession({ npc: 'ruth', player: p });
+  assert.equal((out.session || out).audio.output.voice, 'shimmer', 'the live call uses it');
+  delete process.env.VOICE_RUTH; delete process.env.VOICE_TEDDY;
+});

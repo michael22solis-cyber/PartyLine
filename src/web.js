@@ -23,7 +23,7 @@ import { recapFor } from './recap.js';
 import { ledger, readLedgerFile } from './ai/ledger.js';
 import { buildReport } from './ai/report.js';
 import { BusyError } from './ai/limiter.js';
-import { callTiming, openingItem, realtimeModel } from './voice/session.js';
+import { callTiming, openingItem, realtimeModel, voiceFor } from './voice/session.js';
 import { mintClientSecret, createSidebandCall } from './voice/realtime-api.js';
 import { attachSideband } from './voice/sideband.js';
 import { openCall, getCall, closeCall, callTranscript, callUsage, callDisclose } from './voice/calls.js';
@@ -394,6 +394,7 @@ export function registerWeb(app) {
         callMinutes: Math.round((p.callSeconds || 0) / 6) / 10, ...live.players[p.token], hintLeft: Boolean(nextHint(p)),
       })),
       spend: { usd: live.usd, since: live.since },
+      voices: Object.fromEntries(['ruth', 'marcus', 'lily', 'teddy'].map((k) => [CHARACTERS[k].name.split(' ')[0], voiceFor(k)])),
       revealed: getDb().revealed,
       caretakerVoice: caretakerVoice(),
       music: musicStatus(),
