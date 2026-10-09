@@ -1,5 +1,6 @@
 // Blackwood Line: a haunted old phone. Vanilla JS, no build step.
 import { TUTORIAL_TITLES, readTutorialProgress, tutorialStep } from './tutorial.js';
+import { deviceOS, installGate } from './install.js';
 
 const token = location.pathname.split('/').filter(Boolean)[1];
 const api = (path, opts = {}) =>
@@ -254,6 +255,7 @@ const ICONS = {
   notes: '<path d="M5 3h14v18H5z"/><path d="M8 8h8M8 12h8M8 16h5"/>',
   vote: '<path d="M4 4h16v16H4z"/><path d="M8 12l3 3 6-7"/>',
   recap: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  share: '<path d="M12 3v12M8 7l4-4 4 4"/><path d="M8 10H5v11h14V10h-3"/>',
 };
 const icon = (name) => {
   const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -1716,8 +1718,66 @@ function connect() {
 }
 
 // ============ settings, alerts, install ============
-const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+const device = { ua: navigator.userAgent, platform: navigator.platform, touchPoints: navigator.maxTouchPoints || 0 };
+const isIOS = deviceOS(device) === 'ios';
+const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+
+// ---- home-screen gate: on a phone, the game only runs from the home-screen app (see install.js) ----
+// Chrome on Android offers its own install dialog; keep it for our button instead of the browser's mini bar.
+let gate = null;
+let installPrompt = null;
+let installed = false;
+addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; if (gate) drawInstallGate(); });
+addEventListener('appinstalled', () => { installed = true; installPrompt = null; if (gate) drawInstallGate(); });
+
+async function copyMyLink(btn) {
+  const link = location.origin + location.pathname;
+  try { await navigator.clipboard.writeText(link); btn.textContent = 'LINK COPIED'; }
+  catch { btn.replaceWith(el('p', 'install-link', link)); } // in-app browsers often block the clipboard: select it by hand
+}
+
+function drawInstallGate() {
+  const box = $('#installInner');
+  const ios = gate.os === 'ios';
+  const say = (cls, ...parts) => { const n = el('p', cls); n.append(...parts); return n; };
+  const b = (t) => el('b', null, t);
+  const logo = el('div', 'logo'); logo.append('BLACKWOOD', el('br'), 'MOBILE');
+  box.replaceChildren(logo, el('div', 'install-kicker', 'ONE MORE STEP'), el('h2', null, 'Put the line on your home screen'),
+    say(null, 'The house can only reach you through the Blackwood app. Add it to your home screen, then open it from there to play.'));
+
+  const copy = (cls) => { const c = el('button', cls, 'COPY MY LINK'); c.onclick = () => copyMyLink(c); return c; };
+  if (gate.inApp) {
+    box.append(say('install-warn', 'This link opened inside another app, which can’t add to your home screen. Copy your link and open it in ',
+      b(ios ? 'Safari' : 'Chrome'), '.'), copy('wide'));
+  }
+
+  if (installed) {
+    box.append(say('install-done', b('ADDED.'), ' Close this tab and open ', b('Blackwood'), ' from your home screen.'));
+  } else if (!ios && installPrompt) {
+    const add = el('button', 'wide', 'ADD TO HOME SCREEN');
+    add.onclick = async () => {
+      const offer = installPrompt; installPrompt = null; // each offer can be shown once
+      try { await offer.prompt(); if ((await offer.userChoice).outcome === 'accepted') installed = true; } catch { /* show the manual steps */ }
+      drawInstallGate();
+    };
+    box.append(add, say('fine', 'Then open ', b('Blackwood'), ' from your home screen.'));
+  } else {
+    const steps = el('ol', 'install-steps');
+    const step = (...parts) => { const li = el('li'); const span = el('span'); span.append(...parts); li.append(span); steps.append(li); };
+    if (ios) {
+      step(icon('share'), ' Tap ', b('Share'), '. Don’t see it? Tap ', b('•••'), ' first.');
+      step('Scroll down and tap ', b('Add to Home Screen'), '. Leave ', b('Open as Web App'), ' on if you see it, then tap ', b('Add'), '.');
+    } else {
+      step('Tap ', b('⋮'), ' in the top corner of your browser.');
+      step('Tap ', b('Add to Home screen'), ' or ', b('Install app'), ', then ', b('Install'), '.');
+    }
+    step('Open ', b('Blackwood'), ' from your home screen.');
+    box.append(steps);
+  }
+
+  if (!installed) box.append(say('fine', 'Already added it? Open Blackwood from your home screen. This link is yours alone: don’t share it.'));
+  if (!gate.inApp) box.append(copy('wide ghost'));
+}
 
 function setupMenu() {
   const menu = $('#menu');
@@ -1929,6 +1989,12 @@ async function boot() {
   } catch (ex) {
     $('#power').hidden = true;
     $('#screen').append(el('div', 'empty', ex.message));
+    return;
+  }
+  gate = installGate({ ...device, standalone, required: state.requireInstall });
+  if (gate) {
+    $('#power').hidden = true; $('#install').hidden = false;
+    drawInstallGate();
     return;
   }
   if (state.vote) state.pick = { killer: state.vote.killer, accomplice: state.vote.accomplice };

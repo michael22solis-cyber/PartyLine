@@ -103,7 +103,13 @@ export function registerWeb(app) {
       display: 'standalone',
       background_color: '#07090a',
       theme_color: '#07090a',
-      icons: [{ src: '/assets/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }],
+      // PNGs at 192 and 512 are what Chrome needs to install it as a real app (an app that opens full screen, which the
+      // home-screen gate checks for) rather than a bookmark that opens a browser tab.
+      icons: [
+        { src: '/assets/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+        { src: '/assets/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+        { src: '/assets/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+      ],
     });
   });
 
@@ -134,6 +140,8 @@ export function registerWeb(app) {
       agenda: agendaView(p),
       revealed: getDb().revealed,
       vapidPublicKey,
+      // On a phone, play only from the home-screen app (public/install.js). REQUIRE_INSTALL=off lets browser tabs play.
+      requireInstall: process.env.REQUIRE_INSTALL !== 'off',
     });
   });
 
