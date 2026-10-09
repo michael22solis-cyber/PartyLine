@@ -22,6 +22,12 @@ button { background: var(--glow); color: var(--bg); border: 0; font-family: LCD,
 button:disabled { opacity: 0.5; }
 .err { color: var(--ember); min-height: 20px; }
 .fine { font-size: 11.5px; margin-top: 26px; }
+.rejoin { margin-top: 30px; border-top: 1px solid var(--line); padding-top: 18px; }
+.rejoin h2 { font-family: LCD, monospace; font-weight: 400; font-size: 18px; letter-spacing: 0.2em; color: var(--dim); margin: 0 0 6px; }
+.names { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 8px; }
+.names button { width: auto; padding: 10px 14px; margin: 0; background: transparent; color: var(--ink); border: 1px solid var(--line); font-family: Plex, monospace; font-size: 15px; letter-spacing: 0; }
+.ghost { background: transparent; color: var(--glow); border: 1px solid var(--glow); }
+[hidden] { display: none !important; }
 </style>
 </head>
 <body>
@@ -29,14 +35,56 @@ button:disabled { opacity: 0.5; }
   <div class="kicker">YOU’VE BEEN INVITED</div>
   <h1>The Blackwood Line</h1>
   <p>A murder mystery played on your phone. The suspects text you. The house calls you. One of your friends is lying.</p>
-  <input id="name" maxlength="30" placeholder="Your first name" autocomplete="given-name" />
-  <button id="join">ANSWER THE LINE</button>
+  <button id="mine" class="ghost" hidden></button>
+  <div id="newPlayer">
+    <input id="name" maxlength="30" placeholder="Your first name" autocomplete="given-name" />
+    <button id="join">ANSWER THE LINE</button>
+  </div>
   <p class="err" id="err"></p>
+  <div class="rejoin" id="rejoin" hidden>
+    <h2>ALREADY PLAYING?</h2>
+    <p id="rejoinNote">Lost your link? Tap your name. The host lets you back in.</p>
+    <div class="names" id="names"></div>
+  </div>
   <p class="fine">Next, you’ll add Blackwood to your home screen. Every character is an AI. Best with sound on and headphones.</p>
 </main>
 <script>
 const code = location.pathname.split('/').pop();
-const btn = document.getElementById('join'); const err = document.getElementById('err'); const name = document.getElementById('name');
+const $ = (id) => document.getElementById(id);
+const btn = $('join'); const err = $('err'); const name = $('name');
+// This device remembers the link it joined with, so closing the tab never locks you out.
+const KEY = `bw-join-${code}`;
+const remember = (link, who) => { try { localStorage.setItem(KEY, JSON.stringify({ link, who })); } catch {} };
+let saved = null; try { saved = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch {}
+if (saved?.link) { $('mine').hidden = false; $('mine').textContent = `CONTINUE AS ${String(saved.who || '').toUpperCase()}`; $('mine').onclick = () => location.replace(saved.link); }
+
+// Everyone already in the game, to rejoin as. Once it has started, that's the only way in.
+fetch(`/api/join/${code}`).then((r) => r.json()).then((d) => {
+  if (!d.players) return;
+  if (d.status !== 'lobby') { $('newPlayer').hidden = true; $('rejoinNote').textContent = 'The game has started. Tap your name and the host lets you back in.'; }
+  if (!d.players.length) return;
+  $('rejoin').hidden = false;
+  d.players.forEach((p) => { const b = document.createElement('button'); b.textContent = p.name; b.onclick = () => rejoin(p); $('names').append(b); });
+}).catch(() => {});
+
+async function rejoin(p) {
+  err.textContent = '';
+  try {
+    const r = await fetch(`/api/join/${code}/rejoin`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pid: p.pid }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Something went wrong');
+    $('rejoinNote').textContent = `Waiting for the host to let ${p.name} back in…`;
+    $('names').hidden = true;
+    const poll = setInterval(async () => {
+      const s = await fetch(`/api/join/${code}/rejoin/${d.rid}`).then((x) => x.json()).catch(() => ({}));
+      if (s.status === 'approved') { clearInterval(poll); remember(s.link, p.name); location.replace(s.link); }
+      else if (s.status === 'denied' || s.status === 'expired') {
+        clearInterval(poll); $('names').hidden = false;
+        $('rejoinNote').textContent = s.status === 'denied' ? 'The host said no. Ask them in person.' : 'That request expired. Tap your name to try again.';
+      }
+    }, 3000);
+  } catch (e) { err.textContent = e.message; }
+}
 async function go() {
   if (!name.value.trim()) { err.textContent = 'Enter your name.'; return; }
   btn.disabled = true; err.textContent = '';
@@ -44,6 +92,7 @@ async function go() {
     const r = await fetch(`/api/join/${code}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.value }) });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || 'Something went wrong');
+    remember(d.link, name.value.trim());
     location.replace(d.link);
   } catch (e) { err.textContent = e.message; btn.disabled = false; }
 }

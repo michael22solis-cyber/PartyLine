@@ -3,8 +3,7 @@
 //   npm run admin -- status                    players, votes, schedule
 //   npm run admin -- beat intro                fire a beat right now
 //   npm run admin -- schedule memo 2026-10-30T21:40:00-05:00
-//   npm run admin -- night1 2026-10-30         schedule all of Night 1 (Central time)
-//   npm run admin -- night2 2026-10-31         schedule all of Night 2 + midnight reveal
+//   npm run admin -- night 2026-10-31T20:00-05:00 [quick|evening]   schedule the whole night (~75 min or ~2 hrs)
 //   npm run admin -- usage                     AI cost so far (from the server's usage ledger)
 //   npm run admin -- reset                     wipe the game (careful)
 import 'dotenv/config';
@@ -40,11 +39,9 @@ try {
     case 'schedule':
       console.log(await api('POST', '/admin/schedule', { beat: args[0], at: args[1] }));
       break;
-    case 'night1':
-    case 'night2': {
-      const r = await api('POST', `/admin/night/${cmd === 'night1' ? 1 : 2}`, { date: args[0] });
+    case 'night': {
+      const r = await api('POST', '/admin/schedule-game', { at: args[0], length: args[1] || 'quick' });
       r.scheduled.forEach((x) => console.log(`scheduled ${x.beat} at ${x.at}`));
-      console.log('Remember: run `npm run admin -- beat setup` once everyone has joined, before Night 1.');
       break;
     }
     case 'usage': {
@@ -56,7 +53,7 @@ try {
       console.log(await api('POST', '/admin/reset'));
       break;
     default:
-      console.log('Commands: add, status, beat, schedule, night1, night2, usage, reset (see scripts/admin.js)');
+      console.log('Commands: add, status, beat, schedule, night, usage, reset (see scripts/admin.js)');
   }
 } catch (err) {
   console.error('Error:', err.message);

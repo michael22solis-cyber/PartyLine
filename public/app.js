@@ -34,9 +34,84 @@ let tutorial = readTutorialProgress(store.get(tutorialKey));
 const saveTutorial = () => store.set(tutorialKey, JSON.stringify(tutorial));
 
 const READONLY = { line: 'The Line', unknown: 'UNKNOWN' };
+
+// ============ the cast's faces (public/cast/) ============
+const CAST = { ruth: 'Ruth Calloway', marcus: 'Marcus Vane', lily: 'Lily Blackwood', teddy: 'Teddy Fisk' };
+// Public bios: only what anyone in town could tell you. Never a secret, never anything the player has to earn.
+const BIO = {
+  ruth: { age: 74, role: 'Retired night nurse',
+    background: ['Thirty years of night shifts at St. Agnes Hospital. In the ’90s she nursed Elias Blackwood’s sick wife at the manor.', 'Widowed since 2009. Lives alone two streets from the manor, in the yellow house with the cat in the window.', 'Bakes lemon bars for every church function. Her grandniece set up her phone; she still texts with full punctuation.'],
+    thursday: 'At St. Agnes bingo until 10. Ask anyone.',
+    rumor: 'Walks past the manor every evening. The neighbors say she never once looks at it.' },
+  marcus: { age: 48, role: 'Realtor, Vane Realty',
+    background: ['His face is on the billboard on Route 9. Divorced; his daughter stays with him every other weekend.', 'Blackwood Manor sat on the market for three years. He cut the price twice before Dana bought it in September.', 'Drives a black sedan he keeps spotless. Never off the phone.'],
+    thursday: 'Showed Dana around in the evening. Says he left by 6:30 and went home.',
+    rumor: 'Somebody spray-painted “LIAR” across his billboard last month.' },
+  lily: { age: 42, role: 'The caretaker’s daughter',
+    background: ['Was twelve when her father, Elias, vanished on Halloween 1996. Her mother died three years later.', 'Has waited tables at Rosie’s Diner for fifteen years. Lives alone above the laundromat on Main.', 'Never wanted the house sold. Can’t stand the ghost tours.'],
+    thursday: 'Working her shift at Rosie’s Diner.',
+    rumor: 'Every Halloween she leaves flowers at the manor gate, and never says who they’re for.' },
+  teddy: { age: 34, role: 'Ghost-tour guide & streamer',
+    background: ['Runs Blackwood Ghost Tours: $25 a head, weekends and all of Halloween week. Streams as “Fisk After Dark.”', 'Dropped out of film school. Drives a van with his own face on the side.', 'Dreams of a TV deal. His mom still calls him in the middle of his streams.'],
+    thursday: 'Live on his stream from his apartment, 9 to 10. The replay is online.',
+    rumor: 'Tour guests swear they’ve heard voices in the walls of the manor.' },
+};
+const VICTIM = { name: 'Dana Whitlock', age: 46, lines: [
+  'An architect from Boston who restores old houses. Bought Blackwood Manor in September and planned to turn it into a bed and breakfast.',
+  'Spent her first weeks asking neighbors about the house’s history. Booked a crew to dig up the cellar floor on November 2.',
+  'Found at the bottom of the cellar stairs. Police say she died between 9:30 and 10 pm, and call it an accident.',
+] };
+// The Line has no face, only a shape in the static that never quite resolves.
+let lineAvN = 0;
+function lineAvatar() {
+  const a = el('span', 'avatar av-line');
+  const id = `lg${++lineAvN}`; // unique per avatar so the glow survives when another copy is removed
+  a.innerHTML = `<svg viewBox="0 0 40 40" aria-hidden="true"><defs><radialGradient id="${id}" cx="50%" cy="42%" r="55%"><stop offset="0" stop-color="#9fc4a3"/><stop offset="0.45" stop-color="#3d5a43"/><stop offset="1" stop-color="#050806"/></radialGradient></defs><rect width="40" height="40" fill="url(#${id})"/><g class="shade"><ellipse cx="20" cy="15.5" rx="6.2" ry="7.6"/><path d="M5 40c1-9.5 6.5-14.5 15-14.5S34 30.5 35 40z"/></g><circle class="eye" cx="17.5" cy="15.2" r="1"/><circle class="eye" cx="22.5" cy="15.2" r="1"/></svg>`;
+  return a;
+}
+// Generated art used until a copy is added to public/cast (public/cast/<key>.jpg always wins).
+const CDN_ART = {
+  dana: 'https://d8j0ntlcm91z4.cloudfront.net/user_3HCC73EuiIXBWsy0LnhpTM9HwUC/hf_20261008_233940_29fc5259-cc85-4e25-9b94-a5ca38dca494_min.webp',
+  lineup: 'https://d8j0ntlcm91z4.cloudfront.net/user_3HCC73EuiIXBWsy0LnhpTM9HwUC/hf_20261008_233940_83d74b87-cd21-4eca-968f-22b8bec873ef_min.webp',
+};
+// A portrait, or the shape of someone you haven't met.
+function portrait(key, cls = '') {
+  const box = el('span', `portrait ${cls}`);
+  if (key) {
+    const img = el('img'); img.alt = ''; img.loading = 'lazy';
+    const srcs = [`/assets/cast/${key}.jpg`, ...(CDN_ART[key] ? [CDN_ART[key]] : [])];
+    img.src = srcs.shift();
+    img.onerror = () => { if (srcs.length) img.src = srcs.shift(); else { img.remove(); box.classList.add('unknown'); } };
+    box.append(img);
+  } else box.classList.add('unknown');
+  return box;
+}
+const KEY_OF_NAME = Object.fromEntries(Object.entries(CAST).map(([k, n]) => [n.toUpperCase(), k]));
+const faceKey = (k) => (CAST[k] ? k : String(k || '').startsWith('caretaker') ? 'caretaker' : null);
+const keyOfName = (name) => KEY_OF_NAME[String(name || '').trim().toUpperCase()] || (/BLACKWOOD MANOR|UNKNOWN/i.test(name || '') ? 'caretaker' : null);
+function avatar(key, initial = '') {
+  const k = faceKey(key);
+  const a = el('span', `avatar ${k ? `av-${k}` : 'av-none'}`);
+  if (k && k !== 'caretaker') {
+    const img = el('img'); img.src = `/assets/cast/${k}-sm.jpg`; img.alt = ''; img.loading = 'lazy'; img.decoding = 'async';
+    a.append(img);
+  } else if (!k && initial) a.textContent = initial.slice(0, 1).toUpperCase();
+  return a;
+}
+// Online / last seen, from when they last wrote to you.
+function presence(thread) {
+  const last = [...state.messages].reverse().find((m) => m.thread === thread && m.from === 'character');
+  if (!last) return '';
+  const mins = (Date.now() - new Date(last.at)) / 60000;
+  if (mins < 5) return 'online';
+  if (mins < 60) return `last seen ${Math.round(mins)}m ago`;
+  if (mins < 24 * 60) return `last seen ${Math.round(mins / 60)}h ago`;
+  return 'last seen a while ago';
+}
+const statusOf = (thread) => state.threads.find((t) => t.key === thread)?.status || '';
 const EVIDENCE_KINDS = new Set(['clue', 'memo', 'evidence', 'reveal']);
 const CALL_KINDS = new Set(['call', 'calllog', 'missed', 'voicemail']);
-const SHARE_KINDS = new Set(['clue', 'evidence', 'memo', 'voicemail']);
+const SHARE_KINDS = new Set(['clue', 'evidence', 'memo', 'voicemail', 'photo']);
 
 // Start a group chat with any mix of players and suspects you have numbers for.
 function openNewGroup() {
@@ -113,10 +188,26 @@ const sfx = (() => {
     unlock: ensure,
     click: () => tone(1400, 0, 0.03, 'square', 0.02),
     msg: () => { tone(880, 0, 0.12); tone(660, 0.14, 0.18); buzz(60); },
+    // Each suspect has their own text tone, so you know who it is before you look.
+    from: (npc) => {
+      const t = { ruth: [[523, 0, 0.22, 'sine'], [392, 0.24, 0.3, 'sine']], lily: [[740, 0, 0.1, 'triangle'], [740, 0.16, 0.1, 'triangle']],
+        marcus: [[330, 0, 0.09, 'square'], [440, 0.1, 0.09, 'square']], teddy: [[988, 0, 0.07], [1319, 0.08, 0.07], [1568, 0.16, 0.1]] }[npc];
+      if (!t) return sfx.msg();
+      t.forEach(([f, at, dur, type = 'square']) => tone(f, at, dur, type)); buzz(60);
+    },
+    // The line goes dead: a short burst of static.
+    static: () => {
+      const c = ensure(); if (!c || !enabled()) return;
+      const len = Math.floor(c.sampleRate * 0.45); const buf = c.createBuffer(1, len, c.sampleRate); const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      const src = c.createBufferSource(); const g = c.createGain(); g.gain.value = 0.06; src.buffer = buf; src.connect(g).connect(c.destination); src.start();
+    },
+    tick: () => tone(1800, 0, 0.04, 'square', 0.03),
     hum: () => { tone(55, 0, 1.6, 'sawtooth', 0.05, 110); tone(82, 0.2, 1.4, 'sine', 0.05, 164); },
     creak: () => tone(140, 0, 0.5, 'sawtooth', 0.02, 70),
     ring: () => {
       const once = () => { for (let i = 0; i < 2; i++) { tone(440, i * 0.5, 0.4, 'sine', 0.06); tone(480, i * 0.5, 0.4, 'sine', 0.06); } buzz([400, 100, 400]); };
+      clearInterval(ringTimer); // a second ring signal (reconnect, refresh) must not start a ring that never stops
       once(); ringTimer = setInterval(once, 2400);
     },
     stopRing: () => { clearInterval(ringTimer); ringTimer = null; if (navigator.vibrate) navigator.vibrate(0); },
@@ -142,6 +233,17 @@ function tick() {
   $('#clock').textContent = fmtTime(now);
   const big = $('#bigClock'); if (big) big.textContent = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s?[AP]M/i, '');
   const d = $('#bigDate'); if (d) d.textContent = now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '').toUpperCase();
+  const nc = $('#nightClock'); if (nc) { const t = nightClockText(); nc.textContent = t; nc.hidden = !t; }
+}
+// "Votes open in 18 min", then "Final call in 5 min": the pace of the night, on the home screen.
+function nightClockText(now = Date.now()) {
+  const c = state.clock;
+  if (!c || state.revealed) return '';
+  if (c.paused) return '⏸ PAUSED BY THE HOST';
+  const mins = (iso) => Math.max(0, Math.ceil((Date.parse(iso) - now) / 60_000));
+  if (c.votesAt && Date.parse(c.votesAt) > now) return `VOTES OPEN IN ${mins(c.votesAt)} MIN`;
+  if (c.finalAt) return Date.parse(c.finalAt) > now ? `FINAL CALL IN ${mins(c.finalAt)} MIN` : 'THE FINAL CALL IS COMING';
+  return '';
 }
 setInterval(tick, 10_000);
 
@@ -159,14 +261,9 @@ const icon = (name) => {
   const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = ICONS[name]; return s;
 };
-const MANOR = `<svg class="manor" viewBox="0 0 400 180" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
-  <defs><linearGradient id="fog" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0c140f" stop-opacity="0"/><stop offset="1" stop-color="#0c140f"/></linearGradient></defs>
-  <path d="M0 180V150l40-8 30 10 22-12 30 8v-14l20-20 24-30 14-10 14 10 8-18 10 18 16-6 12 24 30 6 14 20v62z" fill="#0a0f0c" stroke="#1a231e"/>
-  <path d="M110 180v-60l30-34 30 34v60zM240 180v-54l40-30 40 30v54z" fill="#060908" stroke="#1a231e"/>
-  <rect class="win" x="134" y="128" width="9" height="13"/><rect class="win b" x="154" y="128" width="9" height="13"/>
-  <rect class="win b" x="266" y="124" width="9" height="13"/><rect class="win" x="292" y="124" width="9" height="13"/>
-  <path d="M0 150h400v30H0z" fill="url(#fog)"/>
-</svg>`;
+// The wallpaper: Blackwood Manor at night (from the intro), with drifting fog and lights that flicker. Its mood
+// follows the night (see the data-phase styles): warm at first, colder after dark, red near the end, grey at dawn.
+const WALL = '<div class="wall" aria-hidden="true"><i class="fog a"></i><i class="fog b"></i><i class="grain"></i></div>';
 
 // ============ navigation ============
 function go(view, open = null) {
@@ -186,6 +283,7 @@ function goBack() {
 // ============ rendering ============
 let lastKey = '';
 function render() {
+  setTimeout(() => music.sync(), 0);
   const screen = $('#screen');
   const key = `${state.view}:${state.open || ''}`;
   const keepScroll = key === lastKey ? screen.scrollTop : 0;
@@ -219,8 +317,11 @@ function render() {
 
 function appButton(name, label, view, count = 0, locked = false) {
   const b = el('button', `app${locked ? ' locked' : ''}`);
-  b.append(icon(name), el('span', null, label));
-  if (count > 0) b.append(el('i', 'badge', String(count)));
+  b.setAttribute('aria-label', `${label}${count > 0 ? `, ${count} new` : ''}${locked ? ', locked' : ''}`);
+  const tile = el('span', 'ico'); // the rounded app icon, like a real phone's home screen
+  tile.append(icon(name));
+  if (count > 0) tile.append(el('i', 'badge', String(count)));
+  b.append(tile, el('span', 'lbl', label));
   b.onclick = () => { if (locked) { sfx.creak(); flashNote('NOT YET.'); return; } go(view); };
   return b;
 }
@@ -238,32 +339,67 @@ function flashNote(text) {
   setTimeout(() => { noteOverride = null; if (state.view === 'home') render(); }, 1400);
 }
 
+// ---- home: the lock screen of the burner phone ----
+const PHASE_LABEL = {
+  before: 'THE LINE OPENS TONIGHT', early: 'THE LINE IS OPEN', late: 'AFTER DARK', deep: 'THE WITCHING HOUR',
+  final: 'VOTES ARE OPEN', after: 'CASE CLOSED',
+};
+// The four suspects, at a glance: who's online, typing, live, or still a stranger.
+function castStrip() {
+  const row = el('div', 'cast-strip');
+  Object.keys(CAST).forEach((k) => {
+    const t = state.threads.find((x) => x.key === k);
+    const b = el('button', 'cast-chip');
+    if (!t) {
+      b.classList.add('unknown'); b.disabled = true; b.setAttribute('aria-label', 'Unknown number');
+      b.append(el('span', 'avatar av-none', '?'), el('span', 'nm', '???'));
+      row.append(b); return;
+    }
+    const live = /LIVE/.test(t.status || '');
+    if (state.typing[k]) b.classList.add('typing');
+    else if (live) b.classList.add('live');
+    else if (presence(k) === 'online') b.classList.add('online');
+    if (unread(k)) b.classList.add('unread');
+    b.setAttribute('aria-label', `${CAST[k]}${state.typing[k] ? ', typing' : live ? ', live' : ''}${unread(k) ? ', new message' : ''}`);
+    b.append(avatar(k), el('span', 'nm', CAST[k].split(' ')[0]));
+    b.onclick = () => { markSeen(k); go('messages', k); };
+    row.append(b);
+  });
+  return row;
+}
 function renderHome(screen) {
   const home = el('div', 'home');
   const clock = el('div', 'home-clock');
   clock.append(el('div', 'big', '--:--'), el('div', 'date', ''));
   clock.firstChild.id = 'bigClock'; clock.lastChild.id = 'bigDate';
+  // One line under the clock: what needs you (missed calls, new messages), otherwise where the story is.
   const note = homeNote();
-  const line = el('div', `home-note${note.hot && !noteOverride ? ' hot' : ''}`, noteOverride || note.text);
+  const quiet = !note.hot && !noteOverride && PHASE_LABEL[state.phase];
+  const line = el('div', `home-note${note.hot && !noteOverride ? ' hot' : ''}${quiet ? ' quiet' : ''}`, noteOverride || (quiet ? PHASE_LABEL[state.phase] : note.text));
   const grid = el('div', 'grid');
   grid.append(
-    appButton('messages', 'MESSAGES', 'messages', unreadThreads()),
-    appButton('calls', 'CALLS', 'calls', unreadCalls()),
-    appButton('evidence', 'EVIDENCE', 'evidence', unreadEvidence()),
-    appButton('notes', 'NOTES', 'notes'),
-    appButton('vote', 'VOTE', 'vote'),
-    appButton('recap', 'THE END', 'recap', 0, !state.revealed),
+    appButton('messages', 'Messages', 'messages', unreadThreads()),
+    appButton('calls', 'Calls', 'calls', unreadCalls()),
+    appButton('evidence', 'Evidence', 'evidence', unreadEvidence()),
+    appButton('notes', 'Notebook', 'notes', (state.agenda?.goals || []).filter((g) => g.status === 'done').length > seenAgenda() ? 1 : 0),
+    appButton('vote', 'Vote', 'vote'),
+    appButton('recap', 'The End', 'recap', 0, !state.revealed),
   );
   if (state.lobby?.status === 'lobby') home.append(clock, lobbyPanel(), grid);
-  else home.append(clock, line, grid);
-  const guide = el('button', 'home-guide');
-  guide.append(el('span', null, 'FIELD GUIDE'), el('small', null,
-    tutorial.status === 'complete' ? 'How to play · revisit any time'
-      : tutorial.status === 'new' ? 'New here? Start the tutorial'
-        : `Resume tutorial · ${tutorial.step + 1} / ${TUTORIAL_TITLES.length}`));
-  guide.onclick = () => startTutorial();
-  home.append(guide);
-  home.insertAdjacentHTML('beforeend', MANOR);
+  else {
+    const nc = el('div', `night-clock${state.clock?.paused ? ' paused' : ''}`, nightClockText()); nc.id = 'nightClock'; nc.hidden = !nc.textContent;
+    home.append(clock, line, nc, castStrip(), grid);
+  }
+  // The field guide stays on the home screen until it's done; after that it lives in the ⋮ menu.
+  if (tutorial.status !== 'complete') {
+    const guide = el('button', 'home-guide');
+    guide.append(el('span', null, 'FIELD GUIDE'), el('small', null,
+      tutorial.status === 'new' ? 'New here? Start the tutorial' : `Resume tutorial · ${tutorial.step + 1} / ${TUTORIAL_TITLES.length}`));
+    guide.onclick = () => startTutorial();
+    home.append(guide);
+  }
+  home.dataset.phase = state.phase || 'before';
+  home.insertAdjacentHTML('afterbegin', WALL);
   screen.append(home);
 }
 
@@ -288,18 +424,12 @@ function lobbyPanel() {
   }
   if (L.organizer) {
     const err = el('p', 'note bad');
-    let date = null;
-    if (L.length === 'twonights') {
-      date = el('input', 'textin'); date.type = 'date';
-      const y = new Date().getFullYear(); date.value = `${y}-10-30`;
-      box.append(el('p', 'note', 'Night 1 date (8 pm start):'), date);
-    }
     const ready = L.joined.length >= L.minPlayers;
     const start = el('button', 'wide', ready ? 'START THE GAME' : `NEED ${L.minPlayers - L.joined.length} MORE`);
     start.disabled = !ready;
     start.onclick = async () => {
       start.disabled = true; sfx.creak();
-      try { await api('/start', { method: 'POST', body: JSON.stringify({ date: date?.value }) }); }
+      try { await api('/start', { method: 'POST', body: '{}' }); }
       catch (ex) { err.textContent = ex.message; start.disabled = false; }
     };
     box.append(start, err);
@@ -346,12 +476,12 @@ function tutorialVisual(v) {
   const fig = el('figure', `tv tv-${v.type}`);
   if (v.type === 'calls') {
     const segs = 10;
-    const lit = v.max ? Math.ceil((v.left / v.max) * segs) : 0;
+    const lit = v.max == null ? segs : v.max ? Math.ceil((v.left / v.max) * segs) : 0;
     const bar = el('div', 'tv-segs');
     for (let i = 0; i < segs; i++) bar.append(el('i', i < lit ? 'on' : ''));
     const row = (label, value) => { const r = el('div', 'tv-row'); r.append(el('span', null, label), el('b', null, value)); return r; };
-    fig.append(row('☎ CALLS LEFT', `${v.left} / ${v.max}`), bar, row('⏱ EACH CALL', `UP TO ${fmtSec(v.maxSeconds)}`),
-      el('figcaption', null, 'Out of calls? Texting always works.'));
+    fig.append(row(v.shared ? '☎ GROUP CALL TIME' : '☎ CALL TIME LEFT', v.max == null ? 'UNLIMITED' : `${v.left} / ${v.max} MIN`), bar, row('⏱ EACH CALL', `UP TO ${fmtSec(v.maxSeconds)}`),
+      el('figcaption', null, 'Out of call time? Texting always works.'));
   } else if (v.type === 'share') {
     const card = el('div', 'tv-card'); card.append(el('small', null, 'CLUE'), el('span', null, '▤ ▤▤▤ ▤▤'), el('b', null, '↗ SHARE'));
     const chat = el('div', 'tv-chat'); chat.append(el('small', null, 'THE CREW'), el('span', 'tv-bubble', '↗ shared a clue'), el('span', 'tv-bubble them', 'that time is wrong…'));
@@ -365,12 +495,12 @@ function tutorialVisual(v) {
     fig.append(chips, el('figcaption', null, 'Tap a name on the suspect board to mark your theory.'));
   } else if (v.type === 'timeline') {
     const line = el('div', 'tv-line');
-    [['NOW', 'Vote or change it'], ['11:30 PM', 'Voting closes'], ['MIDNIGHT', 'The reveal']].forEach(([when, what], i) => {
+    [['NOW', 'Vote or change it'], ['VOTES OPEN', 'The Line tells you'], ['FINAL CALL', 'The reveal']].forEach(([when, what], i) => {
       const stop = el('div', `tv-stop${i === 2 ? ' end' : ''}`);
       stop.append(el('i'), el('b', null, when), el('span', null, what));
       line.append(stop);
     });
-    fig.append(el('small', 'tv-night', 'NIGHT 2'), line);
+    fig.append(el('small', 'tv-night', 'TONIGHT'), line);
   }
   return fig;
 }
@@ -404,14 +534,13 @@ function renderTutorial(screen) {
     box.append(points);
   }
   const tip = el('div', 'tutorial-tip');
-  tip.append(el('b', null, 'YOUR NEXT MOVE'), el('p', null, step.tip));
+  tip.append(el('b', null, 'NEXT'), el('p', null, step.tip));
   box.append(tip);
   (step.actions || []).forEach((action, i) => {
     const button = el('button', i === 0 ? 'wide' : 'wide ghost', action.label);
     button.onclick = () => go(action.view, action.open);
     box.append(button);
   });
-  if (step.actions?.length) box.append(el('p', 'tutorial-return', 'Try it on your phone, then tap RETURN TO GUIDE to continue.'));
   if (step.extra) box.append(el('p', 'tutorial-extra', step.extra));
   const controls = el('div', 'tutorial-controls');
   const previous = el('button', 'wide ghost', 'PREVIOUS');
@@ -433,13 +562,15 @@ function lastOf(thread) {
 const preview = (m) =>
   ((m.from === 'peer' || (m.from === 'character' && m.sender)) && !m.thread.startsWith('dm:') && m.sender ? `${m.sender.split(' ')[0]}: ` : '') +
   (m.forwarded ? '↗ shared ' : '') +
-  (m.kind === 'secret' ? 'Open this alone.' : m.kind === 'memo' ? '▶ Voice memo' : m.kind === 'voicemail' ? '▶ Voicemail'
+  (m.kind === 'secret' ? 'Open this alone.' : m.kind === 'memo' ? '▶ Voice memo' : m.kind === 'voicemail' ? '▶ Voicemail' : m.kind === 'photo' ? '📷 Photo'
     : m.text.replace(/\s+/g, ' '));
 
 function threadRow(thread, extraClass = '') {
   const li = el('li', unread(thread) ? 'unread' : '');
   const b = el('button');
   const last = lastOf(thread);
+  if (CAST[thread] || thread.startsWith('dm:')) { b.classList.add('has-av'); b.append(avatar(thread, titleOf(thread))); }
+  else if (thread === 'line') { b.classList.add('has-av'); b.append(lineAvatar()); }
   b.append(
     el('span', `name ${extraClass}`, titleOf(thread)),
     el('span', 'time', last ? fmtTime(last.at) : ''),
@@ -489,8 +620,10 @@ function renderCalls(screen) {
     calls.forEach((m) => {
       if (m.kind === 'voicemail') { const li = el('li', 'vm-row'); li.append(messageNode(m)); ul.append(li); return; }
       const li = el('li', `call-row ${m.kind}`);
-      const b = el('button'); b.disabled = true;
+      const b = el('button', 'has-av'); b.disabled = true;
       const label = { call: '☎ incoming · real phone', calllog: '☎ call', missed: '✕ missed' }[m.kind];
+      const who = m.kind === 'missed' ? m.text.replace(/^Missed call: /, '') : m.kind === 'calllog' ? m.text.split(' · ')[0] : 'BLACKWOOD MANOR';
+      b.append(avatar(m.npc || keyOfName(who)));
       b.append(el('span', 'name', m.kind === 'missed' ? m.text.replace(/^Missed call: /, '') : m.kind === 'calllog' ? m.text.split(' · ')[0] : 'BLACKWOOD MANOR'),
         el('span', 'time', fmtTime(m.at)), el('span', 'preview', m.kind === 'calllog' ? `${label} · ${m.text.split(' · ')[1] || ''}` : label));
       li.append(b); ul.append(li);
@@ -501,8 +634,8 @@ function renderCalls(screen) {
     screen.append(el('div', 'section-label', 'CALL SOMEONE'));
     const ul2 = el('ul', 'list');
     state.threads.forEach((t) => {
-      const li = el('li'); const b = el('button');
-      b.append(el('span', 'name', t.name), el('span', 'time', '☎'), el('span', 'preview', t.tagline));
+      const li = el('li'); const b = el('button', 'has-av');
+      b.append(avatar(t.key), el('span', 'name', t.name), el('span', 'time', '☎'), el('span', 'preview', [t.tagline, t.status].filter(Boolean).join(' · ')));
       b.onclick = () => startCall(t.key);
       li.append(b); ul2.append(li);
     });
@@ -544,13 +677,20 @@ function audioPlayer(m) {
 
 function messageNode(m) {
   let node;
-  if (m.kind === 'secret') {
+  if (m.kind === 'photo') {
+    const who = m.from === 'player' ? 'me' : m.from === 'peer' ? 'them peer' : 'them';
+    node = el('div', `bubble ${who} photo`);
+    const img = el('img'); img.src = m.image; img.alt = m.text || 'Photo'; img.loading = 'lazy';
+    img.onclick = (e) => { e.stopPropagation(); openLightbox({ image: m.image, caption: m.text }); };
+    node.append(img);
+    if (m.text) node.append(el('span', 'cap', m.text));
+  } else if (m.kind === 'secret') {
     node = el('div', 'secret');
     node.append(el('span', 'tag', 'FOR YOUR EYES ONLY'), el('div', 'body', m.text), el('div', 'hint', 'Make sure no one is looking, then tap to read.'));
     node.onclick = () => { node.classList.add('open'); sfx.creak(); };
   } else if (EVIDENCE_KINDS.has(m.kind)) {
     node = el('div', `card ${m.kind}`);
-    const tag = m.kind === 'evidence' && /^SECRET UNCOVERED/.test(m.text) ? 'NEW EVIDENCE' : { clue: 'YOUR CLUE', memo: 'VOICE MEMO', evidence: 'EVIDENCE', reveal: 'CASE CLOSED' }[m.kind];
+    const tag = m.kind === 'evidence' && /^SECRET UNCOVERED · HEARD ON A CALL/.test(m.text) ? '☎ HEARD ON A CALL' : m.kind === 'evidence' && /^SECRET UNCOVERED/.test(m.text) ? 'NEW EVIDENCE' : { clue: 'YOUR CLUE', memo: 'VOICE MEMO', evidence: 'EVIDENCE', reveal: 'CASE CLOSED' }[m.kind];
     node.append(el('span', 'tag', tag));
     if (m.audio) node.append(audioPlayer(m));
     else if (m.kind === 'memo') {
@@ -560,9 +700,11 @@ function messageNode(m) {
     }
     node.append(document.createTextNode(m.text));
     if (m.kind === 'evidence' && /^SECRET UNCOVERED/.test(m.text)) node.classList.add('found');
+    if (m.kind === 'evidence' && /HEARD ON A CALL/.test(m.text.split('\n')[0])) node.classList.add('oncall');
   } else if (m.kind === 'voicemail') {
     node = el('div', 'card voicemail');
     node.append(el('span', 'tag', 'VOICEMAIL'));
+    if (CAST[m.npc]) { const h = el('div', 'vm-head'); h.append(avatar(m.npc), el('b', null, CAST[m.npc].toUpperCase())); node.append(h); }
     if (m.audio) node.append(audioPlayer(m));
     node.append(document.createTextNode(m.text));
   } else if (m.kind === 'contact') {
@@ -594,7 +736,21 @@ function messageNode(m) {
 function renderConvo(screen, thread) {
   const head = el('div', 'convo-head');
   const info = el('div', 'who');
-  info.append(el('div', 'to', READONLY[thread] ? 'FROM' : 'TO'), el('div', 'title', titleOf(thread)), el('div', 'sub', subOf(thread)));
+  const sub = el('div', 'sub');
+  if (CAST[thread]) {
+    // What they're up to (follows the story) and when they were last on their phone.
+    const st = statusOf(thread);
+    const seen = presence(thread);
+    sub.append(el('span', /LIVE/.test(st) ? 'live' : null, st || subOf(thread)));
+    if (seen) sub.append(' · ', el('span', seen === 'online' ? 'on' : null, seen));
+    const face = avatar(thread);
+    face.onclick = () => openLightbox({ video: `/assets/cast/${thread}.mp4`, poster: `/assets/cast/${thread}.jpg`, caption: `${CAST[thread]} · ${subOf(thread)}` });
+    head.append(face);
+  } else {
+    sub.textContent = subOf(thread);
+    if (thread === 'line') head.append(lineAvatar());
+  }
+  info.append(el('div', 'to', READONLY[thread] ? 'FROM' : 'TO'), el('div', 'title', titleOf(thread)), sub);
   head.append(info);
   if (!READONLY[thread] && !isPeerThread(thread)) {
     const call = el('button', 'callbtn', '☎ CALL');
@@ -602,7 +758,9 @@ function renderConvo(screen, thread) {
     const calls = state.me?.calls;
     if (calls) {
       const box = el('div', 'callbox');
-      box.append(call, el('div', `callsleft${calls.left ? '' : ' out'}`, calls.left ? `${calls.left} LEFT · ${fmtSec(calls.maxSeconds)} MAX` : 'NO CALLS LEFT'));
+      const out = calls.minutesLeft === 0;
+      box.append(call, el('div', `callsleft${out ? ' out' : ''}`, out ? (calls.shared ? 'GROUP IS OUT OF CALL TIME' : 'NO CALL TIME LEFT')
+        : calls.minutesLeft == null ? `UP TO ${fmtSec(calls.maxSeconds)}` : `${calls.shared ? 'GROUP: ' : ''}${calls.minutesLeft} MIN LEFT · ${fmtSec(calls.maxSeconds)} MAX`));
       head.append(box);
     } else head.append(call);
   }
@@ -678,7 +836,14 @@ function renderConvo(screen, thread) {
 function renderEvidence(screen) {
   markSeen('evidence');
   screen.append(el('div', 'app-title', 'CASE FILE'));
-  const items = state.messages.filter((m) => EVIDENCE_KINDS.has(m.kind));
+  // The victim, first in the file: Dana, so she is a person and not just a name.
+  const vic = el('div', 'victim');
+  const vtext = el('div', 'vtext');
+  vtext.append(el('span', 'tag', 'THE VICTIM'), el('b', null, VICTIM.name), el('span', 'vrole', `${VICTIM.age} · new owner of Blackwood Manor`));
+  VICTIM.lines.forEach((l) => vtext.append(el('p', null, l)));
+  vic.append(portrait('dana', 'victim-photo'), vtext);
+  screen.append(vic);
+  const items = state.messages.filter((m) => EVIDENCE_KINDS.has(m.kind) || (m.kind === 'photo' && m.from === 'character'));
   if (!items.length) { screen.append(el('div', 'empty', 'Nothing yet.\n\nClues, recordings and evidence you receive will be kept here.')); return; }
   const wrap = el('div', 'bubbles');
   items.forEach((m) => { wrap.append(el('div', 'stamp', fmtTime(m.at))); wrap.append(messageNode(m)); });
@@ -689,23 +854,106 @@ function renderEvidence(screen) {
 const boardKey = `bw-board-${token}`, notesKey = `bw-notes-${token}`;
 let board = {}; try { board = JSON.parse(store.get(boardKey, '{}')); } catch { board = {}; }
 const BOARD_LABEL = ['?', 'SUSPICIOUS', 'CLEARED'];
+const agendaKey = `bw-agenda-seen-${token}`;
+const seenAgenda = () => Number(store.get(agendaKey, '0')) || 0;
+const markAgendaSeen = () => store.set(agendaKey, String((state.agenda?.goals || []).filter((g) => g.status === 'done').length));
+// Has this player met (unlocked) the suspect with this name?
+const met = (name) => (state.threads || []).some((t) => t.name === name);
 function renderNotes(screen) {
-  screen.append(el('div', 'app-title', 'NOTES'));
+  screen.append(el('div', 'app-title', 'NOTEBOOK'));
   const box = el('div', 'notes');
-  box.append(el('div', 'section-label', 'SUSPECT BOARD'));
-  const grid = el('div', 'board');
-  state.suspects.forEach((name) => {
-    const s = board[name] || 0;
-    const b = el('button'); b.dataset.s = s;
-    b.append(el('span', null, name), el('em', null, BOARD_LABEL[s]));
-    b.onclick = () => { board[name] = (s + 1) % 3; store.set(boardKey, JSON.stringify(board)); sfx.click(); render(); };
-    grid.append(b);
+  const ag = state.agenda;
+  if (ag) {
+    markAgendaSeen();
+    box.append(el('div', 'section-label', 'SECRET AGENDA'));
+    const sec = el('div', `agenda-secret${ag.leaked ? ' leaked' : ''}`);
+    sec.append(el('span', 'tag', ag.leaked ? 'YOUR SECRET · PEOPLE ARE TALKING' : 'YOUR SECRET'), el('div', null, ag.secret || '🔒 Sealed until you meet the person it’s about.'));
+    if (!ag.secret) sec.classList.add('sealed');
+    box.append(sec);
+    const ul = el('ul', 'agenda');
+    const MARK = { done: '✓', failed: '✗', vote: '⧗', open: '', locked: '🔒' };
+    ag.goals.forEach((g) => {
+      const li = el('li', `st-${g.status}`);
+      li.append(el('span', 'box', MARK[g.status]), el('span', null, g.text || 'Sealed. Meet the right person to reveal it.'));
+      if (g.status === 'vote') li.append(el('em', null, 'decided at the vote'));
+      ul.append(li);
+    });
+    box.append(ul, el('p', 'fine', 'Solving the murder comes first. These are extra, and nobody else can see them until the end.'));
+  }
+  // The lineup: all four suspects against the height chart, numbered. Tap one for their bio and to mark your theory.
+  // Anyone you haven't met stands in the lineup as a shadow.
+  box.append(el('div', 'section-label', 'THE LINEUP'));
+  const keys = Object.keys(CAST);
+  if (!keys.includes(state.lineupPick) || !met(CAST[state.lineupPick])) state.lineupPick = keys.find((k) => met(CAST[k])) || null;
+  const pick = (k, known) => { if (!known) { flashNote('NOT MET YET.'); return; } state.lineupPick = k; sfx.click(); render(); };
+  const lineup = el('div', 'lineup');
+  keys.forEach((k, i) => {
+    const known = met(CAST[k]);
+    const s = board[CAST[k]] || 0;
+    const b = el('button', `slot${state.lineupPick === k ? ' on' : ''}`);
+    b.dataset.s = known ? s : 0;
+    b.setAttribute('aria-label', known ? `${i + 1}: ${CAST[k]}` : `${i + 1}: someone you haven't met`);
+    b.append(portrait(known ? k : null), el('span', 'placard', String(i + 1)), el('span', 'nm', known ? CAST[k].split(' ')[0] : '???'));
+    if (known && s) b.append(el('em', 'mark', BOARD_LABEL[s]));
+    b.onclick = () => pick(k, known);
+    lineup.append(b);
   });
+  // The lineup photo: all four against the height chart, left to right in cast order (where each one stands, in % of width).
+  const LINEUP_SPOTS = [[2, 26.5], [26.5, 49.5], [49.5, 72.5], [72.5, 98]];
+  // Hover (or tap) a suspect to learn more; anyone you haven't met stays in shadow. Falls back to the grid above.
+  const photo = el('div', 'lineup-photo');
+  const img = el('img'); img.alt = 'The four suspects in a police lineup';
+  const srcs = ['/assets/cast/lineup.jpg', CDN_ART.lineup];
+  img.src = srcs.shift();
+  img.onerror = () => { if (srcs.length) img.src = srcs.shift(); else { photo.remove(); lineup.hidden = false; } };
+  photo.append(img);
+  keys.forEach((k, i) => {
+    const known = met(CAST[k]);
+    const s = known ? board[CAST[k]] || 0 : 0;
+    const spot = el('button', `spot${known ? '' : ' hidden-suspect'}${state.lineupPick === k ? ' on' : ''}`);
+    const [x0, x1] = LINEUP_SPOTS[i] || [i * 25, i * 25 + 25];
+    spot.style.left = `${x0}%`; spot.style.width = `${x1 - x0}%`;
+    spot.dataset.s = s;
+    spot.setAttribute('aria-label', known ? `${i + 1}: ${CAST[k]}` : `${i + 1}: someone you haven't met`);
+    if (!known) spot.append(el('span', 'q', '???'));
+    else {
+      const tip = el('span', 'tip');
+      tip.append(el('b', null, CAST[k]), el('span', null, `${BIO[k].age} · ${BIO[k].role}`), el('em', null, BIO[k].rumor));
+      spot.append(tip);
+      if (s) spot.append(el('em', 'mark', BOARD_LABEL[s]));
+    }
+    spot.onclick = () => pick(k, known);
+    photo.append(spot);
+  });
+  lineup.hidden = true;
+  box.append(photo, el('p', 'fine lineup-hint', 'Hover or tap a suspect to learn more.'));
+  box.append(lineup);
+  const k = state.lineupPick;
+  const grid = el('div', 'bio');
+  if (!k) grid.append(el('p', 'fine', 'Meet the suspects to fill in the lineup.'));
+  else {
+    const bio = BIO[k];
+    grid.append(el('b', 'bio-name', CAST[k]), el('span', 'bio-role', `${bio.age} · ${bio.role}`));
+    const ul = el('ul'); bio.background.forEach((l) => ul.append(el('li', null, l))); grid.append(ul);
+    grid.append(el('div', 'bio-sub', 'THEIR STORY: THURSDAY NIGHT'), el('p', 'bio-said', `“${bio.thursday}”`));
+    grid.append(el('div', 'bio-sub', 'AROUND TOWN'), el('p', 'bio-rumor', bio.rumor));
+    // What this player has uncovered about them (their own evidence cards).
+    const found = state.messages.filter((m) => m.thread === k && m.kind === 'evidence' && /^SECRET UNCOVERED/.test(m.text)).map((m) => m.text.split('\n').slice(1).join(' '));
+    if (found.length) { grid.append(el('div', 'bio-sub', 'WHAT YOU’VE UNCOVERED')); const f = el('ul', 'found'); found.forEach((t) => f.append(el('li', null, t))); grid.append(f); }
+    const marks = el('div', 'bio-marks');
+    BOARD_LABEL.forEach((label, s) => {
+      const mb = el('button', (board[CAST[k]] || 0) === s ? 'on' : '', s === 0 ? 'UNDECIDED' : label);
+      mb.dataset.s = s;
+      mb.onclick = () => { board[CAST[k]] = s; store.set(boardKey, JSON.stringify(board)); sfx.click(); render(); };
+      marks.append(mb);
+    });
+    grid.append(marks);
+  }
   box.append(grid, el('div', 'section-label', 'YOUR NOTES'));
   const ta = el('textarea'); ta.placeholder = 'Who lied? What doesn’t add up?'; ta.maxLength = 4000;
   ta.value = state.drafts.notes ?? store.get(notesKey, '');
   ta.oninput = () => { state.drafts.notes = ta.value; store.set(notesKey, ta.value); };
-  box.append(ta, el('p', 'fine', 'Only you can see this. It stays on this phone.'));
+  box.append(ta, el('p', 'fine', 'Notes stay private from the group.'));
   screen.append(box);
 }
 
@@ -720,6 +968,9 @@ function renderVote(screen) {
     box.append(el('h2', null, label));
     const grid = el('div', 'choices');
     options.forEach((name) => {
+      if (field === 'killer' && !met(name)) { // suspects you haven't met yet stay a mystery here too
+        const b = el('button', 'choice locked', '???'); b.disabled = true; grid.append(b); return;
+      }
       const b = el('button', `choice${state.pick[field] === name ? ' on' : ''}`, name);
       b.onclick = () => { state.pick[field] = name; sfx.click(); render(); };
       grid.append(b);
@@ -727,6 +978,7 @@ function renderVote(screen) {
     box.append(grid);
   };
   group('WHO KILLED DANA?', state.suspects, 'killer');
+  if (state.suspects.some((n) => !met(n))) box.append(el('p', 'fine', 'Meet more suspects to add them here.'));
   group('WHO IS THE ACCOMPLICE?', state.players.filter((n) => n !== state.me.name), 'accomplice');
 
   const note = el('p', 'note');
@@ -734,7 +986,7 @@ function renderVote(screen) {
     note.textContent = `Your vote: ${state.vote.killer}${state.vote.accomplice ? `, accomplice ${state.vote.accomplice}` : ''}. You can change it until voting closes.`;
     note.className = 'note ok';
   } else {
-    note.textContent = 'Votes close at 11:30 pm on Night 2. You can change your vote until then.';
+    note.textContent = 'Votes close at the final call. You can change your vote until then.';
   }
   const submit = el('button', 'wide', state.vote ? 'UPDATE VOTE' : 'LOCK IN VOTE');
   submit.onclick = async () => {
@@ -782,6 +1034,33 @@ function renderRecap(screen) {
   r.found.forEach((t) => ul.append(el('li', 'got', t)));
   r.missed.forEach((t) => ul.append(el('li', null, t)));
   box.append(ul);
+  if (r.heardOnCalls) box.append(el('p', 'note', `☎ ${r.heardOnCalls} of them you heard on a call, for bonus points.`));
+  if (r.group?.length > 1) {
+    box.append(el('div', 'section-label', 'THE GROUP'));
+    box.append(el('p', 'note', `The group named ${r.groupVote.killer || 'no one'} as the killer${r.groupVote.accomplice ? ` and ${r.groupVote.accomplice} as the accomplice` : ''}.`));
+    const gl = el('ul', 'group-recap');
+    r.group.forEach((g) => {
+      const li = el('li', g.you ? 'you' : null);
+      li.append(el('b', null, `${g.name}${g.you ? ' (you)' : ''}${g.accomplice ? ' 🗝' : ''}`),
+        el('span', null, `${g.found} secret${g.found === 1 ? '' : 's'}${g.onCall ? ` · ${g.onCall} ☎` : ''} · ${g.vote ? `named ${g.vote.split(' ')[0]}` : 'no vote'}`));
+      gl.append(li);
+    });
+    box.append(gl);
+  }
+  if (r.group?.some((g) => g.agenda)) {
+    box.append(el('div', 'section-label', 'HIDDEN AGENDAS'));
+    const best = Math.max(...r.group.map((g) => g.agenda?.done || 0));
+    r.group.filter((g) => g.agenda).forEach((g) => {
+      const card = el('div', `agenda-recap${g.you ? ' you' : ''}`);
+      const head = el('div', 'head');
+      head.append(el('b', null, `${g.name}${g.you ? ' (you)' : ''}`), el('span', null, `${g.agenda.done}/3${best > 0 && g.agenda.done === best ? ' · PUPPET MASTER' : ''}`));
+      card.append(head, el('div', 'secret-line', `${g.agenda.leaked ? '🗣 leaked · ' : ''}${g.agenda.secret}`));
+      const ul = el('ul', 'agenda small');
+      g.agenda.goals.forEach((x) => { const li = el('li', x.done ? 'st-done' : 'st-failed'); li.append(el('span', 'box', x.done ? '✓' : '✗'), el('span', null, x.text)); ul.append(li); });
+      card.append(ul);
+      box.append(card);
+    });
+  }
   const share = el('button', 'wide', 'SAVE SHARE CARD');
   share.onclick = () => shareCard(r);
   box.append(share, el('p', 'fine', 'The card shows your rank and score, with no spoilers.'));
@@ -806,6 +1085,7 @@ async function shareCard(r) {
   g.fillStyle = '#c9d6c3'; g.font = '70px "Special Elite", serif'; g.fillText(r.rank, 540, 920);
   g.fillStyle = '#6b7a66'; g.font = '48px VT323, monospace';
   g.fillText(`${r.name.toUpperCase()}  ·  ${r.found.length}/${r.totalClues} SECRETS UNCOVERED`, 540, 1010);
+  if (r.heardOnCalls) { g.fillStyle = '#9fe0a0'; g.fillText(`☎ ${r.heardOnCalls} HEARD ON A CALL`, 540, 1075); }
   g.fillStyle = '#d0412e'; g.font = '52px VT323, monospace';
   g.fillText('THE HOUSE CALLED. I ANSWERED.', 540, 1180);
   g.fillStyle = '#6b7a66'; g.font = '36px VT323, monospace'; g.fillText('All characters are AI. Happy Halloween.', 540, 1240);
@@ -817,23 +1097,106 @@ async function shareCard(r) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'blackwood-line.png'; a.click();
 }
 
+// ============ the votes, counted out before the final call ============
+function showVotes({ rows, total }) {
+  document.querySelector('.votes-overlay')?.remove();
+  const box = el('div', 'votes-overlay'); box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', 'The votes');
+  const inner = el('div', 'votes-inner');
+  inner.append(el('div', 'votes-title', 'THE VOTES ARE IN'));
+  const list = el('div', 'votes-rows');
+  inner.append(list);
+  const foot = el('div', 'votes-foot', total ? '' : 'Nobody voted.');
+  inner.append(foot);
+  box.append(inner);
+  box.onclick = () => box.remove();
+  document.body.append(box);
+  music.sync();
+  // Names appear, then each vote lands one at a time.
+  let at = 600;
+  rows.forEach((r) => {
+    const row = el('div', 'votes-row'); const dots = el('span', 'dots');
+    row.append(el('b', null, r.name), dots); row.style.opacity = '0';
+    list.append(row);
+    setTimeout(() => { row.style.opacity = '1'; }, at);
+    at += 500;
+    for (let i = 0; i < r.count; i++) { setTimeout(() => { dots.append(el('i')); sfx.tick(); }, at); at += 700; }
+  });
+  setTimeout(() => { foot.textContent = 'The line is ringing…'; }, at + 600);
+  setTimeout(() => box.remove(), at + 15_000);
+}
+
+// ============ while you were away ============
+const awayKey = `bw-away-${token}`;
+const markHere = () => store.set(awayKey, new Date().toISOString());
+function catchUp() {
+  const since = store.get(awayKey, '');
+  markHere();
+  if (!since || Date.now() - Date.parse(since) < 2 * 60_000 || state.lobby?.status === 'lobby') return;
+  const fresh = state.messages.filter((m) => m.at > since && m.from !== 'player');
+  if (!fresh.length) return;
+  const lines = [];
+  const by = {};
+  fresh.filter((m) => CAST[m.thread] && m.kind !== 'contact').forEach((m) => { by[m.thread] = (by[m.thread] || 0) + 1; });
+  Object.entries(by).forEach(([k, n]) => lines.push([`💬 ${n} message${n > 1 ? 's' : ''} from ${CAST[k].split(' ')[0]}`, 'messages', k]));
+  fresh.filter((m) => m.kind === 'contact').forEach((m) => lines.push([`👤 ${m.text.replace(/^NEW CONTACT: /, '').split(',')[0]} is in your phone`, 'messages', 'line']));
+  const ev = fresh.filter((m) => EVIDENCE_KINDS.has(m.kind)).length;
+  if (ev) lines.push([`🗂 ${ev} new piece${ev > 1 ? 's' : ''} of evidence`, 'evidence', null]);
+  fresh.filter((m) => m.kind === 'missed' || m.kind === 'voicemail').forEach((m) => lines.push([`☎ ${m.kind === 'voicemail' ? 'Voicemail' : 'Missed call'}${CAST[m.npc] ? ` from ${CAST[m.npc].split(' ')[0]}` : ''}`, 'calls', null]));
+  const agenda = fresh.filter((m) => m.kind === 'agenda').length;
+  if (agenda) lines.push(['📓 Your Notebook changed', 'notes', null]);
+  if (!lines.length) return;
+  const box = el('div', 'catchup'); box.setAttribute('role', 'dialog');
+  const card = el('div', 'catchup-card');
+  card.append(el('div', 'catchup-title', 'WHILE YOU WERE AWAY'));
+  lines.slice(0, 6).forEach(([text, view, open]) => {
+    const b = el('button', 'catchup-row', text);
+    b.onclick = () => { box.remove(); go(view, open); };
+    card.append(b);
+  });
+  const ok = el('button', 'wide', 'GOT IT'); ok.onclick = () => box.remove();
+  card.append(ok);
+  box.append(card);
+  document.body.append(box);
+}
+setInterval(() => { if (document.visibilityState === 'visible') markHere(); }, 30_000);
+
 // ============ incoming call overlay ============
 let ringTimeout = null;
 let ringFor = null; // character key when the call can be answered in the app
+// The caller's face fills the ring screen: their portrait moving, or for the house, a lit window through static.
+function setFace(box, key, { video = false } = {}) {
+  const k = faceKey(key);
+  box.querySelectorAll('video, img, i').forEach((n) => n.remove());
+  box.classList.toggle('on', Boolean(k));
+  box.classList.toggle('ghost', k === 'caretaker');
+  if (!k) return;
+  if (k === 'caretaker') { box.prepend(el('i')); return; }
+  if (video && !reduceMotion) {
+    const v = el('video'); v.muted = true; v.loop = true; v.autoplay = true; v.playsInline = true; v.setAttribute('playsinline', '');
+    v.poster = `/assets/cast/${k}.jpg`; v.src = `/assets/cast/${k}.mp4`;
+    box.prepend(v); v.play().catch(() => {});
+  } else {
+    const img = el('img'); img.src = `/assets/cast/${k}.jpg`; img.alt = ''; box.prepend(img);
+  }
+}
 function showRing(sub, note, { id = 'UNKNOWN', answer = null } = {}) {
   if (call) return; // already on a call
   closeCallScreen(); // a lingering "call ended" screen would sit on top of the ring
+  setFace($('#ringFace'), answer, { video: true });
   ringFor = answer;
   $('#ringId').textContent = id; $('#ringSub').textContent = sub; $('#ringNote').textContent = note;
   $('#ringAnswer').hidden = !answer;
   $('#ringDismiss').textContent = answer ? 'DECLINE' : 'DISMISS';
-  $('#ring').hidden = false; sfx.ring();
+  $('#ring').hidden = false; sfx.ring(); music.sync();
   clearTimeout(ringTimeout); ringTimeout = setTimeout(hideRing, 40_000);
 }
-function hideRing() { $('#ring').hidden = true; sfx.stopRing(); clearTimeout(ringTimeout); ringFor = null; }
-$('#ringDismiss').onclick = hideRing;
+function hideRing() { $('#ring').hidden = true; sfx.stopRing(); clearTimeout(ringTimeout); ringFor = null; setFace($('#ringFace'), null); setTimeout(() => music.sync(), 0); }
+let declined = null; // the ring the player turned down, so catching up doesn't bring it back
+$('#ringDismiss').onclick = () => { declined = ringFor; hideRing(); };
 $('#ringAnswer').onclick = () => { const c = ringFor; hideRing(); if (c) startCall(c); };
 function incoming({ character, from }) {
+  document.querySelector('.votes-overlay')?.remove();
+  declined = null;
   const ghost = character.startsWith('caretaker');
   const t = state.threads.find((x) => x.key === character);
   showRing(ghost ? 'BLACKWOOD MANOR' : (t?.tagline || 'MOBILE').toUpperCase(),
@@ -905,6 +1268,9 @@ function callScreen(character) {
   clearTimeout(callAfterTimer);
   captions.reset();
   $('#callName').textContent = callName(character);
+  setFace($('#callFace'), character);
+  $('#callScreen').classList.toggle('has-face', Boolean(CAST[character]));
+  $('#callScreen').style.setProperty('--lvl', '0');
   $('#callState').textContent = 'CALLING…';
   $('#callTime').textContent = '';
   $('#callMute').classList.remove('on');
@@ -948,21 +1314,187 @@ function startClock(maxSeconds, onTick) {
     if (secs > maxSeconds) endCall('max_duration');
   }, 500);
 }
-// A scripted call (the midnight reveal): a finished recording plays through the call screen.
-function playRecordingCall(character, info) {
-  const audio = $('#callAudio');
-  call.mode = 'recording';
-  audio.srcObject = null;
-  audio.src = info.audio;
-  audio.onended = () => setTimeout(() => endCall('recording_ended'), 800);
-  audio.onloadedmetadata = () => { if (info.captions) captions.line(info.captions, audio.duration * 1000); };
-  audio.play().catch(() => {});
+// ============ background music (ElevenLabs tracks, ⋮ menu) ============
+// One track per stretch of the night, each stranger than the last (src/music.js). The phone crossfades to the next one
+// as the story moves, and warps it more as it goes: slower and lower, a wobbling tape, the line cutting out. It goes
+// quiet for calls, rings, the intro and recordings, and when the phone is put away.
+const musicOn = () => store.get('bw-music', '1') === '1' && store.get('bw-sound', '1') !== '0';
+const MUSIC_ORDER = ['early', 'late', 'deep', 'final', 'after'];
+const TRACK_OF = { before: 'early', early: 'early', late: 'late', deep: 'deep', final: 'final', after: 'after' };
+const WEIRD = { // playback rate, tape wobble depth, chance of the sound cutting out (per check)
+  early: { rate: 1, wobble: 0, drop: 0 }, late: { rate: 0.97, wobble: 0.004, drop: 0 },
+  deep: { rate: 0.93, wobble: 0.012, drop: 0.25 }, final: { rate: 0.9, wobble: 0.02, drop: 0.4 }, after: { rate: 0.86, wobble: 0, drop: 0 },
+};
+const MUSIC_VOL = 0.22;
+const music = (() => {
+  const buffers = new Map();
+  let cur = null; let busy = false; let dropTimer = null;
+  const load = (url, ctx) => {
+    if (!buffers.has(url)) buffers.set(url, fetch(url).then((r) => r.arrayBuffer()).then((b) => ctx.decodeAudioData(b)).catch((e) => { buffers.delete(url); throw e; }));
+    return buffers.get(url);
+  };
+  function wanted() {
+    const tracks = state.music || {};
+    let i = MUSIC_ORDER.indexOf(TRACK_OF[state.phase] || 'early');
+    while (i >= 0 && !tracks[MUSIC_ORDER[i]]) i -= 1; // not composed yet: keep the latest one that is
+    return i >= 0 ? { name: MUSIC_ORDER[i], url: tracks[MUSIC_ORDER[i]] } : null;
+  }
+  const shouldPlay = () => musicOn() && !call && $('#ring').hidden && !document.querySelector('.votes-overlay') && $('#power').hidden && $('#intro').hidden && !document.hidden && audioEl.paused;
+  function fadeOut(t, secs = 1.2) {
+    if (!t) return;
+    const ctx = t.gain.context;
+    t.gain.gain.cancelScheduledValues(ctx.currentTime);
+    t.gain.gain.setTargetAtTime(0, ctx.currentTime, secs / 4);
+    setTimeout(() => { try { t.src.stop(); t.lfo?.stop(); } catch { /* stopped */ } t.gain.disconnect(); }, secs * 1000 + 200);
+  }
+  function dropouts(t, chance) {
+    clearInterval(dropTimer);
+    if (!chance) return;
+    dropTimer = setInterval(() => { // the line cuts out for a moment
+      if (cur !== t || Math.random() > chance) return;
+      const g = t.gain.gain; const now = t.gain.context.currentTime;
+      g.cancelScheduledValues(now); g.setValueAtTime(MUSIC_VOL * 0.08, now); g.setValueAtTime(MUSIC_VOL, now + 0.15 + Math.random() * 0.5);
+    }, 7000);
+  }
+  async function sync() {
+    document.body.dataset.music = cur && shouldPlay() ? cur.name : '';
+    if (busy) return;
+    if (!shouldPlay()) { if (cur) { fadeOut(cur); cur = null; clearInterval(dropTimer); } return; }
+    const want = wanted();
+    if (!want) return;
+    if (cur?.url === want.url) return;
+    const ctx = sfx.unlock(); if (!ctx || ctx.state !== 'running') return; // waits for a first tap
+    busy = true;
+    try {
+      const buf = await load(want.url, ctx);
+      if (!shouldPlay()) return;
+      const w = WEIRD[want.name] || WEIRD.early;
+      const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true; src.playbackRate.value = w.rate;
+      const gain = ctx.createGain(); gain.gain.value = 0;
+      src.connect(gain).connect(ctx.destination);
+      let lfo = null;
+      if (w.wobble) { // warped tape: the pitch drifts slowly up and down
+        lfo = ctx.createOscillator(); lfo.frequency.value = 0.23;
+        const depth = ctx.createGain(); depth.gain.value = w.wobble;
+        lfo.connect(depth).connect(src.playbackRate); lfo.start();
+      }
+      src.start(0, Math.random() * Math.max(0, buf.duration - 5));
+      gain.gain.setTargetAtTime(MUSIC_VOL, ctx.currentTime, 1);
+      fadeOut(cur, 3);
+      cur = { name: want.name, url: want.url, src, gain, lfo };
+      dropouts(cur, w.drop);
+    } catch { /* no music this time; try again later */ } finally { busy = false; }
+    document.body.dataset.music = cur && shouldPlay() ? cur.name : '';
+  }
+  return { sync };
+})();
+setInterval(() => music.sync(), 4000);
+document.addEventListener('visibilitychange', () => music.sync());
+['play', 'pause', 'ended'].forEach((ev) => audioEl.addEventListener(ev, () => music.sync()));
+addEventListener('pointerdown', () => setTimeout(() => music.sync(), 50));
+
+// ============ phone-line sound (on by default, ⋮ menu) ============
+// The character's voice goes through a telephone band (about 300-3,400 Hz) with a faint line hiss, like a real call
+// on an old landline, instead of studio-clean audio. If the browser can't do it, the voice plays unprocessed.
+const phoneLineOn = () => store.get('bw-phoneline', '1') === '1';
+function phoneChain(ctx) {
+  const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 320;
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3300;
+  const presence = ctx.createBiquadFilter(); presence.type = 'peaking'; presence.frequency.value = 1700; presence.Q.value = 0.9; presence.gain.value = 4;
+  const out = ctx.createGain(); out.gain.value = 1.6; // the band filter takes some loudness away
+  hp.connect(lp).connect(presence).connect(out).connect(ctx.destination);
+  const noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  const noise = ctx.createBufferSource(); noise.buffer = noiseBuf; noise.loop = true;
+  const nf = ctx.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = 1400; nf.Q.value = 0.6;
+  const ng = ctx.createGain(); ng.gain.value = 0.006;
+  noise.connect(nf).connect(ng).connect(ctx.destination);
+  noise.start();
+  const nodes = [hp, lp, presence, out, noise, nf, ng];
+  return { input: hp, stop: () => { try { noise.stop(); } catch { /* stopped */ } nodes.forEach((n) => { try { n.disconnect(); } catch { /* gone */ } }); } };
+}
+// What you hear behind a character on a call (their room, their car, their stream), quietly under their voice and through
+// the same telephone band. Ruth's room has someone humming. Returns a teardown, or null.
+async function callBed(character) {
+  const url = state.callBeds?.[character];
+  const ctx = url && sfx.unlock();
+  if (!ctx) return null;
+  try {
+    const buf = await fetch(url).then((r) => r.arrayBuffer()).then((b) => ctx.decodeAudioData(b));
+    const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 300;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3400;
+    const g = ctx.createGain(); g.gain.value = 0;
+    src.connect(hp).connect(lp).connect(g).connect(ctx.destination);
+    src.start(0, Math.random() * Math.max(0, buf.duration - 1));
+    g.gain.setTargetAtTime(0.09, ctx.currentTime, 0.8);
+    return () => { g.gain.setTargetAtTime(0, ctx.currentTime, 0.2); setTimeout(() => { try { src.stop(); } catch { /* done */ } g.disconnect(); }, 800); };
+  } catch { return null; }
+}
+
+// Live call: route the remote stream through the line. Returns a teardown, or null to play it as is.
+function phoneLineStream(stream) {
+  if (!phoneLineOn()) return null;
+  try {
+    const ctx = sfx.unlock(); if (!ctx) return null;
+    const chain = phoneChain(ctx);
+    const src = ctx.createMediaStreamSource(stream);
+    src.connect(chain.input);
+    return () => { try { src.disconnect(); } catch { /* gone */ } chain.stop(); };
+  } catch { return null; }
+}
+
+// A scripted call (the Caretaker, the midnight reveal): finished recordings play through the call screen, one after
+// another with a short pause, captions in step.
+async function playRecordingCall(character, info) {
+  const c = call;
+  c.mode = 'recording';
+  const parts = [].concat(info.audio);
+  const lines = [].concat(info.captions || []);
+  const finish = () => setTimeout(() => { if (call === c) endCall('recording_ended'); }, 800);
   startClock(info.maxSeconds);
+  const ctx = phoneLineOn() ? sfx.unlock() : null;
+  if (ctx) {
+    try {
+      const buffers = await Promise.all(parts.map((u) => fetch(u).then((r) => r.arrayBuffer()).then((b) => ctx.decodeAudioData(b))));
+      if (call !== c) return;
+      const chain = phoneChain(ctx);
+      meter(chain.input); // the Caretaker's window (or face) pulses with his voice
+      let src = null;
+      c.stopLine = () => { try { src?.stop(); } catch { /* done */ } chain.stop(); };
+      for (const [i, buf] of buffers.entries()) {
+        if (call !== c) return;
+        src = ctx.createBufferSource(); src.buffer = buf; src.connect(chain.input);
+        if (lines[i]) captions.line(lines[i], buf.duration * 1000);
+        await new Promise((done) => { src.onended = done; src.start(); });
+        await new Promise((done) => setTimeout(done, 650));
+      }
+      finish();
+      return;
+    } catch { if (call !== c) return; c.stopLine?.(); c.stopLine = null; }
+  }
+  // Plain playback (no phone-line sound, or the browser couldn't decode it).
+  const audio = $('#callAudio');
+  audio.srcObject = null;
+  let i = 0;
+  const next = () => {
+    if (call !== c) return;
+    if (i >= parts.length) { finish(); return; }
+    const at = i++;
+    audio.src = parts[at];
+    audio.onloadedmetadata = () => { if (lines[at]) captions.line(lines[at], audio.duration * 1000); };
+    audio.onended = () => setTimeout(next, 650);
+    audio.play().catch(() => {});
+  };
+  next();
 }
 async function startCall(character) {
   if (call) return;
+  hideRing(); // however the call starts (ANSWER, CALL, call back), nothing keeps ringing underneath it
   sfx.unlock();
   call = { character, started: 0, timer: null };
+  music.sync(); // quiet for the call
   callScreen(character);
   const audio = $('#callAudio');
   audio.play().catch(() => {}); // unlock playback inside the tap
@@ -971,19 +1503,27 @@ async function startCall(character) {
     return navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
   };
   try {
-    // Microphone first (the short-lived call key is only minted once we can use it). The scripted reveal needs none.
-    let mic = character === 'caretaker_reveal' ? null : await getMic();
+    // Microphone first (the short-lived call key is only minted once we can use it). The Caretaker's recorded calls need
+    // none (if his call turns out to be live, the microphone is requested below).
+    let mic = character.startsWith('caretaker') ? null : await getMic();
     call.mic = mic;
     if (!call) { mic?.getTracks().forEach((t) => t.stop()); return; }
     const info = await api('/call', { method: 'POST', body: JSON.stringify({ character }) });
-    if (state.me?.calls) state.me.calls.left = Math.max(0, state.me.calls.left - 1);
     if (!call) { mic?.getTracks().forEach((t) => t.stop()); return; }
     call.callId = info.callId;
     if (info.mode === 'recording') { mic?.getTracks().forEach((t) => t.stop()); call.mic = null; playRecordingCall(character, info); return; }
     if (!mic) { mic = await getMic(); call.mic = mic; }
     const pc = new RTCPeerConnection();
     call.pc = pc;
-    pc.ontrack = (e) => { audio.srcObject = e.streams[0]; audio.play().catch(() => {}); meter(e.streams[0]); };
+    pc.ontrack = (e) => {
+      audio.srcObject = e.streams[0];
+      // The element keeps the stream flowing (some browsers need it); with the phone-line sound on, it's muted and the
+      // voice is heard through the filter instead.
+      const stop = call ? phoneLineStream(e.streams[0]) : null;
+      if (stop) { audio.muted = true; call.stopLine = stop; }
+      audio.play().catch(() => {});
+      meter(e.streams[0]);
+    };
     mic.getTracks().forEach((t) => pc.addTrack(t, mic));
     const dc = pc.createDataChannel('oai-events');
     const callId = info.callId;
@@ -1019,8 +1559,11 @@ async function startCall(character) {
     await pc.setRemoteDescription({ type: 'answer', sdp: await r.text() });
     if (!call) return;
     startClock(info.maxSeconds, () => call?.ctl?.tick());
+    const c0 = call;
+    callBed(character).then((stop) => { if (stop && call === c0) c0.stopBed = stop; else stop?.(); });
   } catch (ex) {
-    $('#callState').textContent = ex.name === 'NotAllowedError' ? 'MICROPHONE BLOCKED' : /busy/i.test(ex.message) ? 'LINE BUSY' : 'CALL FAILED';
+    $('#callState').textContent = ex.name === 'NotAllowedError' ? 'MICROPHONE BLOCKED' : /busy/i.test(ex.message) ? 'LINE BUSY'
+      : /picking up|can't talk right now/i.test(ex.message) ? 'NO ANSWER' : /line is dead|out of call time/i.test(ex.message) ? (sfx.static(), 'NO SIGNAL') : 'CALL FAILED';
     $('#callTime').textContent = ex.name === 'NotAllowedError' ? 'Allow the microphone to talk to them.'
       : ex instanceof TypeError ? 'The line dropped. Try again.' : ex.message;
     setTimeout(() => endCall('connect_failed'), 3200);
@@ -1029,16 +1572,19 @@ async function startCall(character) {
 function endCall(reason = 'player_hung_up') {
   if (!call) return;
   const c = call; call = null;
-  clearInterval(c.timer); cancelAnimationFrame(meterRaf);
+  setTimeout(() => music.sync(), 1500); // the music creeps back after the call
+  clearInterval(c.timer); cancelAnimationFrame(meterRaf); $('#callScreen').style.setProperty('--lvl', '0');
   captions.stop();
   c.ctl?.end(reason); // saves what was heard so far and reports any outstanding usage
   c.mic?.getTracks().forEach((t) => t.stop());
   try { c.pc?.close(); } catch { /* already closed */ }
+  c.stopLine?.(); c.stopBed?.();
   const audio = $('#callAudio');
-  audio.pause(); audio.onended = null; audio.srcObject = null; audio.removeAttribute('src');
+  audio.pause(); audio.onended = null; audio.onloadedmetadata = null; audio.srcObject = null; audio.removeAttribute('src'); audio.muted = false;
   showCallEnded(c, reason);
   if (c.started || c.callId) {
-    api('/call/end', { method: 'POST', body: JSON.stringify({ callId: c.callId, character: c.character, mode: c.mode, reason, seconds: c.started ? (Date.now() - c.started) / 1000 : 0 }) }).catch(() => {});
+    api('/call/end', { method: 'POST', body: JSON.stringify({ callId: c.callId, character: c.character, mode: c.mode, reason, seconds: c.started ? (Date.now() - c.started) / 1000 : 0 }) })
+      .then(() => refresh()).catch(() => {}); // refresh: the call-time meter
   }
   sfx.creak();
 }
@@ -1050,22 +1596,34 @@ $('#callMute').onclick = () => {
 };
 // The rings pulse with the character's voice.
 let meterRaf = 0;
-function meter(stream) {
+function meter(source) {
   try {
     const ctx = sfx.unlock(); if (!ctx) return;
     const an = ctx.createAnalyser(); an.fftSize = 256;
-    ctx.createMediaStreamSource(stream).connect(an);
+    (source instanceof MediaStream ? ctx.createMediaStreamSource(source) : source).connect(an);
     const buf = new Uint8Array(an.frequencyBinCount);
-    const viz = $('#callViz');
+    const scr = $('#callScreen');
+    cancelAnimationFrame(meterRaf);
     const tickMeter = () => {
       an.getByteFrequencyData(buf);
       const level = buf.reduce((a, b) => a + b, 0) / buf.length / 255;
-      viz.style.setProperty('--lvl', Math.min(1, level * 3).toFixed(3));
+      scr.style.setProperty('--lvl', Math.min(1, level * 3).toFixed(3));
       meterRaf = requestAnimationFrame(tickMeter);
     };
     tickMeter();
   } catch { /* visual only */ }
 }
+
+// ============ photo / portrait viewer ============
+function openLightbox({ image, video, poster, caption }) {
+  const box = $('#lightbox'); const img = $('#lightboxImg'); const vid = $('#lightboxVid');
+  img.hidden = !image; vid.hidden = !video;
+  if (image) img.src = image;
+  if (video) { vid.poster = poster || ''; vid.src = video; if (!reduceMotion) vid.play().catch(() => {}); }
+  $('#lightboxCap').textContent = caption || '';
+  box.hidden = false;
+}
+$('#lightbox').onclick = () => { const v = $('#lightboxVid'); v.pause(); v.removeAttribute('src'); $('#lightbox').hidden = true; };
 
 // ============ toast ============
 let toastTimer = null;
@@ -1103,6 +1661,7 @@ function connect() {
     state.messages.push(m);
     state.arrived[m.id] = Date.now();
     if (m.kind === 'reveal') { state.revealed = true; loadRecap(); }
+    if (m.kind === 'agenda' || /^YOUR SECRET AGENDA/.test(m.text || '')) refresh();
     if (m.from !== 'player') {
       state.typing[m.thread] = false;
       const viewing = (state.view === 'convo' && state.open === m.thread) || (state.view === 'calls' && m.thread === 'unknown');
@@ -1111,7 +1670,7 @@ function connect() {
       const isRinging = m.thread === 'line' && /line is ringing/i.test(m.text);
       if (isCall) showRing('BLACKWOOD MANOR', 'Your real phone is ringing. Pick it up.');
       else if (isRinging) showRing('THE LINE', 'It’s ringing. Everyone’s phone is ringing.');
-      else if (!['missed', 'calllog'].includes(m.kind)) { sfx.msg(); if (!viewing) toast(m); }
+      else if (!['missed', 'calllog'].includes(m.kind)) { if (/^No signal/.test(m.text || '')) sfx.static(); else if (CAST[m.thread]) sfx.from(m.thread); else sfx.msg(); if (!viewing) toast(m); }
     }
     render();
     setTimeout(() => { if (Object.values(state.arrived).some((t) => Date.now() - t < 1000)) render(); }, 1000);
@@ -1139,11 +1698,23 @@ function connect() {
     state.messages.forEach((m) => { if (m.thread === thread && m.from === 'player' && !m.readAt) m.readAt = at; });
     render();
   });
+  es.addEventListener('clock', (e) => { state.clock = JSON.parse(e.data); render(); });
+  es.addEventListener('votes', (e) => showVotes(JSON.parse(e.data)));
+  es.addEventListener('status', (e) => {
+    const statuses = JSON.parse(e.data);
+    state.threads.forEach((t) => { if (statuses[t.key] != null) t.status = statuses[t.key]; });
+    if (statuses.phase) state.phase = statuses.phase;
+    render();
+  });
   es.addEventListener('typing', (e) => {
     const { thread, on, who } = JSON.parse(e.data);
     state.typing[thread] = on ? (who || true) : false; render();
   });
-  es.onerror = () => { /* EventSource reconnects on its own */ };
+  // EventSource reconnects on its own after a drop (switching apps, a network blip), but anything sent while it was
+  // down is lost: catch up as soon as it's back.
+  let opened = false;
+  es.addEventListener('open', () => { if (opened) refresh(); opened = true; });
+  es.onerror = () => { /* reconnects on its own; 'open' catches up */ };
 }
 
 // ============ settings, alerts, install ============
@@ -1217,11 +1788,15 @@ function setupMenu() {
     $('#callsToggle').disabled = !state.me.hasPhone;
     $('#soundToggle').checked = store.get('bw-sound', '1') !== '0';
     $('#captionsToggle').checked = captionsOn();
+    $('#phoneLineToggle').checked = phoneLineOn();
+    $('#musicToggle').checked = store.get('bw-music', '1') === '1';
     menu.showModal();
   };
   $('#closeMenu').onclick = () => menu.close();
   $('#soundToggle').onchange = (e) => store.set('bw-sound', e.target.checked ? '1' : '0');
   $('#captionsToggle').onchange = (e) => store.set('bw-captions', e.target.checked ? '1' : '0');
+  $('#phoneLineToggle').onchange = (e) => store.set('bw-phoneline', e.target.checked ? '1' : '0');
+  $('#musicToggle').onchange = (e) => { store.set('bw-music', e.target.checked ? '1' : '0'); music.sync(); };
   $('#callsToggle').onchange = async (e) => {
     try {
       const r = await api('/settings', { method: 'POST', body: JSON.stringify({ callsOff: !e.target.checked }) });
@@ -1389,13 +1964,18 @@ async function refresh() {
     fresh.messages.filter((m) => !known.has(m.id)).forEach((m) => state.messages.push(m));
     Object.assign(state.me, fresh.me);
     state.threads = fresh.threads;
-    state.revealed = fresh.revealed; state.vote = fresh.vote; state.players = fresh.players; state.peers = fresh.peers; state.groups = fresh.groups; state.lobby = fresh.lobby;
+    state.phase = fresh.phase; state.music = fresh.music; state.callBeds = fresh.callBeds;
+    state.revealed = fresh.revealed; state.vote = fresh.vote; state.players = fresh.players; state.peers = fresh.peers; state.groups = fresh.groups; state.lobby = fresh.lobby; state.agenda = fresh.agenda; state.clock = fresh.clock;
     if (state.revealed && !state.recap) loadRecap();
+    // A call that started ringing while this screen wasn't listening.
+    if (fresh.ringing && $('#ring').hidden && !call && declined !== fresh.ringing.character) incoming({ character: fresh.ringing.character, from: '' });
     render();
     if ($('#power').hidden && !roleSeen() && state.me.assigned) showRole();
   } catch { /* offline: try again next time */ }
 }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh().then(catchUp); else markHere(); });
+// Safety net: if live updates quietly stall (some networks hold them back), check in every 20 seconds anyway.
+setInterval(() => { if (document.visibilityState === 'visible' && token) refresh(); }, 20_000);
 
 // ============ boot ============
 async function boot() {
@@ -1440,6 +2020,7 @@ async function boot() {
     if (state.ringing) incoming({ character: state.ringing.character, from: '' });
     if (!roleSeen() && state.me.assigned) await showRole();
     if (!fromHash && !state.revealed && !state.ringing && !organizerWaiting() && ['new', 'active'].includes(tutorial.status)) startTutorial();
+    else if (!state.ringing) catchUp();
   } else {
     $('#pwrBtn').onclick = (e) => { e.stopPropagation(); $('#pwrBtn').disabled = true; firstRun(); };
   }

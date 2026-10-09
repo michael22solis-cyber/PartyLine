@@ -4,6 +4,18 @@ import { CHARACTERS } from '../characters/index.js';
 import { buildVoiceSetup, TOOL_NAME } from '../context.js';
 import { contextMode } from '../disclosure.js';
 
+// The OpenAI Realtime voices a character can use. Pick one per character in Railway Variables, no code change:
+// VOICE_RUTH=shimmer, VOICE_MARCUS=echo, VOICE_LILY=coral, VOICE_TEDDY=ballad, VOICE_CARETAKER=... A name that isn't
+// on the list is ignored (with a warning) so a typo never breaks a call.
+export const VOICES = ['alloy', 'ash', 'ballad', 'cedar', 'coral', 'echo', 'marin', 'sage', 'shimmer', 'verse'];
+export function voiceFor(npc) {
+  const c = CHARACTERS[npc];
+  const want = String(process.env[`VOICE_${String(npc).split('_')[0].toUpperCase()}`] || '').trim().toLowerCase();
+  if (want && VOICES.includes(want)) return want;
+  if (want) console.warn(`[voice] VOICE_${npc.split('_')[0].toUpperCase()}=${want} is not a Realtime voice (${VOICES.join(', ')}); using ${c?.voice}`);
+  return c?.voice;
+}
+
 const env = process.env;
 // gpt-realtime (2025-08-28) is deprecated and shuts down 2027-01-20. Roll back with OPENAI_REALTIME_MODEL=gpt-realtime.
 export const realtimeModel = (npc) => env[`OPENAI_REALTIME_MODEL_${String(npc || '').toUpperCase()}`] || env.OPENAI_REALTIME_MODEL || 'gpt-realtime-2.1-mini';
@@ -74,7 +86,7 @@ export function realtimeSession({ npc, player, format = null, minimal = false })
         transcription: { model: transcribeModel() },
         turn_detection: minimal ? { type: 'server_vad' } : turnDetection(turns),
       },
-      output: { ...(format ? { format: { type: format } } : {}), voice: c.voice },
+      output: { ...(format ? { format: { type: format } } : {}), voice: voiceFor(npc) },
     },
   };
   if (!minimal) {

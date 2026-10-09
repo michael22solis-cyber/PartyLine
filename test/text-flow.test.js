@@ -133,14 +133,29 @@ test('a retried send with the same client id is stored once and answered once', 
 
 test('evidence presentation: the engine approves, the character confesses, the card is awarded once', async () => {
   const p = addPlayer({ name: 'Eve' });
-  await handlePlayerText(p, 'lily', 'Lily, the anonymous 911 call came from a woman at 11:12. Was it you?');
-  await until(() => sysMsgs(p, 'lily').some((m) => m.kind === 'evidence'));
+  await handlePlayerText(p, 'marcus', 'Marcus, I have a receipt from Rosie\'s Diner at 9:31 pm with your card on it.');
+  await until(() => sysMsgs(p, 'marcus').some((m) => m.kind === 'evidence'));
   const sys = mock.log.chat.at(-1).messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n');
   assert.match(sys, /YOU MAY NOW ADMIT THIS TO EVE/);
-  assert.deepEqual(playerByToken(p.token).found, ['call911']);
-  await handlePlayerText(p, 'lily', 'Say it again about the 911 call.');
-  await until(() => charMsgs(p, 'lily').length === 2);
-  assert.equal(sysMsgs(p, 'lily').filter((m) => m.kind === 'evidence').length, 1, 'no duplicate state change');
+  assert.deepEqual(playerByToken(p.token).found, ['diner']);
+  assert.doesNotMatch(sysMsgs(p, 'marcus').find((m) => m.kind === 'evidence').text, /HEARD ON A CALL/, 'found by text');
+  await handlePlayerText(p, 'marcus', 'Say it again about the diner.');
+  await until(() => charMsgs(p, 'marcus').length === 2);
+  assert.equal(sysMsgs(p, 'marcus').filter((m) => m.kind === 'evidence').length, 1, 'no duplicate state change');
+});
+
+test('phone-only secrets: over text the character won’t say it and tells the player to call', async () => {
+  const p = addPlayer({ name: 'Pax' });
+  reply = (m) => (/tell them to call you/.test(m.filter((x) => x.role === 'system').map((x) => x.content).join('\n'))
+    ? 'not over text. call me.' : defaultChatReply(m));
+  await handlePlayerText(p, 'lily', 'Lily, the anonymous 911 call came from a woman at 11:12. Was it you?');
+  await until(() => charMsgs(p, 'lily').length === 1);
+  reply = defaultChatReply;
+  assert.equal(charMsgs(p, 'lily')[0].text, 'not over text. call me.');
+  const sent = mock.log.chat.at(-1).messages.map((m) => m.content).join('\n');
+  assert.doesNotMatch(sent, /already dead when you arrived/, 'the fact never reaches a text prompt');
+  assert.deepEqual(playerByToken(p.token).found, []);
+  assert.deepEqual(playerByToken(p.token).permitted.lily || [], []);
 });
 
 test('a character blurting a secret without approval does not award evidence', async () => {
@@ -163,19 +178,19 @@ test('unusual actions (prompt injection) reach the model without any secret to g
 
 test('simultaneous players: fair concurrency cap, everyone answered, no cross-player leakage', async () => {
   const ps = Array.from({ length: 12 }, (_, i) => addPlayer({ name: `Crowd${i}` }));
-  // One of them has earned a secret from Lily; it must not appear in anyone else's prompt.
-  await handlePlayerText(ps[0], 'lily', 'about the 911 call...');
-  await until(() => sysMsgs(ps[0], 'lily').some((m) => m.kind === 'evidence'));
+  // One of them has earned a secret from Marcus; it must not appear in anyone else's prompt.
+  await handlePlayerText(ps[0], 'marcus', 'about that receipt from Rosie\'s diner...');
+  await until(() => sysMsgs(ps[0], 'marcus').some((m) => m.kind === 'evidence'));
   mock.setDelay(40);
   mock.stats.maxInFlight = 0;
   const n0 = mock.log.chat.length;
-  await Promise.all(ps.slice(1).map((p) => handlePlayerText(p, 'lily', `hi lily, it's ${p.name}`)));
-  await until(() => ps.slice(1).every((p) => charMsgs(p, 'lily').length === 1), 6000);
+  await Promise.all(ps.slice(1).map((p) => handlePlayerText(p, 'marcus', `hi marcus, it's ${p.name}`)));
+  await until(() => ps.slice(1).every((p) => charMsgs(p, 'marcus').length === 1), 6000);
   mock.setDelay(0);
   assert.ok(mock.stats.maxInFlight <= 3, `max in flight ${mock.stats.maxInFlight}`);
   const prompts = mock.log.chat.slice(n0);
   assert.equal(prompts.length, 11);
-  for (const body of prompts) assert.ok(!JSON.stringify(body).includes('already dead when you arrived'), 'secret leaked to another player');
+  for (const body of prompts) assert.ok(!JSON.stringify(body).includes('where you paid at 9:31'), 'secret leaked to another player');
   for (const p of ps.slice(1)) assert.deepEqual(playerByToken(p.token).found, []);
 });
 
@@ -196,5 +211,5 @@ test('"the house is listening" nudge is a single bounded call, attributed to its
   await overheard('ruth', p, 'Maya', 'I bet Ruth was never at bingo');
   const rec = usageFor(p.pid).find((r) => r.capability === 'overheard');
   assert.ok(rec);
-  assert.ok(tok(mock.log.chat.at(-1).messages) < 800);
+  assert.ok(tok(mock.log.chat.at(-1).messages) < 950);
 });

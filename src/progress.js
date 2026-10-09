@@ -9,6 +9,12 @@ import { CHARACTERS, TEXTABLE } from './characters/index.js';
 import { SECRETS, MENTIONS } from './secrets.js';
 import { callPhone } from './phone.js';
 import { mayAward } from './disclosure.js';
+import { prepare as prepareCaretaker } from './voice/caretaker.js';
+import { statusOf } from './cast.js';
+import { onSecretFound } from './initiative.js';
+import { checkAgenda } from './agenda.js';
+import { overBudget } from './budget.js';
+import { madeFile } from './recordings.js';
 
 const { UNLOCK_ALL, CALL_MODE = 'app' } = process.env; // CALL_MODE=phone uses real Twilio calls when a player has a number
 
@@ -20,9 +26,10 @@ export async function unlock(p, key, reason = '') {
   if (!MENTIONS[key] || isUnlocked(p, key)) return false;
   updatePlayer(p.token, { unlocked: [...(p.unlocked || []), key] });
   const t = TEXTABLE.find((x) => x.key === key);
-  emit(p.token, 'unlock', t);
+  emit(p.token, 'unlock', { ...t, status: statusOf(key) });
   await deliver({ token: p.token, thread: 'line', from: 'system', kind: 'contact',
     text: `NEW CONTACT: ${t.name}, ${t.tagline}.${reason ? ` ${reason}` : ''}` });
+  await checkAgenda(p).catch((err) => console.error('[agenda]', err.message)); // a mission about them may unseal
   return true;
 }
 
@@ -38,14 +45,17 @@ export async function unlockAll(reason) {
 // ---------- secrets ----------
 // A secret becomes evidence when the character actually says it AND the engine had approved that disclosure for this
 // player (or, in a group chat, for the conversation: `approved`). Each card is awarded once.
-export async function checkSecrets(p, characterKey, text, { approved = [] } = {}) {
+// Heard on a call counts for more (see recap.js), and some secrets only come out on a call.
+export async function checkSecrets(p, characterKey, text, { approved = [], channel = 'text' } = {}) {
   for (const s of SECRETS) {
     const fresh = playerByToken(p.token) || p;
     if (s.who !== characterKey || (fresh.found || []).includes(s.id) || !s.test(text || '')) continue;
-    if (!mayAward(fresh, characterKey, s.id, approved)) continue;
-    updatePlayer(p.token, { found: [...(fresh.found || []), s.id] });
+    if (!mayAward(fresh, characterKey, s.id, approved, channel)) continue;
+    const onCall = channel === 'call';
+    updatePlayer(p.token, { found: [...(fresh.found || []), s.id], ...(onCall ? { foundOnCall: [...(fresh.foundOnCall || []), s.id] } : {}) });
     await deliver({ token: p.token, thread: characterKey, from: 'system', kind: 'evidence',
-      text: `SECRET UNCOVERED\n${s.card}` });
+      text: `SECRET UNCOVERED${onCall ? ' · HEARD ON A CALL' : ''}\n${s.card}` });
+    onSecretFound(p, characterKey);
   }
 }
 
@@ -69,21 +79,34 @@ export function answerRing(token) {
 }
 
 const AUDIO_DIR = path.resolve('public/audio');
-export const audioIf = (file) => (fs.existsSync(path.join(AUDIO_DIR, file)) ? `/assets/audio/${file}` : null);
+// Built into the game (public/audio/), or made once on the server by the host (see recordings.js).
+export const audioIf = (file) => (fs.existsSync(path.join(AUDIO_DIR, file)) ? `/assets/audio/${file}` : madeFile(file) ? `/assets/made/${file}` : null);
 
 // Ring a player's Blackwood phone. If they don't pick up in 40 s it becomes a missed call (or a voicemail).
-export async function ringInApp(p, character, { opening, voicemail } = {}) {
+// `onMissed`: what happens if they don't pick up (besides the missed call), e.g. the caller giving up on them.
+export async function ringInApp(p, character, { opening, voicemail, onMissed } = {}) {
   const c = CHARACTERS[character];
   const from = character.startsWith('caretaker') ? 'BLACKWOOD MANOR' : c.name.toUpperCase();
-  const r = { character, opening, until: Date.now() + 40_000 };
+  // Over this game's budget (budget.js): suspects don't place live calls anymore; it goes straight to voicemail or a
+  // missed call, so nobody answers into a dead line. The Caretaker's calls are recordings and still ring.
+  if (!character.startsWith('caretaker') && overBudget()) {
+    if (voicemail) await deliver({ token: p.token, thread: 'unknown', from: 'character', kind: 'voicemail', text: voicemail.text, audio: voicemail.audio, npc: character });
+    else await deliver({ token: p.token, thread: 'unknown', from: 'system', kind: 'missed', text: `Missed call: ${from}`, npc: character });
+    if (onMissed) await onMissed().catch(() => {});
+    return;
+  }
+  const ringMs = Number(process.env.RING_TIMEOUT_MS || 40_000);
+  const r = { character, opening, until: Date.now() + ringMs };
   r.timer = setTimeout(async () => {
     if (ringing.get(p.token) !== r) return;
     ringing.delete(p.token);
     emit(p.token, 'ringEnd', { character });
-    if (voicemail) await deliver({ token: p.token, thread: 'unknown', from: 'character', kind: 'voicemail', text: voicemail.text, audio: voicemail.audio });
-    else await deliver({ token: p.token, thread: 'unknown', from: 'system', kind: 'missed', text: `Missed call: ${from}` });
-  }, 40_000);
+    if (voicemail) await deliver({ token: p.token, thread: 'unknown', from: 'character', kind: 'voicemail', text: voicemail.text, audio: voicemail.audio, npc: character });
+    else await deliver({ token: p.token, thread: 'unknown', from: 'system', kind: 'missed', text: `Missed call: ${from}`, npc: character });
+    if (onMissed) await onMissed().catch((err) => console.error('[ring] after missed call:', err.message));
+  }, ringMs);
   ringing.set(p.token, r);
+  if (character.startsWith('caretaker')) prepareCaretaker(character, p, character === 'caretaker' ? p.caretakerCalls || 0 : 0);
   emit(p.token, 'incoming', { character, from });
   await notify(p.token, { title: 'Incoming call', body: from, thread: 'unknown' });
 }

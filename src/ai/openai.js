@@ -1,6 +1,7 @@
 // Text model client: bounded retries with backoff, per-attempt timeouts, fair concurrency, model fallback, and a
 // ledger record for every response. The permanent API key never leaves the server.
 import { ledger } from './ledger.js';
+import { pastHardStop, BudgetError } from '../budget.js';
 import { fromChatCompletion } from './usage.js';
 import { createLimiter } from './limiter.js';
 
@@ -51,6 +52,7 @@ async function attempt(model, body) {
  * Returns { text, model, id, usage, latencyMs, retries }.
  */
 export async function chatComplete(messages, { model, maxTokens = 200, meta = {} } = {}) {
+  if (meta.capability !== 'eval' && pastHardStop()) throw new BudgetError(); // see budget.js
   return textLimiter.run(meta.session || 'anon', () => runWithRetries(messages, { model, maxTokens, meta }));
 }
 

@@ -232,6 +232,11 @@ Rollback switches (env only; no code change):
 | Goodbye cue / idle hang-up | `CALL_WRAP_UP=off`, `CALL_IDLE_SECONDS=0` |
 | Acknowledgement skipping | `TEXT_SKIP_ACKS=off` |
 | Recorded reveal | `REVEAL_MODE=live` |
+| Caretaker in the ElevenLabs narrator voice | `CARETAKER_VOICE=live` (or leave the ElevenLabs keys unset) |
+| Call minutes per player / cooldowns | `CALL_POOL_MINUTES=0` (per player), `CALL_MINUTES_PER_PLAYER=0`, `CALL_COOLDOWN_MINUTES=0` |
+| Per-game AI budget | `GAME_BUDGET_USD=0` |
+| Phone-line sound | players switch it off in the ⋮ menu |
+| Background music | `MUSIC=off` (players can also switch it off in the ⋮ menu) |
 | Usage ledger | `USAGE_LEDGER=off` |
 | Everything | `git revert` the branch's commit |
 

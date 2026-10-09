@@ -21,12 +21,12 @@ const THREAD_TITLES = { line: 'The Line', unknown: 'UNKNOWN', crew: 'The Crew' }
 export const threadTitle = (thread) => THREAD_TITLES[thread] || CHARACTERS[thread]?.name || thread;
 
 // Deliver a message to a player: save it, show it live, and buzz their phone.
-export async function deliver({ token, thread, from = 'character', text, kind = 'text', audio = null, sender = null, forwarded = false, clientId = null }) {
-  const msg = addMessage({ token, thread, from, text, kind, audio, sender, forwarded, clientId });
+export async function deliver({ token, thread, from = 'character', text, kind = 'text', audio = null, sender = null, forwarded = false, clientId = null, npc = null, image = null }) {
+  const msg = addMessage({ token, thread, from, text, kind, audio, sender, forwarded, clientId, npc, image });
   if (msg.duplicate) return msg;
   emit(token, 'message', msg);
   if (from !== 'player') {
-    const preview = kind === 'memo' ? 'New voice memo' : kind === 'voicemail' ? 'New voicemail' : kind === 'secret' ? 'Open this alone.' : text;
+    const preview = kind === 'memo' ? 'New voice memo' : kind === 'photo' ? 'Sent a photo' : kind === 'voicemail' ? 'New voicemail' : kind === 'secret' ? 'Open this alone.' : text;
     const title = thread === 'crew' ? `The Crew · ${sender}` : thread.startsWith('dm:') ? sender : threadTitle(thread);
     await notify(token, { title, body: preview.slice(0, 120), thread });
   }

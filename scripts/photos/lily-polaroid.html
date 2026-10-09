@@ -1,0 +1,13 @@
+<!doctype html><meta charset="utf-8"><style>
+@font-face { font-family: 'Special Elite'; src: url(../../public/fonts/special-elite-latin-400-normal.woff2); }
+body { margin: 0; width: 720px; height: 900px; overflow: hidden; background: #1c1712 radial-gradient(circle at 50% 40%, #3b3127, #0f0c09 85%); }
+.box { position: absolute; inset: 0; background: repeating-linear-gradient(90deg, rgba(255,255,255,.02) 0 2px, transparent 2px 9px); }
+.pol { position: absolute; left: 110px; top: 90px; width: 500px; height: 610px; background: #eee9dd; transform: rotate(-4deg); box-shadow: 0 18px 40px rgba(0,0,0,.65); padding: 30px 30px 0; box-sizing: border-box; }
+.img { width: 440px; height: 440px; background: url(../../intro/assets/manor.jpg) 46% center/cover; filter: sepia(.75) saturate(.8) brightness(1.25) contrast(.85) blur(.6px); position: relative; }
+.img::after { content: ''; position: absolute; inset: 0; background: radial-gradient(circle, transparent 50%, rgba(60,30,10,.45)); mix-blend-mode: multiply; }
+.cap { font-family: 'Special Elite', cursive; font-size: 34px; color: #2a3a6a; margin-top: 30px; transform: rotate(-2deg); text-align: center; }
+.tape { position: absolute; top: -18px; left: 190px; width: 130px; height: 40px; background: rgba(235,225,190,.55); transform: rotate(3deg); }
+.crease { position: absolute; left: 0; right: 0; top: 300px; height: 2px; background: rgba(255,255,255,.25); transform: rotate(-8deg); }
+</style>
+<div class="box"></div>
+<div class="pol"><div class="tape"></div><div class="img"><div class="crease"></div></div><div class="cap">halloween '96 — dad</div></div>

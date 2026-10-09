@@ -28,8 +28,9 @@ if (!FAKE && !OPENAI_API_KEY) { console.error('Add OPENAI_API_KEY to .env first 
 
 const ONLY = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7);
 const SR = 24000;
-const WORK = path.resolve('audio-src');
-const OUT = path.resolve('public/audio');
+// EVIDENCE_WORK / EVIDENCE_OUT: where the server's "Make the recordings" button works and saves (the data volume).
+const WORK = path.resolve(process.env.EVIDENCE_WORK || 'audio-src');
+const OUT = path.resolve(process.env.EVIDENCE_OUT || 'public/audio');
 fs.mkdirSync(WORK, { recursive: true });
 fs.mkdirSync(OUT, { recursive: true });
 
@@ -39,16 +40,33 @@ const LINES = {
     how: 'A tired woman in her forties recording a casual voice memo to herself late at night in an empty old house. Natural, a little echoey, unhurried.' },
   dana2: { voice: 'coral', text: "Hello? ...Who's there? ...Ma'am?",
     how: 'Suddenly frightened, quiet, uncertain. Long pauses between each word, like she is peering down dark stairs.' },
-  dispatch1: { voice: 'onyx', text: "Nine-one-one, what's the address of your emergency?",
-    how: 'A calm, professional emergency dispatcher on a phone line.' },
-  lily: { voice: 'shimmer', text: "There's... there's someone at the bottom of the stairs. At Blackwood. The old manor on Crane Road. I think... I think she's dead.",
-    how: 'A woman crying and panicking, whispering, breath shaking, trying not to be heard. Breaks off between phrases.' },
-  dispatch2: { voice: 'onyx', text: "Ma'am, can I get your name? Ma'am? Are you still there?",
-    how: 'A calm dispatcher becoming concerned as the caller goes silent.' },
-  vmIntro: { voice: 'alloy', text: 'First new message. Received Friday, at ten thirty-one P M.',
-    how: 'A flat automated voicemail system voice.' },
-  ruth: { voice: 'sage', text: "Sweetheart, it's Ruth. I heard you've been asking about the cellar. Some doors in that house are better left closed. You get some rest now. God bless.",
-    how: 'A sweet elderly woman leaving a voicemail, warm and grandmotherly on the surface, with something cold and threatening underneath. Slow.' },
+  // The 911 call, in short pieces so the pauses, interruptions and overlaps land like a real recording.
+  // Acting notes ask for a real person, not a performance: breaths, cracks, false starts, uneven pace.
+  d911a: { voice: 'ash', fallbackVoice: 'onyx', text: "Nine-one-one, what's the address of your emergency?",
+    how: 'A real night-shift 911 dispatcher, not an actor. Brisk, practiced, slightly fast and a little flat from saying it a thousand times. Natural, unpolished.' },
+  l911a: { voice: 'marin', fallbackVoice: 'shimmer', text: "Hi— um. I— there's... there's someone. At the bottom of the stairs.",
+    how: 'A real young woman, terrified, whispering into her phone so no one hears her. Out of breath, shaky inhales between fragments, voice catching, swallowing. Not acting: messy, uneven, trailing off.' },
+  d911b: { voice: 'ash', fallbackVoice: 'onyx', text: "Okay. Ma'am, where are you right now?",
+    how: 'The dispatcher shifts gears: calm, slower, firmer, leaning in. Real, not theatrical.' },
+  l911b: { voice: 'marin', fallbackVoice: 'shimmer', text: "Blackwood. The old— the manor on Crane Road. She's not moving. She's... I think she's dead. Oh my god. Oh my god.",
+    how: 'Crying now, panicking, words tumbling over each other, a sharp gasp, a sob breaking through on "oh my god". Still trying to whisper. A real person falling apart, not a performance.' },
+  d911c: { voice: 'ash', fallbackVoice: 'onyx', text: "Okay, I need you to stay on the line with me. Is she breathing? Can you check if she's—",
+    how: 'Urgent but controlled, quick, a real dispatcher talking someone through it. Gets cut off at the end.' },
+  l911c: { voice: 'marin', fallbackVoice: 'shimmer', text: "I can't. I can't, I'm sorry. I'm so sorry.",
+    how: 'Whispered through tears, getting quieter, already pulling the phone away from her face. Ragged breathing.' },
+  d911d: { voice: 'ash', fallbackVoice: 'onyx', text: "Ma'am? Ma'am, can I get your name? ... Ma'am, are you still there?",
+    how: 'Concerned, then quieter and slower, realizing the line is dead. Alone. Real, understated.' },
+  // Ruth's voicemail: a sweet old lady who isn't great with voicemail, until she very much is.
+  vmIntro: { voice: 'alloy', text: 'You have... one... new message. Received... Friday... at ten... thirty-one... P.M.',
+    how: 'An old automated voicemail system: flat, robotic, evenly spaced words with odd gaps.' },
+  ruth1: { voice: 'sage', text: "Oh— hello? Is it... oh, it's recording. Hello, sweetheart! It's Ruth. Ruth Calloway, from down the road.",
+    how: 'A real elderly woman fumbling with a voicemail, unsure if it is recording, a little breathless, mouth close to the phone, then a warm chuckle and bright hello. Natural and imperfect, not an actress.' },
+  ruth2: { voice: 'sage', text: "I heard you've been asking around... about the cellar.",
+    how: 'Still warm, but slower now, the smile fading from her voice. A small pause in the middle, as if choosing her words.' },
+  ruth3: { voice: 'sage', text: "Some doors in that house are better left closed, dear.",
+    how: 'Very quiet and calm, close to the phone, all the warmth gone for a moment. Cold. No drama, just certain.' },
+  ruth4: { voice: 'sage', text: "Anyway! You get some rest now. God bless.",
+    how: 'Suddenly bright and cheerful again, a little too cheerful, a short laugh at the start. Then she fumbles for the button.' },
   // The midnight reveal is fully scripted, so every player hears a recording instead of a live model call.
   // Tip: drop the intro narrator's version in audio-src/custom/caretakerReveal.mp3 to match the intro's voice.
   caretakerReveal: { voice: 'cedar', fallbackVoice: 'onyx', text: "Thirty years I've waited under that floor. ... She sang my wife to sleep, and then she buried me. ... Ruth Calloway. ... Dana was going to find me, so Ruth made sure she never reached the bottom of the stairs alive. ... Thank you for listening. ... Happy Halloween.",
@@ -164,6 +182,13 @@ function crash() {
 function roomTone(sec, amt = 0.012) { const a = len(sec); let b = 0; for (let i = 0; i < a.length; i++) { b = 0.97 * b + 0.03 * rand(); a[i] = amt * b * 4; } return a; }
 function dialTone(sec) { const a = len(sec); for (let i = 0; i < a.length; i++) { const t = i / SR; a[i] = 0.12 * (Math.sin(2 * Math.PI * 350 * t) + Math.sin(2 * Math.PI * 440 * t)); } return a; }
 function beep(sec = 0.45) { const a = len(sec); for (let i = 0; i < a.length; i++) a[i] = 0.25 * Math.sin((2 * Math.PI * 1000 * i) / SR) * Math.min(1, (a.length - i) / 400); return a; }
+// The caller's side: wind and a big empty house behind her. Ruth's side: a clock ticking in a quiet room.
+function wind(sec) { const a = len(sec); let b = 0, g = 0; for (let i = 0; i < a.length; i++) { b = 0.995 * b + 0.005 * rand(); g = 0.9995 * g + 0.0005 * Math.abs(rand()); a[i] = b * (6 + 30 * g); } return a; }
+function ticks(sec) { const a = len(sec); for (let k = 0; k < sec; k++) { const n0 = Math.round((k + 0.3) * SR); for (let i = 0; i < 600 && n0 + i < a.length; i++) a[n0 + i] += (k % 2 ? 0.05 : 0.07) * Math.exp(-i / 90) * rand(); } return a; }
+// Someone handling the phone: thumps and rustle.
+function handling(sec = 1.2) { const a = len(sec); for (const at of [0.05, 0.3, 0.55, 0.9]) { const n0 = Math.round(at * SR); for (let i = 0; i < SR * 0.15 && n0 + i < a.length; i++) { const t = i / SR; a[n0 + i] += 0.25 * Math.exp(-t / 0.03) * Math.sin(2 * Math.PI * 90 * t) + 0.05 * Math.exp(-t / 0.05) * rand(); } } return a; }
+// The line going dead after a hang-up: three fast busy tones.
+function disconnect() { const a = len(1.6); for (let k = 0; k < 3; k++) for (let i = 0; i < SR * 0.25; i++) { const t = i / SR; a[Math.round(k * 0.5 * SR) + i] = 0.13 * (Math.sin(2 * Math.PI * 480 * t) + Math.sin(2 * Math.PI * 620 * t)); } return a; }
 function click() { const a = len(0.08); for (let i = 0; i < a.length; i++) a[i] = 0.5 * Math.exp(-i / 120) * rand(); return a; }
 
 // ---------- mixing ----------
@@ -183,14 +208,17 @@ function mix(outName, parts, total, master = '') {
   const graph = `${chains.join(';')};${inputs}amix=inputs=${parts.length}:normalize=0:duration=longest,atrim=0:${total.toFixed(2)}${master ? `,${master}` : ''},afade=t=out:st=${(total - 0.4).toFixed(2)}:d=0.4,loudnorm=I=-18:TP=-1.5[out]`;
   args.push('-filter_complex', graph, '-map', '[out]', '-ac', '1', '-ar', '44100', '-b:a', '96k', path.join(OUT, outName));
   execFileSync(ffmpeg, args);
-  console.log(`made public/audio/${outName} (${total.toFixed(1)} s)`);
+  console.log(`made ${path.join(OUT, outName)} (${total.toFixed(1)} s)`);
 }
 
 const sfx = (name, samples) => custom(name) || writeWav(path.join(WORK, `${name}.wav`), samples);
 const PHONE = 'highpass=f=320,lowpass=f=3300,acompressor=threshold=-20dB:ratio=4,volume=1.4';
+// A cheap cell phone held too close (the caller) vs. a dispatcher's headset; both through the recording system.
+const CELL = 'highpass=f=420,lowpass=f=2900,acrusher=bits=10:mode=log:aa=1,acompressor=threshold=-24dB:ratio=6:attack=5,volume=1.6';
+const HEADSET = 'highpass=f=260,lowpass=f=3600,acompressor=threshold=-20dB:ratio=3,volume=1.3';
 const MEMO_ROOM = 'aecho=0.8:0.6:35|70:0.25|0.15';
 
-const NEEDS = { memo: ['dana1', 'dana2'], call911: ['dispatch1', 'lily', 'dispatch2'], voicemail: ['vmIntro', 'ruth'], reveal: ['caretakerReveal'] };
+const NEEDS = { memo: ['dana1', 'dana2'], call911: ['d911a', 'l911a', 'd911b', 'l911b', 'd911c', 'l911c', 'd911d'], voicemail: ['vmIntro', 'ruth1', 'ruth2', 'ruth3', 'ruth4'], reveal: ['caretakerReveal'] };
 const want = (k) => !ONLY || ONLY === k;
 fs.mkdirSync(CUSTOM, { recursive: true });
 const v = {};
@@ -226,33 +254,58 @@ if (want('memo') && !finished('memo.mp3')) {
   ], total);
 }
 
-// 2) The anonymous 911 call
+// 2) The anonymous 911 call: the dispatcher's recording. Pieces overlap a little, like real people talking over each
+// other; the caller's line is rougher and has wind behind it; she hangs up, the line goes dead, the dispatcher keeps asking.
 if (want('call911') && !finished('call911.mp3')) {
-  const a = seconds(v.dispatch1), b = seconds(v.lily), c = seconds(v.dispatch2);
-  const lilyAt = 0.6 + a + 0.6;
-  const d2At = lilyAt + b + 1.4;
-  const clickAt = d2At + c + 0.3;
-  const total = clickAt + 2.6;
+  const L = Object.fromEntries(['d911a', 'l911a', 'd911b', 'l911b', 'd911c', 'l911c', 'd911d'].map((k) => [k, seconds(v[k])]));
+  const t = {};
+  t.d911a = 0.7;
+  t.l911a = t.d911a + L.d911a + 0.9; // she hesitates before speaking
+  t.d911b = t.l911a + L.l911a + 0.35;
+  t.l911b = t.d911b + L.d911b + 0.25;
+  t.d911c = t.l911b + Math.max(0.5, L.l911b - 0.4); // the dispatcher starts before she's quite done
+  t.l911c = t.d911c + Math.max(1.2, L.d911c - 0.7); // and she cuts him off
+  const hangup = t.l911c + L.l911c + 0.2;
+  t.d911d = hangup + 0.9;
+  const total = t.d911d + L.d911d + 2.4;
   mix('call911.mp3', [
-    { file: sfx('line', roomTone(total + 1, 0.02)), at: 0, filter: PHONE },
-    { file: v.dispatch1, at: 0.6, filter: PHONE },
-    { file: v.lily, at: lilyAt, filter: `${PHONE},volume=0.85` },
-    { file: v.dispatch2, at: d2At, filter: PHONE },
-    { file: sfx('click', click()), at: clickAt },
-    { file: sfx('dial', dialTone(2.4)), at: clickAt + 0.15, filter: `${PHONE},volume=0.5` },
+    { file: sfx('line', roomTone(total + 1, 0.02)), at: 0, filter: HEADSET },
+    { file: sfx('wind', wind(hangup - t.l911a + 1)), at: Math.max(0, t.l911a - 0.6), filter: `lowpass=f=900,${CELL},volume=0.35` },
+    { file: v.d911a, at: t.d911a, filter: HEADSET },
+    { file: v.l911a, at: t.l911a, filter: `${CELL},volume=0.9` },
+    { file: v.d911b, at: t.d911b, filter: HEADSET },
+    { file: v.l911b, at: t.l911b, filter: CELL },
+    { file: v.d911c, at: t.d911c, filter: `${HEADSET},afade=t=out:st=${Math.max(0.5, L.d911c - 1.1).toFixed(2)}:d=0.5` },
+    { file: v.l911c, at: t.l911c, filter: `${CELL},afade=t=out:st=${Math.max(0.3, L.l911c - 1.2).toFixed(2)}:d=1.1,volume=0.85` },
+    { file: sfx('click', click()), at: hangup },
+    { file: sfx('dead', disconnect()), at: hangup + 0.25, filter: `${HEADSET},volume=0.35` },
+    { file: v.d911d, at: t.d911d, filter: `${HEADSET},volume=0.9` },
   ], total);
 }
 
-// 3) Ruth's voicemail
+// 3) Ruth's voicemail: the system intro, the beep, then Ruth in her quiet living room (a clock ticking), fumbling
+// with the phone at both ends.
 if (want('voicemail') && !finished('ruth-voicemail.mp3')) {
-  const a = seconds(v.vmIntro), r = seconds(v.ruth);
-  const beepAt = 0.3 + a + 0.4;
-  const total = beepAt + 0.7 + r + 1.2;
+  const L = Object.fromEntries(['vmIntro', 'ruth1', 'ruth2', 'ruth3', 'ruth4'].map((k) => [k, seconds(v[k])]));
+  const beepAt = 0.3 + L.vmIntro + 0.4;
+  const t1 = beepAt + 1.3; // a second of rustling before she realizes it's recording
+  const t2 = t1 + L.ruth1 + 0.7;
+  const t3 = t2 + L.ruth2 + 1.1; // a long pause before the warning
+  const t4 = t3 + L.ruth3 + 0.9;
+  const end = t4 + L.ruth4 + 0.2;
+  const total = end + 2.0;
   mix('ruth-voicemail.mp3', [
     { file: v.vmIntro, at: 0.3, filter: 'lowpass=f=5000' },
     { file: sfx('beep', beep()), at: beepAt },
     { file: sfx('vline', roomTone(total + 1, 0.015)), at: beepAt + 0.5, filter: PHONE },
-    { file: v.ruth, at: beepAt + 0.7, filter: PHONE },
+    { file: sfx('ticks', ticks(end - beepAt + 1)), at: beepAt + 0.5, filter: `${PHONE},volume=0.5` },
+    { file: sfx('fumble1', handling()), at: beepAt + 0.4, filter: `${PHONE},volume=0.8` },
+    { file: v.ruth1, at: t1, filter: PHONE },
+    { file: v.ruth2, at: t2, filter: PHONE },
+    { file: v.ruth3, at: t3, filter: `${PHONE},volume=0.95` },
+    { file: v.ruth4, at: t4, filter: PHONE },
+    { file: sfx('fumble2', handling()), at: end, filter: `${PHONE},volume=0.9` },
+    { file: sfx('vclick', click()), at: end + 1.2 },
   ], total);
 }
 

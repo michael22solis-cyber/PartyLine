@@ -10,6 +10,8 @@ import { unlockMentions, onCharacterSaid } from '../progress.js';
 import { approveFromPlayerText, requestDisclosure } from '../disclosure.js';
 import { approvalNote } from '../context.js';
 import { transcribeModel } from './session.js';
+import { tagLine } from '../memory.js';
+import { onAccusation } from '../initiative.js';
 
 const env = process.env;
 const maxConcurrent = () => Number(env.MAX_CONCURRENT_CALLS || 25);
@@ -79,10 +81,11 @@ export async function callTranscript(call, player, speaker, text, { itemId = nul
     call.playerText.push(clean);
     if (call.playerText.length > 6) call.playerText.shift();
     await unlockMentions(player, clean);
+    if (c.textable && tagLine({ speaker: 'player', text: clean, npc: call.npc }).includes('accusation')) onAccusation(player, call.npc, clean);
     const approved = approveFromPlayerText(player, call.npc, clean, 'call');
     return { notes: approved.map((t) => approvalNote(player, t)) };
   }
-  if (c.textable) await onCharacterSaid(player, call.npc, clean);
+  if (c.textable) await onCharacterSaid(player, call.npc, clean, { channel: 'call' });
   return { notes: [] };
 }
 

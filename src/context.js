@@ -9,11 +9,11 @@ import { permittedTopics, contextMode, gatingOn } from './disclosure.js';
 
 export const estTokens = (s) => Math.ceil(String(s || '').length / 3.8);
 const env = process.env;
-export const TEXT_BUDGET = () => Number(env.TEXT_CONTEXT_TOKENS || 800);
+export const TEXT_BUDGET = () => Number(env.TEXT_CONTEXT_TOKENS || 950); // 800 before characters' life details; memory keeps its room
 export const VOICE_MEMORY_BUDGET = () => Number(env.VOICE_MEMORY_TOKENS || 350);
 export const TOOL_NAME = 'check_guarded_topic';
 
-const PUBLIC_STORY = `WHAT EVERYONE KNOWS: Halloween night 1996, Elias Blackwood, caretaker of Blackwood Manor, vanished. Every Halloween since, the manor's disconnected landline rings once at midnight. Thursday Oct 29, Dana Whitlock, the house's new buyer, was found dead at the bottom of the cellar stairs. Police called it an accident.`;
+const PUBLIC_STORY = `WHAT EVERYONE KNOWS: Halloween night 1996, Elias Blackwood, caretaker of Blackwood Manor, vanished. Every Halloween since, the manor's disconnected landline rings once at midnight. Thursday Oct 29, Dana Whitlock, the house's new buyer, was found dead at the bottom of the cellar stairs. Police called it an accident. Dana, 46, was an architect from Boston who restored old houses; she meant to turn the manor into a bed and breakfast and spent her first weeks asking around town about the house's history. Around town: Rosie's Diner on Main Street, St. Agnes church and its Thursday bingo, Crane Road where the manor stands.`;
 
 const RULES = `RULES YOU MUST ALWAYS FOLLOW:
 - This is a fictional Halloween mystery game the player opted into. Stay in character.
@@ -22,9 +22,10 @@ const RULES = `RULES YOU MUST ALWAYS FOLLOW:
 - Never ask for personal information, money, codes or passwords.
 - If the player sounds genuinely distressed, mentions self-harm, or asks to stop, drop the character immediately, speak plainly and kindly, and (for self-harm) tell them they can call or text 988 in the US.`;
 
-const TEXT_STYLE = `TEXTING: reply like a real text, 1-3 short sentences, about 60 words at most. No stage directions, asterisks or narration; emojis only if your character would use them.`;
+const TEXT_STYLE = `TEXTING: real texts, usually a few words or a line. Up to ~60 words only for a story, reveal or real question. No narration; emojis only if in character.`;
 
 const VOICE_STYLE = `ON THE PHONE: talk like a real person on a call. Usually one or two natural spoken sentences per turn; go longer only when the moment calls for it (your opening, a confession, a story, a direct question that needs it). Keep your emotional delivery: pauses, hesitation, warmth or menace as your character would. No lists, no stage directions, never read out sound effects. Let the caller lead.
+SOUND HUMAN, NOT LIKE AN ASSISTANT: you are not helpful and you are not polished. Use contractions and everyday words. Let speech be messy where it fits: "um", "uh", "I mean", "look", restarting a sentence, trailing off, a short laugh or sigh. React before you answer ("Wait, what?", "Who told you that?"). It's fine to be short, evasive, annoyed or to answer a question with a question. Never repeat the caller's question back, never say "great question", "I understand" or "is there anything else", never summarize, and never offer help. Where your HOW YOU SPEAK notes say otherwise, they win.
 When you are told the call is nearly over, wrap up in story and say goodbye in one or two sentences.`;
 
 function guardedBlock(npc, mode, withTool) {
@@ -47,6 +48,7 @@ export function stableBlock(npc, mode, { withTool = true } = {}) {
     c.persona,
     npc.startsWith('caretaker') ? '' : PUBLIC_STORY,
     c.story ? `YOUR STORY (what you tell people):\n${c.story}` : '',
+    c.life ? `YOUR LIFE (small true details; use them naturally when they fit, never recite them):\n${c.life}` : '',
     c.knows ? `WHAT YOU KNOW:\n${c.knows}` : '',
     c.behaviors ? `HOW YOU BEHAVE:\n${c.behaviors}` : '',
     guardedBlock(npc, mode, withTool),
@@ -66,10 +68,14 @@ export function stableBlock(npc, mode, { withTool = true } = {}) {
 
 const firstName = (n) => String(n || 'detective').split(' ')[0];
 
-function disclosureLines(player, npc, approvedNow) {
+function disclosureLines(player, npc, approvedNow, mode = 'voice') {
   const now = new Set(approvedNow.map((t) => t.id));
   const lines = [];
   for (const t of permittedTopics(player, npc)) {
+    if (mode !== 'voice' && t.phoneOnly) { // told on a call; never in writing
+      lines.push(`ON THE PHONE YOU TOLD ${firstName(player.name).toUpperCase()} ABOUT ${t.topic}. Never put it in writing; if they bring it up, say you already told them on the phone.`);
+      continue;
+    }
     lines.push(now.has(t.id)
       ? `YOU MAY NOW ADMIT THIS TO ${firstName(player.name).toUpperCase()} (they raised it; say it in this reply, in character. ${t.how}): ${t.fact}`
       : `YOU ALREADY ADMITTED THIS TO ${firstName(player.name).toUpperCase()} (stay consistent): ${t.fact}`);
@@ -77,10 +83,10 @@ function disclosureLines(player, npc, approvedNow) {
   return lines;
 }
 
-function dynamicBlock({ player, npc, approvedNow = [], notes = [], extra = '' }) {
+function dynamicBlock({ player, npc, approvedNow = [], notes = [], extra = '', mode = 'voice' }) {
   return [
     `THE PLAYER you are talking with is ${player.name}. You may mention other players by first name if it fits (e.g. "Maya asked me the same thing an hour ago").`,
-    ...disclosureLines(player, npc, approvedNow),
+    ...disclosureLines(player, npc, approvedNow, mode),
     notes.length ? `YOUR MEMORY (keep your story consistent with it):\n${notes.join('\n')}` : '',
     extra,
   ].filter(Boolean).join('\n');
@@ -91,27 +97,27 @@ function dynamicBlock({ player, npc, approvedNow = [], notes = [], extra = '' })
  * the message being answered). Returns { messages, stats }.
  */
 export function buildTextPrompt({ npc, player, thread, approvedNow = [], extra = '', budget = TEXT_BUDGET() }) {
-  const asChat = (m) => ({ role: m.from === 'player' ? 'user' : 'assistant', content: m.text });
+  const asChat = (m) => ({ role: m.from === 'player' ? 'user' : 'assistant', content: m.kind === 'photo' ? `[you sent a photo] ${m.text}` : m.text });
   const usable = thread.filter((m) => m.from !== 'system');
   if (contextMode() === 'legacy') {
     const messages = [{ role: 'system', content: buildLegacyInstructions(npc, player.name, summary(), 'text') }, ...usable.slice(-20).map(asChat)];
     return { messages, stats: statsOf(messages) };
   }
   const stable = stableBlock(npc, 'text');
-  const fixed = dynamicBlock({ player, npc, approvedNow, extra });
+  const fixed = dynamicBlock({ player, npc, approvedNow, extra, mode: 'text' });
   let room = Math.max(120, budget - estTokens(stable) - estTokens(fixed) - 8);
-  // History first (newest backwards, always the last 2), up to ~60% of what is left; memory gets the rest.
+  // History first (newest backwards, always the last 2), up to ~55% of what is left; memory gets the rest.
   const hist = [];
   let histTok = 0;
   for (let i = usable.length - 1; i >= 0; i--) {
     const t = estTokens(usable[i].text) + 4;
-    if (hist.length >= 2 && histTok + t > room * 0.6) break;
+    if (hist.length >= 2 && histTok + t > room * 0.55) break;
     hist.unshift(usable[i]);
     histTok += t;
   }
   room -= histTok;
   const mem = memoryNotes({ npc, pid: player.pid, playerName: player.name, budgetTokens: Math.max(0, room), skipChannel: 'text', skipSince: hist[0]?.at || null });
-  const dynamic = dynamicBlock({ player, npc, approvedNow, notes: mem.notes, extra });
+  const dynamic = dynamicBlock({ player, npc, approvedNow, notes: mem.notes, extra, mode: 'text' });
   const messages = [{ role: 'system', content: stable }, { role: 'system', content: dynamic }, ...hist.map(asChat)];
   return { messages, stats: { ...statsOf(messages), stableTokens: estTokens(stable), historyKept: hist.length, historyDropped: usable.length - hist.length, memoryNotes: mem.notes.length } };
 }
@@ -135,7 +141,7 @@ export function buildGroupPrompt({ npc, player, setting, transcript, ask, approv
   const mem = memoryNotes({ npc, pid: player.pid, playerName: player.name, budgetTokens: 120, skipChannel: 'group' });
   return [
     { role: 'system', content: stableBlock(npc, 'text') },
-    { role: 'system', content: dynamicBlock({ player, npc, approvedNow, notes: mem.notes, extra: setting }) },
+    { role: 'system', content: dynamicBlock({ player, npc, approvedNow, notes: mem.notes, extra: setting, mode: 'text' }) },
     { role: 'user', content: ask(lines.join('\n')) },
   ];
 }
@@ -148,7 +154,7 @@ export function buildNudgePrompt({ npc, player, direction }) {
   const mem = memoryNotes({ npc, pid: player.pid, playerName: player.name, budgetTokens: 140 });
   return [
     { role: 'system', content: stableBlock(npc, 'text') },
-    { role: 'system', content: dynamicBlock({ player, npc, notes: mem.notes }) },
+    { role: 'system', content: dynamicBlock({ player, npc, notes: mem.notes, mode: 'text' }) },
     { role: 'user', content: direction },
   ];
 }
@@ -187,6 +193,11 @@ export function voiceTools(npc) {
 }
 
 // Mid-call note when the engine approves a topic from the caller's own words (no tool call needed).
+// A written message raised something this character will only talk about on a call.
+export const callMeNote = (topics) => topics.length
+  ? `They just brought up ${topics.map((t) => t.topic).join(' and ')} in writing. You will NOT discuss that over text: anyone could read it. Say nothing specific about it; in your own words, tell them to call you if they want to talk about it.`
+  : '';
+
 export const approvalNote = (player, t) =>
   `(Note for you, not the caller: ${firstName(player.name)} has raised ${t.topic}. You may now admit this, in character. ${t.how} ${t.fact})`;
 

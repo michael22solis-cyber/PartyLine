@@ -3,6 +3,9 @@
 import 'dotenv/config';
 import './env.js';
 import { pathToFileURL } from 'node:url';
+import { warmUp as warmCaretaker } from './voice/caretaker.js';
+import { warmUp as warmMusic } from './music.js';
+import { DATA_DIR, dataSince } from './paths.js';
 import Fastify from 'fastify';
 import fastifyWs from '@fastify/websocket';
 import fastifyFormBody from '@fastify/formbody';
@@ -43,5 +46,11 @@ if (isMain) {
   app.listen({ port: Number(PORT), host: '0.0.0.0' }).then(() => {
     console.log(`Blackwood Line server listening on :${PORT} (voice model ${realtimeModel()}, text model ${process.env.OPENAI_TEXT_MODEL || 'gpt-4.1-mini'})`);
     if (!PUBLIC_HOST) console.warn('PUBLIC_HOST is not set; Twilio will not be able to reach the media stream.');
+    const data = dataSince();
+    if (data.fresh) console.warn(`[data] new, empty data folder at ${DATA_DIR}. If you see this after every deploy, attach a persistent volume there, or ElevenLabs audio is regenerated (and paid for) each time.`);
+    // ElevenLabs: the Caretaker's lines first (needed from the first call), then the background music.
+    // Music is only made when the host asks (tap "Make music" on /host), unless MUSIC_AUTO=on: a deploy never spends credits.
+    warmCaretaker().catch((e) => console.error('[caretaker] warm-up failed:', e.message))
+      .then(() => (process.env.MUSIC_AUTO === 'on' ? warmMusic() : null)).catch((e) => console.error('[music] warm-up failed:', e.message));
   });
 }

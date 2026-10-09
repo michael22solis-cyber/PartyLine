@@ -1,13 +1,19 @@
-// The scripted moments of The Blackwood Line (2-night version).
+// The scripted moments of The Blackwood Line: one night, about 75 minutes (timetables in modes.js).
 // Fire them by hand during a playtest (`npm run admin -- beat <name>`) or schedule them.
-import { players, updatePlayer, votes, setRevealed } from './store.js';
-import { deliver } from './live.js';
-import { callPlayer, ringInApp, unlock, unlockMentions, unlockAll, audioIf } from './progress.js';
+import { players, updatePlayer, votes, setRevealed, markBeat, messagesFor, firedBeats, playerByToken } from './store.js';
+import { deliver, emit } from './live.js';
+import { callPlayer, ringInApp, unlock, unlockMentions, unlockAll, audioIf, unlockedFor } from './progress.js';
 import { getDb } from './store.js';
-import { summary } from './memory.js';
+import { summary, remember } from './memory.js';
+import { PHOTOS, statusOf, phase } from './cast.js';
+import { TEXTABLE } from './characters/index.js';
 import { ledger } from './ai/ledger.js';
+import { holdOff } from './voice/allowance.js';
+import { nudgeStuck } from './hints.js';
+import { dealAgendas, deliverAgendas, leakSecret } from './agenda.js';
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// BEAT_TIME_SCALE shrinks the waits inside beats (the full-game rehearsal test runs a night in seconds).
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms * Number(process.env.BEAT_TIME_SCALE ?? 1)));
 const everyone = () => players();
 
 const STARTING_CLUES = [
@@ -20,6 +26,13 @@ const STARTING_CLUES = [
 ];
 
 export const SUSPECTS = ['Ruth Calloway', 'Marcus Vane', 'Lily Blackwood', 'Teddy Fisk'];
+
+// What a suspect says when they text a stuck player first (the nudge beat).
+const FIRST_CONTACT = {
+  teddy: 'heyyy heard ur investigating the manor 👀 i might have a tip for u. text me',
+  marcus: 'This is Marcus Vane. I hear you’re asking questions about the Blackwood house. Let’s keep this professional.',
+  lily: 'is this the person asking about my family’s house?',
+};
 
 async function toAll(thread, text, kind = 'text', audio = null) {
   await Promise.all(everyone().map((p) => deliver({ token: p.token, thread, from: 'character', text, kind, audio })));
@@ -36,7 +49,10 @@ async function callEach(character, gapMs = 0) {
 // A player's starting clue: it also puts Ruth, and anyone the clue names, in their phone.
 async function giveClue(p) {
   const clue = p.clue || STARTING_CLUES[0];
-  await deliver({ token: p.token, thread: 'line', from: 'character', kind: 'clue', text: clue });
+  // Once per player: the calls beat and the clues beat both hand out clues, so never send it twice.
+  if (!messagesFor(p.token).some((m) => m.kind === 'clue' && m.text === clue)) {
+    await deliver({ token: p.token, thread: 'line', from: 'character', kind: 'clue', text: clue });
+  }
   await unlock(p, 'ruth', 'She was the family’s night nurse. She wants to help.');
   await unlockMentions(p, clue);
 }
@@ -45,7 +61,8 @@ export const BEATS = {
   // Assign the accomplice and starting clues. Run once, after everyone has joined.
   async setup() {
     const ps = everyone();
-    if (ps.length < 3) throw new Error('Need at least 3 players (4+ recommended).');
+    // A real game needs 3+ (auto mode enforces it); fewer is fine for the host testing on their own.
+    if (!ps.length) throw Object.assign(new Error('Add at least one player first.'), { status: 400 });
     const accomplice = ps[Math.floor(Math.random() * ps.length)];
     ps.forEach((p, i) => {
       updatePlayer(p.token, {
@@ -53,18 +70,25 @@ export const BEATS = {
         clue: STARTING_CLUES[i % STARTING_CLUES.length],
       });
     });
-    // With fewer than 6 players, double up so every clue reaches someone.
-    if (ps.length < STARTING_CLUES.length) {
-      for (let i = ps.length; i < STARTING_CLUES.length; i++) {
-        const p = ps[i % ps.length];
-        updatePlayer(p.token, { clue: `${p.clue}\n\n${STARTING_CLUES[i]}` });
-      }
+    // With fewer than 6 players, the leftover clues still reach someone, but later (the nudge beat, a few minutes
+    // in), so nobody meets half the cast in their very first message.
+    ps.forEach((p) => updatePlayer(p.token, { extraClues: [] }));
+    for (let i = ps.length; i < STARTING_CLUES.length; i++) {
+      const p = playerByToken(ps[i % ps.length].token);
+      updatePlayer(p.token, { extraClues: [...(p.extraClues || []), STARTING_CLUES[i]] });
     }
-    return { players: ps.length, accomplice: ps.length >= 4 ? accomplice.name : '(none, fewer than 4 players)' };
+    dealAgendas(); // everyone's secret and three goals (see agenda.js)
+    return { players: ps.length, accomplice: ps.length >= 4 ? accomplice.name : '(none, fewer than 4 players)', ...(ps.length < 3 ? { note: 'Fewer than 3 players: fine for testing, too few for a real game.' } : {}) };
+  },
+
+  // Everyone gets their secret agenda (sealed): a personal secret and three goals on top of solving the murder.
+  async agendas() {
+    dealAgendas({ onlyMissing: true }); // anyone setup didn't deal in (joined late, or setup was skipped)
+    await deliverAgendas();
   },
 
   async welcome() {
-    await toAll('line', 'Tonight at 8, the Blackwood line opens. Keep this phone close. Every character you meet is an AI. Tap ⋮ to turn off calls anytime.');
+    await toAll('line', 'Tonight, the Blackwood line opens. Keep this phone close. Every character you meet is an AI. Tap ⋮ to turn off calls anytime.');
   },
 
   async accomplice() {
@@ -96,6 +120,30 @@ export const BEATS = {
     for (const p of everyone()) await giveClue(p);
   },
 
+  // Anyone still down to one contact a few minutes in: a suspect finds them first, so nobody sits waiting.
+  async nudge() {
+    // First, the leftover starting clues (small groups): another lead turns up.
+    for (const p of everyone()) {
+      for (const clue of p.extraClues || []) {
+        if (messagesFor(p.token).some((m) => m.kind === 'clue' && m.text.endsWith(clue))) continue;
+        await deliver({ token: p.token, thread: 'line', from: 'character', kind: 'clue', text: `ANOTHER LEAD TURNED UP:\n${clue}` });
+        await unlockMentions(p, clue);
+      }
+    }
+    let nudged = 0;
+    for (const p of everyone()) {
+      if (unlockedFor(p).length > 1) continue;
+      const key = ['teddy', 'marcus', 'lily'].find((k) => !unlockedFor(p).includes(k));
+      if (!key) continue;
+      await unlock(p, key, 'They found you first.');
+      const text = FIRST_CONTACT[key];
+      await deliver({ token: p.token, thread: key, from: 'character', text });
+      remember({ player: p.name, pid: p.pid, npc: key, character: TEXTABLE.find((t) => t.key === key).name, speaker: 'character', text: `(text, you reached out first) ${text}`, channel: 'text' });
+      nudged++;
+    }
+    return { nudged };
+  },
+
   // Backup for anyone who hasn't found every suspect yet.
   async cast() {
     await toAll('line', 'Dana’s phone was found at the bottom of the stairs. Every number in her recent calls is in yours now. Text them. Call them if you dare.');
@@ -117,19 +165,22 @@ export const BEATS = {
     await unlock(target, 'ruth');
     await ringInApp(target, 'ruth', {
       opening: `You are calling ${target.name} late at night, uninvited. Speak first, sweetly but with an edge: say some doors in that house are better left closed, and that they should get some rest. Keep it short unless they push you.`,
-      voicemail: { text: 'Voicemail from Ruth Calloway: "Sweetheart, it’s Ruth. Some doors in that house are better left closed. Get some rest now."', audio: audioIf('ruth-voicemail.mp3') },
+      voicemail: { text: 'Voicemail from Ruth Calloway: "Hello, sweetheart! It’s Ruth. I heard you’ve been asking around about the cellar. Some doors in that house are better left closed, dear. Anyway! You get some rest now. God bless."', audio: audioIf('ruth-voicemail.mp3') },
     });
     return { target: target.name };
   },
 
-  async closeNight1() {
-    await toAll('line', 'Someone in your group has been talking to the house. Votes are due tomorrow at 11:30 pm. At midnight, it calls everyone.');
+  // Word gets around: a suspect leaks one player's secret to two others.
+  async leak() {
+    return leakSecret();
   },
 
   async twist() {
     await toAll('line',
       '911 CALL — Thursday, 11:12 pm. A woman, crying: "There’s someone at the bottom of the stairs at Blackwood... I think she’s dead." Then she hangs up.',
       'evidence', audioIf('call911.mp3'));
+    // Halfway through: anyone who hasn't found anything yet gets a nudge.
+    return { nudged: await nudgeStuck() };
   },
 
   async planted() {
@@ -137,8 +188,24 @@ export const BEATS = {
     if (!p) return { skipped: 'no accomplice' };
     await deliver({
       token: p.token, thread: 'line', from: 'character', kind: 'secret',
-      text: 'PLANTED EVIDENCE (forward it if you like): "Lily Blackwood’s car, parked at the manor, Thursday 11:02 pm." It’s true. It’s just not the whole truth. Push them toward Lily or Teddy.',
+      text: 'PLANTED EVIDENCE: "Lily Blackwood’s car, parked at the manor, Thursday 11:02 pm." It’s true. It’s just not the whole truth. Tell the others about it (the group chat or a DM), and push them toward Lily or Teddy.',
     });
+  },
+
+  // Lily calls everyone herself: she wants to talk about Thursday night, but only on the phone and only now. Answer and
+  // ask her about it, and she tells you; miss it and she shuts down ("nvm") and won't pick up for 10 minutes.
+  async lilyCalls() {
+    await Promise.all(everyone().map(async (p, i) => {
+      await sleep(i * 20_000);
+      await unlock(p, 'lily');
+      await ringInApp(p, 'lily', {
+        opening: `You are calling ${p.name} yourself, late at night, nervous. Speak first, quietly: you can't keep something in anymore and you want to tell someone, but only on the phone, and only now, because your shift starts in a few minutes. Do not say what it is yet. Wait for them to ask about Thursday night or the 911 call.`,
+        onMissed: async () => {
+          await deliver({ token: p.token, thread: 'lily', from: 'character', text: 'nvm. forget i called.' });
+          holdOff(p.token, 'lily', 10 * 60_000);
+        },
+      });
+    }));
   },
 
   async caretakerHint() {
@@ -146,15 +213,23 @@ export const BEATS = {
   },
 
   async votesOpen() {
-    await toAll('line', 'One hour left. Open the VOTE tab and name the killer and the accomplice.');
+    await toAll('line', 'Votes are open. Open the VOTE tab and name the killer and the accomplice before the line goes dead.');
   },
 
   async lineRinging() {
     await toAll('line', 'The line is ringing.');
   },
 
-  // Midnight: everyone gets the Caretaker's reveal call, then the results.
+  // The final call: everyone gets the Caretaker's reveal, then the results.
   async reveal() {
+    // The votes first, counted out on every phone at once (anonymous: who got how many, not who voted for whom),
+    // then the Caretaker calls with the truth.
+    const counts = {};
+    Object.values(votes()).forEach((v) => { if (v.killer) counts[v.killer] = (counts[v.killer] || 0) + 1; });
+    const rows = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count }));
+    everyone().forEach((p) => emit(p.token, 'votes', { rows, total: Object.values(votes()).length }));
+    await toAll('line', `THE VOTES ARE IN\n${rows.length ? rows.map((r) => `${r.name}: ${r.count}`).join('\n') : 'Nobody voted.'}`, 'tally');
+    await sleep(4000 + rows.reduce((s, r) => s + r.count, 0) * 900);
     setRevealed();
     await callEach('caretaker_reveal', 0); // every phone rings at once
     await sleep(75_000);
@@ -184,9 +259,31 @@ export function tallyVotes() {
   return { killer: top('killer'), accomplice: top('accomplice'), votes: v.length, players: getDb().players.length };
 }
 
+// A character texts everyone a photo (see cast.js). They're added to anyone's phone who didn't have them yet, and
+// they remember sending it.
+async function sendPhoto({ npc, image, text, remember: what }) {
+  const name = TEXTABLE.find((t) => t.key === npc)?.name || npc;
+  for (const p of everyone()) {
+    await unlock(p, npc);
+    await deliver({ token: p.token, thread: npc, from: 'character', kind: 'photo', image, text, npc });
+    remember({ player: p.name, pid: p.pid, npc, character: name, speaker: 'character', text: `(text) [you ${what}] ${text}`, channel: 'text' });
+  }
+}
+
+const REPEATABLE = new Set(['leak', 'caretakerHint', 'nudge', 'agendas']); // agendas: deals only players without one
+
 export async function runBeat(name) {
   const fn = BEATS[name];
   if (!fn) throw Object.assign(new Error(`Unknown beat "${name}". Options: ${Object.keys(BEATS).join(', ')}`), { status: 400 });
+  // Each moment of the story happens once a night: firing it again (by hand, or when it's also scheduled) would send
+  // its clues, evidence and photos a second time. A few are meant to repeat.
+  if (!REPEATABLE.has(name) && firedBeats().includes(name)) return { skipped: `${name} already happened tonight` };
   console.log(`[beat] ${name}`);
-  return (await fn()) || { ok: true };
+  const result = (await fn()) || { ok: true };
+  markBeat(name);
+  // Characters' status lines follow the story.
+  const statuses = { ...Object.fromEntries(TEXTABLE.map((t) => [t.key, statusOf(t.key)])), phase: phase() };
+  everyone().forEach((p) => emit(p.token, 'status', statuses));
+  if (PHOTOS[name]) await sendPhoto(PHOTOS[name]);
+  return result;
 }

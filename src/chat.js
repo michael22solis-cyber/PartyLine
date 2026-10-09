@@ -4,10 +4,13 @@ import { remember, tagLine } from './memory.js';
 import { threadHistory, countPlayerMessages, markRead } from './store.js';
 import { deliver, emit } from './live.js';
 import { isUnlocked, onCharacterSaid, unlockMentions } from './progress.js';
-import { buildTextPrompt, buildNudgePrompt } from './context.js';
-import { approveFromPlayerText } from './disclosure.js';
+import { buildTextPrompt, buildNudgePrompt, callMeNote } from './context.js';
+import { topicsFor } from './secrets.js';
+import { approveFromPlayerText, phoneOnlyRaised } from './disclosure.js';
 import { chatComplete } from './ai/openai.js';
 import { ledger } from './ai/ledger.js';
+import { typingPlan, busyReplyDelayMs } from './cast.js';
+import { onAccusation } from './initiative.js';
 
 const { MAX_TEXTS_PER_PLAYER = 150 } = process.env;
 const env = process.env;
@@ -50,6 +53,7 @@ export async function handlePlayerText(player, thread, text, { clientId = null }
   if (mine.duplicate) return mine; // a retried send: already handled
   remember({ player: player.name, pid: player.pid, npc: thread, character: c.name, speaker: 'player', text: `(text) ${clean}`, channel: 'text' });
   unlockMentions(player, clean).catch(() => {});
+  if (tagLine({ speaker: 'player', text: clean, npc: thread }).includes('accusation')) onAccusation(player, thread, clean);
 
   if (CRISIS.test(clean)) {
     await deliver({
@@ -63,20 +67,22 @@ export async function handlePlayerText(player, thread, text, { clientId = null }
 
   // The engine, not the model, decides whether this message earns a disclosure.
   const approved = approveFromPlayerText(player, thread, clean, 'text');
+  const callOnly = phoneOnlyRaised(thread, clean); // things they'll only say on a call
   const key = `${player.token}:${thread}`;
   const state = pending.get(key);
   if (state) {
     approved.forEach((t) => state.approved.add(t.id));
+    callOnly.forEach((t) => state.callOnly.add(t.id));
     state.followUp = true;
     return mine;
   }
-  if (!approved.length && isAckOnly(clean, before)) {
+  if (!approved.length && !callOnly.length && isAckOnly(clean, before)) {
     ledger.event('text_skipped', { session: player.pid, npc: thread, reason: 'acknowledgement' });
     // No reply, like a real person: but they did see it.
     delay(1500 + Math.random() * 2500).then(() => read(player, thread)).catch(() => {});
     return mine;
   }
-  const s = { approved: new Set(approved.map((t) => t.id)), followUp: false };
+  const s = { approved: new Set(approved.map((t) => t.id)), callOnly: new Set(callOnly.map((t) => t.id)), followUp: false };
   pending.set(key, s);
   // Reply in the background so the app feels like real texting.
   (async () => {
@@ -107,33 +113,41 @@ async function replyOnce(player, thread, s) {
   const c = CHARACTERS[thread];
   let approvedIds = [];
   try {
-    await delay(1200 + Math.random() * 1800); // "read" delay; texts that arrive meanwhile are answered together
+    await delay(1200 + Math.random() * 1800 + busyReplyDelayMs(thread)); // "read" delay (longer when they're busy); texts that arrive meanwhile are answered together
     read(player, thread);
     emit(player.token, 'typing', { thread, on: true });
     // Everything up to here is answered by this reply; only texts arriving from now on need a follow-up.
     s.followUp = false;
     approvedIds = [...s.approved];
     s.approved.clear();
+    const callOnly = topicsFor(thread).filter((t) => s.callOnly.has(t.id));
+    s.callOnly.clear();
     const history = threadHistory(player.token, thread, 30);
     const lastPlayer = [...history].reverse().find((m) => m.from === 'player');
     const approvedNow = approvedIds.map((id) => ({ id }));
-    const { messages } = buildTextPrompt({ npc: thread, player, thread: history, approvedNow });
+    const { messages } = buildTextPrompt({ npc: thread, player, thread: history, approvedNow, extra: callMeNote(callOnly) });
     const { model, purpose } = route(lastPlayer?.text || '');
     const { text: reply } = await chatComplete(messages, {
       model, meta: { session: player.pid, npc: thread, capability: 'text', purpose, turn: countPlayerMessages(player.token) },
     });
 
-    await delay(Math.min(4000, 600 + reply.length * 25)); // "typing" time scales with length
+    // "Typing" time scales with length, at each character's own pace (Ruth slow and careful, Teddy fast); some stop
+    // and start again, like someone deciding what to say.
+    for (const step of typingPlan(thread, reply)) {
+      emit(player.token, 'typing', { thread, on: step.typing });
+      await delay(step.ms);
+    }
     emit(player.token, 'typing', { thread, on: false });
     await deliver({ token: player.token, thread, from: 'character', text: reply });
     remember({ player: player.name, pid: player.pid, npc: thread, character: c.name, speaker: 'character', text: `(text) ${reply}`, channel: 'text' });
-    await onCharacterSaid(player, thread, reply, { approved: approvedIds });
+    await onCharacterSaid(player, thread, reply, { approved: approvedIds, channel: 'text' });
   } catch (err) {
     console.error(`[${thread}] text reply failed:`, err.message);
     emit(player.token, 'typing', { thread, on: false });
     const busy = err.code === 'busy';
     await deliver({ token: player.token, thread, from: 'system', kind: 'text',
-      text: busy ? 'Their phone is busy. Try again in a minute.' : 'Message failed to deliver. Try again. (Host: the server window says why.)' });
+      text: err.code === 'budget' ? 'No signal. The line has gone quiet for tonight.'
+        : busy ? 'Their phone is busy. Try again in a minute.' : 'Message failed to deliver. Try again. (Host: the server window says why.)' });
   }
 }
 

@@ -1,6 +1,6 @@
 # The Blackwood Line
 
-A 2-night Halloween mystery played on real phones. AI characters **call** players for real, and players **text** them in a burner-phone web app (no carrier approval needed). Every character shares one memory, so Ruth knows what you told the Caretaker.
+A one-night Halloween mystery (about 75 minutes) played on phones. AI characters **call** players for real, and players **text** them in a burner-phone web app (no carrier approval needed). Every character shares one memory, so Ruth knows what you told the Caretaker.
 
 ## What's in here
 
@@ -10,8 +10,11 @@ A 2-night Halloween mystery played on real phones. AI characters **call** player
 | Haunted old phone | Each player's private link opens a power-on and boot screen, then a home screen with Messages, Calls, Evidence, Notes (suspect board), Vote and The End. Glitches, whispers, synth sounds and a full-screen incoming-call alert. On a phone it only runs from the home screen: a link opened in a browser tab shows how to add it first. Push alerts. |
 | Intro video | A 30-second story intro plays after a player taps the power button, then their private role card (Detective, or a blurred Accomplice card), then the phone. Replay it from Menu. Script: `intro/SCRIPT.md`. |
 | New-player tutorial | A six-step, spoiler-free field guide opens after the first role card. Players can open the real apps from each step, return to the guide, pause and resume, or revisit it from the home screen and Menu → How to play. Progress is saved per private link on the current device. |
-| Recap | After the midnight reveal, "The End" shows each player's detective score, rank, secrets uncovered, and a no-spoiler share card (PNG). |
-| Beats | Every scripted moment from the case doc (intro, clues, 9:40 voice memo, 911 twist, accomplice's secret texts, midnight reveal). Fire by hand or schedule. |
+| Recap | After the final call, "The End" shows each player's detective score, rank, secrets uncovered, and a no-spoiler share card (PNG). |
+| Beats | Every scripted moment from the case doc (intro, clues, 9:40 voice memo, 911 twist, accomplice's secret texts, the final call). Fire by hand or schedule the whole night. |
+| Living cast | Characters text first (reactions and gossip, capped), are busy when their status says so, and keep some secrets for phone calls only. |
+| Secret agendas (pilot) | Everyone gets a personal secret and three private goals (one to uncover, one social, keep your secret). Teddy leaks a secret or two mid-game. The recap reveals every agenda. |
+| Host live view | `/host` shows each player's progress, AI spend, and who has gone quiet, with a **Send hint** button. |
 | Admin CLI | Add players, fire or schedule beats, check votes. |
 
 ## Setup (about 45 minutes)
@@ -37,10 +40,10 @@ Run `beat setup` **before** you send links, so each friend sees their role right
 ## Immersion features
 
 - **Talk to them in the app.** Characters ring your Blackwood phone (ANSWER / DECLINE) and you talk out loud; unlocked suspects have a ☎ CALL button. Uses OpenAI Realtime straight from the phone's browser (needs mic permission and HTTPS, which ngrok gives you). Set `CALL_MODE=phone` to use real Twilio calls instead for players with a number.
-- **Captions on calls** (⋮ menu, off by default): the character's words appear in step with their voice, handy at a loud party. The recorded midnight reveal is captioned too.
-- **Contacts unlock gradually.** You start with The Line. Your clue gives you Ruth plus anyone it names; anyone a suspect mentions (or you mention) gets added. The `cast` beat (21:15 on Night 1) unlocks everyone as a backup. `UNLOCK_ALL=1` turns this off.
+- **Captions on calls** (⋮ menu, off by default): the character's words appear in step with their voice, handy at a loud party. The recorded final reveal is captioned too.
+- **Contacts unlock gradually.** You start with The Line. Your clue gives you Ruth plus anyone it names; anyone a suspect mentions (or you mention) gets added. About 6 minutes in, anyone still down to one contact gets texted first by a new suspect (the `nudge` beat), and the `cast` beat (about 12 minutes in) unlocks everyone as a backup. Vote and the suspect board only list suspects you have met. `UNLOCK_ALL=1` turns this off.
 - **Secrets become evidence.** When a suspect lets a locked secret slip, a NEW EVIDENCE card lands in that player's case file.
-- **Real audio evidence.** Run `npm run evidence` once (uses your OpenAI key) to make `public/audio/memo.mp3`, `call911.mp3`, `ruth-voicemail.mp3` and `caretaker-reveal.mp3`. The memo, 911 call and Ruth's voicemail then play in the app. Ruth's late-night warning is now a call; if you don't pick up, she leaves the voicemail. With `caretaker-reveal.mp3` present, the scripted midnight reveal call plays the recording instead of a live model (no cost per player). Lines are cached, so re-running only pays for lines you changed.
+- **Real audio evidence.** Run `npm run evidence` once (uses your OpenAI key) to make `public/audio/memo.mp3`, `call911.mp3`, `ruth-voicemail.mp3` and `caretaker-reveal.mp3`. The memo, 911 call and Ruth's voicemail then play in the app. Ruth's late-night warning is now a call; if you don't pick up, she leaves the voicemail. With `caretaker-reveal.mp3` present, the scripted final reveal call plays the recording instead of a live model (no cost per player). Lines are cached, so re-running only pays for lines you changed.
 
 ## Players talking to each other
 
@@ -52,7 +55,7 @@ Run `beat setup` **before** you send links, so each friend sees their role right
 ## Auto mode (no host needed)
 
 On `/host`, pick a length and tap **New game**. Send the one invite link to your group: each friend types their name and lands on their own phone. The first to join is the organizer and gets a **Start** button; the story then runs on its own.
-Lengths live in `src/modes.js` (minutes after Start for each beat): *Play now* ~75 min, *One evening* ~2 hrs, *Two nights* (Halloween event). Tune the minutes after real playtests.
+Lengths live in `src/modes.js` (minutes after Start for each beat): *One night* ~75 min (default) and *Slow burn* ~2 hrs; both are the same one-night story. Tune the minutes after real playtests.
 
 ## Host it online + run it from your phone
 
@@ -65,7 +68,7 @@ Running one with friends tonight? Follow **`docs/PLAYTEST_RUNBOOK.md`**: setup, 
 
 ### Helping new players
 
-The tutorial explains the two-night investigation, first clue, suspect questions and calls, sharing with the crew, private notes, voting, and the ending. It adapts its next step when the host has not assigned roles, no clue or contacts have arrived, other players have not joined, a vote is already saved, or the reveal has happened. It keeps roles and the solution private and opens voting for review without sending a vote or making a call.
+The tutorial explains the one-night investigation, first clue, suspect questions and calls, sharing with the crew, private notes, voting, and the ending. It adapts its next step when the host has not assigned roles, no clue or contacts have arrived, other players have not joined, a vote is already saved, or the reveal has happened. It keeps roles and the solution private and opens voting for review without sending a vote or making a call.
 
 Players can tap **DO THIS LATER** and use **FIELD GUIDE** on the home screen to resume. **MENU → How to play** reopens the tutorial; after completing it, either entry starts it again. Notifications still open their requested thread directly. Tutorial progress and notes stay on the device.
 
@@ -87,14 +90,13 @@ npm run admin -- beat intro
 npm run admin -- beat calls        # Caretaker calls everyone, then sends their clue
 npm run admin -- beat memo
 
-# 3b. ...or schedule both nights (Central time)
-npm run admin -- night1 2026-10-30
-npm run admin -- night2 2026-10-31   # includes the midnight reveal
+# 3b. ...or schedule the whole night (setup runs at the start time)
+npm run admin -- night 2026-10-31T20:00-05:00          # ~75 min; add `evening` for ~2 hrs
 
 npm run admin -- status              # players, roles, votes, schedule
 ```
 
-All beats: `setup, welcome, accomplice, intro, calls, clues, cast, memo, ruthWarning, closeNight1, twist, planted, caretakerHint, votesOpen, lineRinging, reveal`. Use `clues` instead of `calls` to test without phones.
+All beats: `setup, welcome, accomplice, agendas, intro, calls, clues, cast, memo, ruthWarning, leak, twist, planted, lilyCalls, caretakerHint, votesOpen, lineRinging, reveal`. Use `clues` instead of `calls` to test without phones.
 
 On a phone, each link first asks the player to add Blackwood to their home screen (iPhone: **Share → Add to Home Screen**; Android: the **ADD TO HOME SCREEN** button, or **⋮ → Install app**), and the game only runs from that icon. Then they turn on alerts under **MENU**. Computers play in the browser. `REQUIRE_INSTALL=off` lets phones play in a browser tab too (iPhones get no alerts there).
 

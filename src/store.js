@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 import { dataFile } from './paths.js';
 
 const FILE = dataFile('game.json');
-const EMPTY = { players: [], messages: [], votes: {}, pushSubs: {}, schedule: [], revealed: false, groups: [], game: null };
+const EMPTY = { players: [], messages: [], votes: {}, pushSubs: {}, schedule: [], revealed: false, groups: [], game: null, beats: [], pausedAt: null };
 
 let db = load();
 db.players.forEach((p) => { p.pid ||= crypto.randomBytes(4).toString('hex'); p.permitted ||= {}; });
@@ -82,7 +82,7 @@ export function updatePlayer(token, patch) {
 // thread: a character key ('ruth', 'marcus'...), 'line' (narrator) or 'unknown' (the Caretaker's call log)
 // from: 'player' | 'character' | 'system'
 // kind: 'text' | 'clue' | 'memo' | 'call' | 'calllog' | 'missed' | 'voicemail' | 'secret' | 'evidence' | 'reveal'
-export function addMessage({ token, thread, from, text, kind = 'text', audio = null, sender = null, forwarded = false, clientId = null }) {
+export function addMessage({ token, thread, from, text, kind = 'text', audio = null, sender = null, forwarded = false, clientId = null, npc = null, image = null }) {
   if (clientId) {
     const dup = db.messages.find((m) => m.token === token && m.clientId === clientId);
     if (dup) return { ...dup, duplicate: true };
@@ -95,6 +95,8 @@ export function addMessage({ token, thread, from, text, kind = 'text', audio = n
     text,
     kind,
     ...(audio ? { audio } : {}),
+    ...(npc ? { npc } : {}),     // which character it is about (call log, voicemail, photo): the phone shows their face
+    ...(image ? { image } : {}),
     ...(sender ? { sender } : {}),
     ...(forwarded ? { forwarded: true } : {}),
     ...(clientId ? { clientId: String(clientId).slice(0, 64) } : {}),
@@ -167,11 +169,27 @@ export function addGroup({ name, players: pids, ai, createdBy }) {
 export const groupById = (id) => db.groups.find((g) => g.id === id) || null;
 export const groupsFor = (pid) => db.groups.filter((g) => g.players.includes(pid));
 
+// Pause the night: the scheduler holds still; on resume, every beat still to come moves later by the time paused.
+export const pausedAt = () => db.pausedAt || null;
+export function pauseSchedule(now = Date.now()) { if (!db.pausedAt) { db.pausedAt = new Date(now).toISOString(); save(); } }
+export function resumeSchedule(now = Date.now()) {
+  if (!db.pausedAt) return 0;
+  const ms = now - Date.parse(db.pausedAt);
+  for (const s of db.schedule) if (!s.done) s.at = new Date(Date.parse(s.at) + ms).toISOString();
+  db.pausedAt = null;
+  save();
+  return ms;
+}
+
 export function clearPendingSchedule() { db.schedule = db.schedule.filter((x) => x.done); save(); }
 
 // ---- auto mode: one game per server with a self-serve invite link ----
 export function setGame(game) { db.game = game; save(); return game; }
 export const getGame = () => db.game;
+
+// Story beats that have fired, in order (characters' status lines follow the story).
+export function markBeat(name) { db.beats = [...(db.beats || []), name]; save(); }
+export const firedBeats = () => db.beats || [];
 
 export function setRevealed() { db.revealed = true; save(); }
 
