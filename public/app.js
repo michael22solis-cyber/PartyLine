@@ -71,9 +71,34 @@ function lineAvatar() {
 }
 // Generated art used until a copy is added to public/cast (public/cast/<key>.jpg always wins).
 const CDN_ART = {
+  'clue-police': 'https://d8j0ntlcm91z4.cloudfront.net/user_3HCC73EuiIXBWsy0LnhpTM9HwUC/hf_20261009_234754_c3a18391-4df8-4140-9c37-91cd642831ca_min.webp',
+  'clue-contract': 'https://d8j0ntlcm91z4.cloudfront.net/user_3HCC73EuiIXBWsy0LnhpTM9HwUC/hf_20261009_234755_7f10d95f-4966-425e-a18c-e5514fe01399_min.webp',
+  'clue-ruth': 'https://d8j0ntlcm91z4.cloudfront.net/user_3HCC73EuiIXBWsy0LnhpTM9HwUC/hf_20261009_234754_5e27190d-56db-4582-bad8-b2a2800ba1f6_min.webp',
+  'clue-receipt': 'https://d8j0ntlcm91z4.cloudfront.net/user_3HCC73EuiIXBWsy0LnhpTM9HwUC/hf_20261009_234754_e73bd54a-21a1-4549-95fa-68e477601a83_min.webp',
+  'clue-livestream': 'https://d8j0ntlcm91z4.cloudfront.net/user_3HCC73EuiIXBWsy0LnhpTM9HwUC/hf_20261009_234753_0aaf1c8b-c54b-47f9-8a0e-152e6778a738_min.webp',
+  'clue-neighbor': 'https://d8j0ntlcm91z4.cloudfront.net/user_3HCC73EuiIXBWsy0LnhpTM9HwUC/hf_20261009_234755_a29f40da-bd9d-41bf-8589-55f680f46310_min.webp',
+  'elias-poster': 'https://d8j0ntlcm91z4.cloudfront.net/user_3HCC73EuiIXBWsy0LnhpTM9HwUC/hf_20261009_234754_88adf7ae-b4b6-4850-8651-e1b290cef358_min.webp',
+  danaVideo: 'https://d8j0ntlcm91z4.cloudfront.net/user_3HCC73EuiIXBWsy0LnhpTM9HwUC/hf_20261009_234802_7e2589d7-8882-40f6-a732-ba5f9ac22c8c.mp4',
+  'truth-cellar': 'https://d8j0ntlcm91z4.cloudfront.net/user_3HCC73EuiIXBWsy0LnhpTM9HwUC/hf_20261009_234755_0cf5fa3a-bc3d-49f9-a1a2-a6bbbe87e3a6_min.webp',
   dana: 'https://d8j0ntlcm91z4.cloudfront.net/user_3HCC73EuiIXBWsy0LnhpTM9HwUC/hf_20261008_233940_29fc5259-cc85-4e25-9b94-a5ca38dca494_min.webp',
   lineup: 'https://d8j0ntlcm91z4.cloudfront.net/user_3HCC73EuiIXBWsy0LnhpTM9HwUC/hf_20261008_233940_83d74b87-cd21-4eca-968f-22b8bec873ef_min.webp',
 };
+// Dana's moving photo: public/cast/dana.mp4 when it's there, otherwise the generated copy.
+let danaVideoOk = null;
+const DANA_VIDEO = () => (danaVideoOk === false && CDN_ART.danaVideo ? CDN_ART.danaVideo : '/assets/cast/dana.mp4');
+fetch('/assets/cast/dana.mp4', { method: 'HEAD' }).then((r) => { danaVideoOk = r.ok; }).catch(() => { danaVideoOk = false; });
+// Evidence art: public/art/<key>.jpg when it's there, otherwise the generated copy. Tap to see it full size.
+function artImg(key, caption = '') {
+  const img = el('img'); img.alt = caption; img.loading = 'lazy'; img.className = 'art';
+  const srcs = [`/assets/art/${key}.jpg`, ...(CDN_ART[key] ? [CDN_ART[key]] : [])];
+  img.src = srcs.shift();
+  img.onerror = () => { if (srcs.length) img.src = srcs.shift(); else img.remove(); };
+  img.onclick = (e) => { e.stopPropagation(); openLightbox({ image: img.currentSrc || img.src, caption }); };
+  return img;
+}
+// Which photo goes with each starting clue.
+const CLUE_ART = [[/POLICE NOTE/, 'clue-police'], [/RENOVATION CONTRACT/, 'clue-contract'], [/RUTH.S STATEMENT/, 'clue-ruth'],
+  [/DINER RECEIPT/, 'clue-receipt'], [/TEDDY.S LIVESTREAM/, 'clue-livestream'], [/NEIGHBOR.S TEXT/, 'clue-neighbor']];
 // A portrait, or the shape of someone you haven't met.
 function portrait(key, cls = '') {
   const box = el('span', `portrait ${cls}`);
@@ -699,6 +724,8 @@ function messageNode(m) {
       node.append(wave);
     }
     node.append(document.createTextNode(m.text));
+    const art = m.kind === 'clue' && CLUE_ART.find(([re]) => re.test(m.text));
+    if (art) node.append(artImg(art[1], m.text.split('\n').pop()));
     if (m.kind === 'evidence' && /^SECRET UNCOVERED/.test(m.text)) node.classList.add('found');
     if (m.kind === 'evidence' && /HEARD ON A CALL/.test(m.text.split('\n')[0])) node.classList.add('oncall');
   } else if (m.kind === 'voicemail') {
@@ -841,8 +868,16 @@ function renderEvidence(screen) {
   const vtext = el('div', 'vtext');
   vtext.append(el('span', 'tag', 'THE VICTIM'), el('b', null, VICTIM.name), el('span', 'vrole', `${VICTIM.age} · new owner of Blackwood Manor`));
   VICTIM.lines.forEach((l) => vtext.append(el('p', null, l)));
-  vic.append(portrait('dana', 'victim-photo'), vtext);
-  screen.append(vic);
+  const photo = portrait('dana', 'victim-photo');
+  photo.onclick = () => openLightbox({ video: DANA_VIDEO(), poster: '/assets/cast/dana.jpg', caption: `${VICTIM.name}, three weeks before` });
+  vic.append(photo, vtext);
+  // The cold case under it all: Elias, missing since Halloween 1996.
+  const cold = el('div', 'victim cold');
+  const ctext = el('div', 'vtext');
+  ctext.append(el('span', 'tag', 'THE COLD CASE · 1996'), el('b', null, 'Elias Blackwood'), el('span', 'vrole', 'Caretaker of Blackwood Manor'),
+    el('p', null, 'Vanished on Halloween night, 1996. Everyone says he ran off. His daughter Lily never believed it.'));
+  cold.append(artImg('elias-poster', 'MISSING: Elias Blackwood, last seen Halloween night, 1996'), ctext);
+  screen.append(vic, cold);
   const items = state.messages.filter((m) => EVIDENCE_KINDS.has(m.kind) || (m.kind === 'photo' && m.from === 'character'));
   if (!items.length) { screen.append(el('div', 'empty', 'Nothing yet.\n\nClues, recordings and evidence you receive will be kept here.')); return; }
   const wrap = el('div', 'bubbles');
@@ -1023,6 +1058,11 @@ function renderRecap(screen) {
   }[r.outcome];
   score.append(el('div', 'num', String(r.score)), el('div', 'rank', r.rank), el('div', `out ${win ? 'win' : 'lose'}`, outText));
   box.append(score);
+  // What was under the cellar floor all along.
+  const truth = el('div', 'truth');
+  truth.append(artImg('truth-cellar', 'The cellar of Blackwood Manor'), el('div', 'section-label', 'WHAT REALLY HAPPENED'),
+    el('p', 'note', 'Halloween 1996: Ruth Calloway, the night nurse who sang Mrs. Blackwood to sleep, killed Elias and buried him under the cellar floor. For thirty years everyone said he ran off. Then Dana booked a crew to dig up that floor. On Thursday, bingo let out at 8:30, and Ruth went to the manor. Dana never reached the bottom of the cellar stairs alive.'));
+  box.append(truth);
 
   if (r.role === 'accomplice') {
     box.append(el('div', 'section-label', 'YOUR SECRET'), el('p', 'note', 'You were the accomplice. Your score measures how well you steered the group.'));
