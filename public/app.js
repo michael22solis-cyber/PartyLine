@@ -271,6 +271,24 @@ function nightClockText(now = Date.now()) {
   return '';
 }
 setInterval(tick, 10_000);
+// Time left in the game, on every screen: a countdown to the final call (from the host's schedule). Red in the last
+// five minutes; hidden when there's no schedule or the night is over.
+function countdownText(now = Date.now()) {
+  const c = state.clock;
+  if (!c || state.revealed || !c.finalAt) return null;
+  if (c.paused) return { text: '⏸ PAUSED', urgent: false };
+  const left = Math.max(0, Math.floor((Date.parse(c.finalAt) - now) / 1000));
+  const h = Math.floor(left / 3600), m = Math.floor((left % 3600) / 60), sec = left % 60;
+  const pad = (n) => String(n).padStart(2, '0');
+  return { text: `⏳ ${h ? `${h}:${pad(m)}` : m}:${pad(sec)}`, urgent: left <= 300 };
+}
+function tickCountdown() {
+  const el2 = $('#countdown'); if (!el2) return;
+  const t = countdownText();
+  el2.hidden = !t;
+  if (t) { el2.textContent = t.text; el2.classList.toggle('urgent', t.urgent); }
+}
+setInterval(tickCountdown, 1000);
 
 // ============ icons ============
 const ICONS = {
@@ -1738,7 +1756,7 @@ function connect() {
     state.messages.forEach((m) => { if (m.thread === thread && m.from === 'player' && !m.readAt) m.readAt = at; });
     render();
   });
-  es.addEventListener('clock', (e) => { state.clock = JSON.parse(e.data); render(); });
+  es.addEventListener('clock', (e) => { state.clock = JSON.parse(e.data); render(); tickCountdown(); });
   es.addEventListener('votes', (e) => showVotes(JSON.parse(e.data)));
   es.addEventListener('status', (e) => {
     const statuses = JSON.parse(e.data);

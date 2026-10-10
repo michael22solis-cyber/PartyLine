@@ -92,6 +92,7 @@ test('double texts are answered together: one model call, not one per message or
 
 test('a text that arrives while a reply is being written gets one follow-up reply', async () => {
   const p = addPlayer({ name: 'Flo' });
+  reply = () => 'ok. ask.';
   mock.setDelay(120);
   const n0 = mock.log.chat.length;
   await handlePlayerText(p, 'marcus', 'Marcus, quick question');
@@ -100,6 +101,7 @@ test('a text that arrives while a reply is being written gets one follow-up repl
   await until(() => charMsgs(p, 'marcus').length === 2, 3000);
   assert.equal(mock.log.chat.length - n0, 2);
   mock.setDelay(0);
+  reply = defaultChatReply;
 });
 
 test('pure acknowledgements after a statement get no reply and no model call', async () => {
@@ -139,8 +141,9 @@ test('evidence presentation: the engine approves, the character confesses, the c
   assert.match(sys, /YOU MAY NOW ADMIT THIS TO EVE/);
   assert.deepEqual(playerByToken(p.token).found, ['diner']);
   assert.doesNotMatch(sysMsgs(p, 'marcus').find((m) => m.kind === 'evidence').text, /HEARD ON A CALL/, 'found by text');
+  const before = charMsgs(p, 'marcus').length;
   await handlePlayerText(p, 'marcus', 'Say it again about the diner.');
-  await until(() => charMsgs(p, 'marcus').length === 2);
+  await until(() => charMsgs(p, 'marcus').length > before);
   assert.equal(sysMsgs(p, 'marcus').filter((m) => m.kind === 'evidence').length, 1, 'no duplicate state change');
 });
 

@@ -65,6 +65,9 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   border-bottom: 1px solid var(--line); flex: none;
 }
 .carrier { flex: 1; color: var(--glow); text-shadow: 0 0 8px rgba(159,224,160,0.4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.countdown { color: var(--glow); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.countdown.urgent { color: var(--ember); text-shadow: 0 0 8px rgba(208,65,46,0.6); animation: cdPulse 1s ease-in-out infinite; }
+@keyframes cdPulse { 50% { opacity: 0.55; } }
 .carrier.whisper { color: var(--ember); text-shadow: 0 0 8px rgba(208,65,46,0.6); }
 .bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 13px; }
 .bars i { width: 3px; background: var(--glow); box-shadow: 0 0 4px rgba(159,224,160,0.5); }
