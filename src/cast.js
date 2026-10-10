@@ -51,16 +51,17 @@ export const busyAs = (npc, p = phase()) => BUSY[npc]?.[p] || null;
 export const excuseFor = (why) => EXCUSE[why] || 'Can’t talk right now. Try me in a couple minutes.';
 export const busyReplyDelayMs = (npc) => (busyAs(npc) ? 25_000 + Math.random() * 30_000 : 0);
 
-// How each of them types: ms per character, the longest they'll "type" for, and whether they stop and start again.
+// How each of them types on a phone: ms per character, the longest one text takes, and whether they stop and start.
+// Real thumbs: roughly 5-10 characters a second, so a short text takes a couple of seconds and a long one noticeably longer.
 const TYPING = {
-  ruth: { perChar: 55, max: 7000, hesitate: true },   // slow, careful, proper punctuation
-  lily: { perChar: 40, max: 5500, hesitate: true },   // starts, stops, says less than she meant to
-  marcus: { perChar: 16, max: 3000, hesitate: false }, // fast and curt
-  teddy: { perChar: 14, max: 2800, hesitate: false },  // fast, lots of exclamation points
+  ruth: { perChar: 190, max: 14000, hesitate: true },  // slow, careful, proper punctuation
+  lily: { perChar: 140, max: 10000, hesitate: true },  // starts, stops, says less than she meant to
+  marcus: { perChar: 95, max: 8000, hesitate: false }, // fast and curt
+  teddy: { perChar: 85, max: 8000, hesitate: false },  // fast, lots of exclamation points
 };
 export function typingPlan(npc, reply) {
-  const t = TYPING[npc] || { perChar: 25, max: 4000, hesitate: false };
-  const total = Math.min(t.max, 600 + reply.length * t.perChar);
+  const t = TYPING[npc] || { perChar: 110, max: 8000, hesitate: false };
+  const total = Math.min(t.max, 500 + reply.length * t.perChar);
   if (!t.hesitate || reply.length < 40) return [{ typing: true, ms: total }];
   // Type, stop for a moment (the dots disappear), then finish.
   const first = Math.round(total * 0.45);
@@ -83,3 +84,20 @@ export const PHOTOS = {
     text: 'found this in a box. last picture of the house before he was gone.',
     remember: 'sent the player an old polaroid of the manor from Halloween 1996, the last before your father vanished' },
 };
+
+// A reply as the separate texts a person would send: one per line the model wrote, and a long single line split at a
+// sentence break. At most three; anything beyond that rides in the last one.
+export function splitTexts(reply) {
+  const parts = [];
+  for (const line of String(reply).split(/\n+/).map((l) => l.trim()).filter(Boolean)) {
+    if (line.length <= 90) { parts.push(line); continue; }
+    const sentences = line.match(/[^.!?]+[.!?]+["”’)]*\s*|[^.!?]+$/g)?.map((x) => x.trim()).filter(Boolean) || [line];
+    let cur = '';
+    for (const x of sentences) {
+      if (cur && (cur + ' ' + x).length > 90) { parts.push(cur); cur = x; } else cur = cur ? `${cur} ${x}` : x;
+    }
+    if (cur) parts.push(cur);
+  }
+  if (parts.length <= 3) return parts.length ? parts : [String(reply).trim()];
+  return [...parts.slice(0, 2), parts.slice(2).join(' ')];
+}

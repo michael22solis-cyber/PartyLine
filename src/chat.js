@@ -1,6 +1,6 @@
 // Character text replies in the burner-phone app. Same brain and shared memory as the phone calls.
 import { CHARACTERS } from './characters/index.js';
-import { remember, tagLine } from './memory.js';
+import { remember, tagLine, allLines } from './memory.js';
 import { threadHistory, countPlayerMessages, markRead } from './store.js';
 import { deliver, emit } from './live.js';
 import { isUnlocked, onCharacterSaid, unlockMentions } from './progress.js';
@@ -9,7 +9,7 @@ import { topicsFor } from './secrets.js';
 import { approveFromPlayerText, phoneOnlyRaised } from './disclosure.js';
 import { chatComplete } from './ai/openai.js';
 import { ledger } from './ai/ledger.js';
-import { typingPlan, busyReplyDelayMs } from './cast.js';
+import { typingPlan, busyReplyDelayMs, splitTexts } from './cast.js';
 import { onAccusation } from './initiative.js';
 
 const { MAX_TEXTS_PER_PLAYER = 150 } = process.env;
@@ -127,18 +127,30 @@ async function replyOnce(player, thread, s) {
     const approvedNow = approvedIds.map((id) => ({ id }));
     const { messages } = buildTextPrompt({ npc: thread, player, thread: history, approvedNow, extra: callMeNote(callOnly) });
     const { model, purpose } = route(lastPlayer?.text || '');
-    const { text: reply } = await chatComplete(messages, {
-      model, meta: { session: player.pid, npc: thread, capability: 'text', purpose, turn: countPlayerMessages(player.token) },
-    });
-
-    // "Typing" time scales with length, at each character's own pace (Ruth slow and careful, Teddy fast); some stop
-    // and start again, like someone deciding what to say.
-    for (const step of typingPlan(thread, reply)) {
-      emit(player.token, 'typing', { thread, on: step.typing });
-      await delay(step.ms);
+    const meta = { session: player.pid, npc: thread, capability: 'text', purpose, turn: countPlayerMessages(player.token) };
+    let { text: reply } = await chatComplete(messages, { model, meta });
+    // Asked again over text what they already answered on a call (or earlier)? Don't send the same words back: one
+    // retry with a nudge to say it differently. Rare, so it costs almost nothing.
+    const echo = echoOf(reply, player.pid, thread);
+    if (echo) {
+      const again = await chatComplete([...messages, { role: 'assistant', content: reply },
+        { role: 'system', content: `You already said almost exactly that earlier ("${echo.slice(0, 160)}"). Reply again, shorter, in different words: refer back to it ("like I said on the phone…"), or add something new.` }],
+      { model, meta: { ...meta, purpose: 'rephrase' } }).catch(() => null);
+      if (again?.text) reply = again.text;
     }
-    emit(player.token, 'typing', { thread, on: false });
-    await deliver({ token: player.token, thread, from: 'character', text: reply });
+
+    // Sent as a real person would: separate short texts, each "typed" for as long as it takes at that character's pace
+    // (Ruth slow and careful, Teddy fast); some stop and start again, like someone deciding what to say.
+    const texts = splitTexts(reply);
+    for (const [i, part] of texts.entries()) {
+      if (i) { emit(player.token, 'typing', { thread, on: false }); await delay(500 + Math.random() * 700); }
+      for (const step of typingPlan(thread, part)) {
+        emit(player.token, 'typing', { thread, on: step.typing });
+        await delay(step.ms);
+      }
+      if (i === texts.length - 1) emit(player.token, 'typing', { thread, on: false });
+      await deliver({ token: player.token, thread, from: 'character', text: part });
+    }
     remember({ player: player.name, pid: player.pid, npc: thread, character: c.name, speaker: 'character', text: `(text) ${reply}`, channel: 'text' });
     await onCharacterSaid(player, thread, reply, { approved: approvedIds, channel: 'text' });
   } catch (err) {
@@ -149,6 +161,22 @@ async function replyOnce(player, thread, s) {
       text: err.code === 'budget' ? 'No signal. The line has gone quiet for tonight.'
         : busy ? 'Their phone is busy. Try again in a minute.' : 'Message failed to deliver. Try again. (Host: the server window says why.)' });
   }
+}
+
+// The earlier line from this character to this player that a new reply nearly repeats, if any (most words shared).
+const words = (t) => String(t).toLowerCase().replace(/^\((text|call)\)\s*/, '').match(/[a-z0-9']+/g) || [];
+export function echoOf(reply, pid, npc, lines = allLines()) {
+  const mine = new Set(words(reply));
+  if (mine.size < 6) return null; // short answers ("no.", "call me") may repeat; that's normal
+  for (const l of lines) {
+    if (l.npc !== npc || l.pid !== pid || l.speaker !== 'character') continue;
+    const theirs = new Set(words(l.text));
+    if (theirs.size < 6) continue;
+    let shared = 0;
+    for (const w of mine) if (theirs.has(w)) shared++;
+    if (shared / Math.min(mine.size, theirs.size) >= 0.75) return l.text.replace(/^\((text|call)\)\s*/, '');
+  }
+  return null;
 }
 
 // Kept for older callers: one completion, text only.

@@ -39,7 +39,10 @@ test('each character types at their own pace; the hesitant ones stop and start',
   assert.ok(total(ruth) > 2 * total(teddy), 'Ruth types much slower than Teddy');
   assert.deepEqual(ruth.map((x) => x.typing), [true, false, true], 'Ruth pauses mid-message');
   assert.deepEqual(teddy.map((x) => x.typing), [true]);
-  assert.ok(total(typingPlan('marcus', 'x'.repeat(2000))) <= 3000, 'capped');
+  assert.ok(total(typingPlan('marcus', 'x'.repeat(2000))) <= 8000, 'capped');
+  // Typing time follows length: a short text is quick, a longer one takes noticeably longer.
+  assert.ok(total(typingPlan('teddy', 'lol no')) < 1500);
+  assert.ok(total(typingPlan('teddy', 'x'.repeat(60))) > 3 * total(typingPlan('teddy', 'lol no')));
 });
 
 test('photos arrive with the story beat, in the character’s thread, and the character knows they sent it', async () => {

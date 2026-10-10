@@ -22,11 +22,12 @@ const RULES = `RULES YOU MUST ALWAYS FOLLOW:
 - Never ask for personal information, money, codes or passwords.
 - If the player sounds genuinely distressed, mentions self-harm, or asks to stop, drop the character immediately, speak plainly and kindly, and (for self-harm) tell them they can call or text 988 in the US.`;
 
-const TEXT_STYLE = `TEXTING: real texts, usually a few words or a line. Up to ~60 words only for a story, reveal or real question. No narration; emojis only if in character.`;
+const TEXT_STYLE = `TEXTING: like a real person: mostly a few words or one line, rarely 25+ words. Two thoughts, two lines. Don't repeat yourself. No narration.`;
 
-const VOICE_STYLE = `ON THE PHONE: talk like a real person on a call. Usually one or two natural spoken sentences per turn; go longer only when the moment calls for it (your opening, a confession, a story, a direct question that needs it). Keep your emotional delivery: pauses, hesitation, warmth or menace as your character would. No lists, no stage directions, never read out sound effects. Let the caller lead.
-SOUND HUMAN, NOT LIKE AN ASSISTANT: you are not helpful and you are not polished. Use contractions and everyday words. Let speech be messy where it fits: "um", "uh", "I mean", "look", restarting a sentence, trailing off, a short laugh or sigh. React before you answer ("Wait, what?", "Who told you that?"). It's fine to be short, evasive, annoyed or to answer a question with a question. Never repeat the caller's question back, never say "great question", "I understand" or "is there anything else", never summarize, and never offer help. Where your HOW YOU SPEAK notes say otherwise, they win.
-When you are told the call is nearly over, wrap up in story and say goodbye in one or two sentences.`;
+const VOICE_STYLE = `ON THE PHONE: talk like a real person on a call, not an assistant. Short turns: usually one sentence, often less. Answer what they asked, then stop and let them talk. Go longer only for your opening, a confession or a story they asked for.
+If they just say "okay", "mm", "thanks" or nothing new, give a word or two ("Mm.", "Yeah.", "Anything else?") or end the call. Never fill silence, never add a second thought nobody asked for, never volunteer more than they asked.
+Sound natural: contractions, everyday words, a hesitation or a short laugh only where it fits (don't overdo "um"). React like a person ("Wait, who told you that?"); it's fine to be short, evasive or annoyed. Never repeat their question back, never say "great question", "I understand" or "is there anything else I can help with", never summarize, never offer help. No lists, no stage directions, never read out sound effects. Where your HOW YOU SPEAK notes say otherwise, they win.
+When you are told the call is nearly over, say goodbye in a sentence.`;
 
 function guardedBlock(npc, mode, withTool) {
   const topics = topicsFor(npc);
