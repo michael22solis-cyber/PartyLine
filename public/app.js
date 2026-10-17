@@ -411,7 +411,7 @@ function renderHome(screen) {
     appButton('messages', 'Messages', 'messages', unreadThreads()),
     appButton('calls', 'Calls', 'calls', unreadCalls()),
     appButton('evidence', 'Evidence', 'evidence', unreadEvidence()),
-    appButton('notes', 'Notebook', 'notes', (state.agenda?.goals || []).filter((g) => g.status === 'done').length > seenAgenda() ? 1 : 0),
+    appButton('notes', 'Notebook', 'notes', (state.agenda?.goals || []).filter((g) => g.status === 'done').length > seenAgenda() || newMoments().length ? 1 : 0),
     appButton('vote', 'Vote', 'vote'),
     appButton('recap', 'The End', 'recap', 0, !state.revealed),
   );
@@ -910,6 +910,12 @@ const BOARD_LABEL = ['?', 'SUSPICIOUS', 'CLEARED'];
 const agendaKey = `bw-agenda-seen-${token}`;
 const seenAgenda = () => Number(store.get(agendaKey, '0')) || 0;
 const markAgendaSeen = () => store.set(agendaKey, String((state.agenda?.goals || []).filter((g) => g.status === 'done').length));
+// Thursday-night moments this phone has shown (a moment that gains a detail counts as new again).
+const timelineKey = `bw-timeline-seen-${token}`;
+const momentSig = (m) => [m.id, m.text, ...m.notes].join('|');
+const seenMoments = () => { try { return new Set(JSON.parse(store.get(timelineKey, '[]'))); } catch { return new Set(); } };
+const newMoments = () => { const seen = seenMoments(); return (state.timeline?.moments || []).filter((m) => !m.known && !seen.has(momentSig(m))); };
+let freshMoments = new Set(); // new on this visit to the Notebook: they keep their NEW tag until it closes
 // Has this player met (unlocked) the suspect with this name?
 const met = (name) => (state.threads || []).some((t) => t.name === name);
 function renderNotes(screen) {
@@ -1002,7 +1008,30 @@ function renderNotes(screen) {
     });
     grid.append(marks);
   }
-  box.append(grid, el('div', 'section-label', 'YOUR NOTES'));
+  box.append(grid);
+  const tl = state.timeline;
+  if (tl) {
+    if (lastKey !== 'notes:') { // opening the Notebook: mark what's new since the last look
+      freshMoments = new Set(newMoments().map(momentSig));
+      store.set(timelineKey, JSON.stringify(tl.moments.map(momentSig)));
+    }
+    box.append(el('div', 'section-label', 'THURSDAY NIGHT'));
+    const ol = el('ol', 'timeline');
+    tl.moments.forEach((m) => {
+      const fresh = freshMoments.has(momentSig(m));
+      const li = el('li', `moment${m.era ? ' era' : ''}${m.death ? ' death' : ''}${fresh ? ' fresh' : ''}`);
+      const what = el('div', 'what');
+      what.append(el('p', null, m.text), ...m.notes.map((n) => el('p', 'tl-note', n)));
+      li.append(el('span', 'when', m.time), what);
+      if (fresh) li.append(el('em', 'tl-new', 'NEW'));
+      ol.append(li);
+      if (m.era) ol.append(el('li', 'tl-gap', 'Thirty years later · Thursday'));
+    });
+    box.append(ol, el('p', 'fine', tl.missing
+      ? `${tl.missing} more moment${tl.missing > 1 ? 's' : ''} to find. Ask the suspects about Thursday night, and share what you learn.`
+      : 'You’ve pieced together the whole night.'));
+  }
+  box.append(el('div', 'section-label', 'YOUR NOTES'));
   const ta = el('textarea'); ta.placeholder = 'Who lied? What doesn’t add up?'; ta.maxLength = 4000;
   ta.value = state.drafts.notes ?? store.get(notesKey, '');
   ta.oninput = () => { state.drafts.notes = ta.value; store.set(notesKey, ta.value); };
@@ -1727,7 +1756,7 @@ function connect() {
     state.messages.push(m);
     state.arrived[m.id] = Date.now();
     if (m.kind === 'reveal') { state.revealed = true; loadRecap(); }
-    if (m.kind === 'agenda' || /^YOUR SECRET AGENDA/.test(m.text || '')) refresh();
+    if (['agenda', 'clue', 'evidence', 'memo'].includes(m.kind) || /^YOUR SECRET AGENDA/.test(m.text || '')) refresh(); // the agenda and the timeline live in state
     if (m.from !== 'player') {
       state.typing[m.thread] = false;
       const viewing = (state.view === 'convo' && state.open === m.thread) || (state.view === 'calls' && m.thread === 'unknown');
@@ -2031,7 +2060,7 @@ async function refresh() {
     Object.assign(state.me, fresh.me);
     state.threads = fresh.threads;
     state.phase = fresh.phase; state.music = fresh.music; state.callBeds = fresh.callBeds;
-    state.revealed = fresh.revealed; state.vote = fresh.vote; state.players = fresh.players; state.peers = fresh.peers; state.groups = fresh.groups; state.lobby = fresh.lobby; state.agenda = fresh.agenda; state.clock = fresh.clock;
+    state.revealed = fresh.revealed; state.vote = fresh.vote; state.players = fresh.players; state.peers = fresh.peers; state.groups = fresh.groups; state.lobby = fresh.lobby; state.agenda = fresh.agenda; state.timeline = fresh.timeline; state.clock = fresh.clock;
     if (state.revealed && !state.recap) loadRecap();
     // A call that started ringing while this screen wasn't listening.
     if (fresh.ringing && $('#ring').hidden && !call && declined !== fresh.ringing.character) incoming({ character: fresh.ringing.character, from: '' });

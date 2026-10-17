@@ -39,6 +39,7 @@ import { elevenToday } from './eleven-guard.js';
 import { madeFile, makeRecordings, recordingsStatus } from './recordings.js';
 import { sendHint, nextHint } from './hints.js';
 import { agendaView, agendaSummary, checkAgendas } from './agenda.js';
+import { timelineFor } from './timeline.js';
 import { recordedCall, servedFile as caretakerClip, voiceStatus as caretakerVoice, warmUp as warmCaretaker } from './voice/caretaker.js';
 import { statusOf, phase, busyAs, excuseFor } from './cast.js';
 import { trackUrls, bedUrls, servedFile as musicFile, musicStatus, warmUp as warmMusic } from './music.js';
@@ -138,6 +139,7 @@ export function registerWeb(app) {
       peers: players().filter((x) => x.token !== p.token).map((x) => ({ pid: x.pid, name: x.name })),
       vote: votes()[p.token] || null,
       agenda: agendaView(p),
+      timeline: timelineFor(p),
       revealed: getDb().revealed,
       vapidPublicKey,
       // On a phone, play only from the home-screen app (public/install.js). REQUIRE_INSTALL=off lets browser tabs play.

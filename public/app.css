@@ -305,6 +305,23 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .board button[data-s='1'] { border-color: var(--ember); } .board button[data-s='1'] em { color: var(--ember); }
 .board button[data-s='2'] { opacity: 0.55; } .board button[data-s='2'] span { text-decoration: line-through; } .board button[data-s='2'] em { color: var(--glow); }
 .notes textarea { width: 100%; height: 220px; max-height: none; font-family: var(--type); font-size: 16px; line-height: 1.5; }
+/* Thursday night in the Notebook: a line of moments that fills in as evidence arrives */
+.timeline { list-style: none; margin: 4px 0 6px; padding: 0 0 0 4px; position: relative; }
+.timeline::before { content: ''; position: absolute; left: 101px; top: 6px; bottom: 6px; width: 1px; background: var(--line); }
+.timeline .moment { position: relative; display: grid; grid-template-columns: 86px 1fr; gap: 0 22px; padding: 7px 0; font-size: 13.5px; line-height: 1.4; }
+.timeline .moment::after { content: ''; position: absolute; left: 92px; top: 12px; width: 7px; height: 7px; border-radius: 50%; background: var(--panel); border: 1px solid var(--glow); }
+.timeline .when { font-family: var(--lcd); font-size: 17px; line-height: 1.1; color: var(--amber); text-align: right; padding-top: 1px; white-space: nowrap; }
+.timeline .era .when { white-space: normal; }
+.timeline .what p { margin: 0; color: var(--ink); }
+.timeline .what .tl-note { margin-top: 4px; padding-left: 10px; border-left: 2px solid rgba(230,162,60,0.4); color: var(--dim); font-size: 12.5px; }
+.timeline .era .when, .timeline .era .what p:first-child { color: var(--dim); }
+.timeline .era::after { border-color: var(--dim); }
+.timeline .death { margin: 4px 0; padding: 9px 0; background: linear-gradient(90deg, transparent, rgba(208,65,46,0.12) 30%, rgba(208,65,46,0.12) 70%, transparent); }
+.timeline .death .when { color: var(--ember); }
+.timeline .death::after { background: var(--ember); border-color: var(--ember); box-shadow: 0 0 8px rgba(208,65,46,0.6); }
+.timeline .tl-gap { padding: 6px 0 6px 108px; font-family: var(--lcd); font-size: 14px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); }
+.timeline .tl-new { position: absolute; right: 0; top: 7px; font-style: normal; font-family: var(--lcd); font-size: 14px; letter-spacing: 0.12em; color: var(--glow); }
+.timeline .moment.fresh .what { padding-right: 34px; }
 
 /* ============ recap ============ */
 .recap { padding: 6px 16px 30px; }

@@ -152,7 +152,7 @@ export const BEATS = {
 
   async memo() {
     await toAll('line',
-      'Recorded 24 hours ago, at this exact minute.\n\n"...so the crew comes Monday, and they start on the cellar floor first, the whole slab..." [humming, faint, a lullaby] [footsteps on the stairs] "Who’s there? ...Ma’am?" [a crash] [silence]',
+      'Recorded on Dana’s phone, Thursday, 9:40 pm.\n\n"...so the crew comes Monday, and they start on the cellar floor first, the whole slab..." [humming, faint, a lullaby] [footsteps on the stairs] "Who’s there? ...Ma’am?" [a crash] [silence]',
       'memo', audioIf('memo.mp3'));
   },
 
