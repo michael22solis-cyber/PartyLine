@@ -15,16 +15,18 @@ few minutes of setup makes it count.
    - With ngrok, `PUBLIC_HOST` and the Twilio webhook both need updating each time the URL changes (this was already
      true before).
 3. **`npm test`** should pass.
-4. **Optional: recorded final reveal** (about $0.01, once). Run `npm run evidence -- --only=reveal`, or drop your own
+4. **Evidence pictures:** run `npm run art` once and commit `public/art` and `public/cast/dana.mp4`, so phones don't
+   load the clue photos from online links on the night.
+5. **Optional: recorded final reveal** (about $0.01, once). Run `npm run evidence -- --only=reveal`, or drop your own
    recording in `audio-src/custom/caretakerReveal.mp3` first. Without the file, the reveal stays a live call.
-5. **Recommended: compare the voice models before players hear them** (about $0.10–$0.15).
+6. **Recommended: compare the voice models before players hear them** (about $0.10–$0.15).
    - Run `npm run eval:voice -- --live --budget 0.50`.
    - It runs six scripted scenes (normal chat, evidence, a probe for leaked secrets, prompt injection, repeated
      accusation, the Caretaker's opening) on `gpt-realtime` and `gpt-realtime-2.1-mini`.
    - Read the transcripts in `eval-results/`. If 2.1-mini's acting isn't good enough for a character, keep the old model
      for just that one, e.g. `OPENAI_REALTIME_MODEL_RUTH=gpt-realtime`.
 
-6. **ElevenLabs (the Caretaker's voice, music and call backgrounds).**
+7. **ElevenLabs (the Caretaker's voice, music and call backgrounds).**
    - In Railway → Variables: `ELEVENLABS_API_KEY` and `ELEVENLABS_VOICE_ID` (the intro narrator). Never paste the key
      anywhere else, chat included.
    - The plan must be Creator or above for library voices, with credits for about 7 narrator lines, 5 music tracks
@@ -40,10 +42,10 @@ few minutes of setup makes it count.
      if that date resets after a deploy, the volume isn't attached and everything is regenerated (and charged) each
      time. A server start never makes more than `MUSIC_MAX_GENERATIONS` (default 12) tracks, and **Try again now** only
      appears after a real failure. `MUSIC=off` stops music generation entirely.
-7. **Character voices (optional).** In Railway → Variables, set `VOICE_RUTH`, `VOICE_MARCUS`, `VOICE_LILY` or
+8. **Character voices (optional).** In Railway → Variables, set `VOICE_RUTH`, `VOICE_MARCUS`, `VOICE_LILY` or
    `VOICE_TEDDY` to any of: alloy, ash, ballad, cedar, coral, echo, marin, sage, shimmer, verse. `/host` shows which
    voice each character is using. A misspelled name is ignored.
-8. **Rehearse the night offline:** `node --test test/rehearsal.test.js` plays a whole 75-minute game (every beat, five
+9. **Rehearse the night offline:** `node --test test/rehearsal.test.js` plays a whole 75-minute game (every beat, five
    players) against the mock AI in about a second.
 
 ## What players should notice (worth watching for)

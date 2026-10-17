@@ -12,6 +12,7 @@
     "vapid": "web-push generate-vapid-keys",
     "voice": "node scripts/intro-voice.js",
     "evidence": "node scripts/evidence-audio.js",
+    "art": "node scripts/fetch-art.js",
     "say": "node scripts/say.js",
     "test": "node --test test/*.test.js",
     "usage": "node scripts/usage-report.js",

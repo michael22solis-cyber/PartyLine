@@ -704,5 +704,6 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .card img.art { display: block; width: 100%; max-height: 220px; object-fit: cover; margin-top: 10px; border-radius: 3px; box-shadow: 0 0 0 3px #e9e3d4, 0 4px 12px rgba(0,0,0,0.5); cursor: zoom-in; filter: saturate(0.9); }
 .victim .victim-photo { cursor: zoom-in; }
 .victim.cold { margin-top: -6px; }
+.victim > .vtext:first-child { grid-column: 1 / -1; } /* the picture didn't load: the text takes the whole card */
 .victim.cold img.art { width: 96px; height: 120px; object-fit: cover; border-radius: 4px; box-shadow: 0 0 0 4px #e9e3d4, 0 6px 16px rgba(0,0,0,0.6); transform: rotate(1.5deg); filter: grayscale(0.5); cursor: zoom-in; }
 .recap .truth img.art { display: block; width: 100%; border-radius: 10px; border: 1px solid var(--line); margin: 6px 0 2px; cursor: zoom-in; }

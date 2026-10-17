@@ -77,3 +77,21 @@ test('before the final call, the votes are counted out on every phone (anonymous
   assert.equal(tally.text, 'THE VOTES ARE IN\nRuth Calloway: 2\nLily Blackwood: 1');
   assert.ok(!/Ava|Ben|Cy/.test(tally.text), 'counts only, not who voted for whom');
 });
+
+test('the 15-minute test run: the same beats in the same order, and one phone can start it', async () => {
+  const { LENGTHS } = await import('../src/modes.js');
+  const order = (k) => LENGTHS[k].beats.map(([b]) => b);
+  assert.deepEqual(order('test'), order('quick'));
+  const mins = LENGTHS.test.beats.map(([, m]) => m);
+  assert.deepEqual(mins, [...mins].sort((x, y) => x - y), 'beats in time order');
+  assert.equal(mins.at(-1), 15);
+
+  await req('POST', '/admin/reset', {}, admin);
+  const g = await req('POST', '/admin/game', { length: 'test' }, admin);
+  const token = (await req('POST', `/api/join/${g.body.code}`, { name: 'Host' })).body.link.split('/').pop();
+  const st = await req('GET', `/api/p/${token}/state`);
+  assert.equal(st.body.lobby.minPlayers, 1);
+  assert.equal((await req('POST', `/api/p/${token}/start`, {})).status, 200);
+  const reveal = Date.parse(scheduled().find((s) => s.beat === 'reveal').at);
+  assert.ok(Math.abs(reveal - Date.now() - 15 * 60_000) < 5000, 'the final call comes 15 minutes after Start');
+});

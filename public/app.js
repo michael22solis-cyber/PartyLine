@@ -1,6 +1,7 @@
 // Blackwood Line: a haunted old phone. Vanilla JS, no build step.
 import { TUTORIAL_TITLES, readTutorialProgress, tutorialStep } from './tutorial.js';
 import { deviceOS, installGate } from './install.js';
+import { CDN_ART } from './art.js';
 
 const token = location.pathname.split('/').filter(Boolean)[1];
 const api = (path, opts = {}) =>
@@ -69,20 +70,6 @@ function lineAvatar() {
   a.innerHTML = `<svg viewBox="0 0 40 40" aria-hidden="true"><defs><radialGradient id="${id}" cx="50%" cy="42%" r="55%"><stop offset="0" stop-color="#9fc4a3"/><stop offset="0.45" stop-color="#3d5a43"/><stop offset="1" stop-color="#050806"/></radialGradient></defs><rect width="40" height="40" fill="url(#${id})"/><g class="shade"><ellipse cx="20" cy="15.5" rx="6.2" ry="7.6"/><path d="M5 40c1-9.5 6.5-14.5 15-14.5S34 30.5 35 40z"/></g><circle class="eye" cx="17.5" cy="15.2" r="1"/><circle class="eye" cx="22.5" cy="15.2" r="1"/></svg>`;
   return a;
 }
-// Generated art used until a copy is added to public/cast (public/cast/<key>.jpg always wins).
-const CDN_ART = {
-  'clue-police': 'https://d8j0ntlcm91z4.cloudfront.net/user_3HCC73EuiIXBWsy0LnhpTM9HwUC/hf_20261009_234754_c3a18391-4df8-4140-9c37-91cd642831ca_min.webp',
-  'clue-contract': 'https://d8j0ntlcm91z4.cloudfront.net/user_3HCC73EuiIXBWsy0LnhpTM9HwUC/hf_20261009_234755_7f10d95f-4966-425e-a18c-e5514fe01399_min.webp',
-  'clue-ruth': 'https://d8j0ntlcm91z4.cloudfront.net/user_3HCC73EuiIXBWsy0LnhpTM9HwUC/hf_20261009_234754_5e27190d-56db-4582-bad8-b2a2800ba1f6_min.webp',
-  'clue-receipt': 'https://d8j0ntlcm91z4.cloudfront.net/user_3HCC73EuiIXBWsy0LnhpTM9HwUC/hf_20261009_234754_e73bd54a-21a1-4549-95fa-68e477601a83_min.webp',
-  'clue-livestream': 'https://d8j0ntlcm91z4.cloudfront.net/user_3HCC73EuiIXBWsy0LnhpTM9HwUC/hf_20261009_234753_0aaf1c8b-c54b-47f9-8a0e-152e6778a738_min.webp',
-  'clue-neighbor': 'https://d8j0ntlcm91z4.cloudfront.net/user_3HCC73EuiIXBWsy0LnhpTM9HwUC/hf_20261009_234755_a29f40da-bd9d-41bf-8589-55f680f46310_min.webp',
-  'elias-poster': 'https://d8j0ntlcm91z4.cloudfront.net/user_3HCC73EuiIXBWsy0LnhpTM9HwUC/hf_20261009_234754_88adf7ae-b4b6-4850-8651-e1b290cef358_min.webp',
-  danaVideo: 'https://d8j0ntlcm91z4.cloudfront.net/user_3HCC73EuiIXBWsy0LnhpTM9HwUC/hf_20261009_234802_7e2589d7-8882-40f6-a732-ba5f9ac22c8c.mp4',
-  'truth-cellar': 'https://d8j0ntlcm91z4.cloudfront.net/user_3HCC73EuiIXBWsy0LnhpTM9HwUC/hf_20261009_234755_0cf5fa3a-bc3d-49f9-a1a2-a6bbbe87e3a6_min.webp',
-  dana: 'https://d8j0ntlcm91z4.cloudfront.net/user_3HCC73EuiIXBWsy0LnhpTM9HwUC/hf_20261008_233940_29fc5259-cc85-4e25-9b94-a5ca38dca494_min.webp',
-  lineup: 'https://d8j0ntlcm91z4.cloudfront.net/user_3HCC73EuiIXBWsy0LnhpTM9HwUC/hf_20261008_233940_83d74b87-cd21-4eca-968f-22b8bec873ef_min.webp',
-};
 // Dana's moving photo: public/cast/dana.mp4 when it's there, otherwise the generated copy.
 let danaVideoOk = null;
 const DANA_VIDEO = () => (danaVideoOk === false && CDN_ART.danaVideo ? CDN_ART.danaVideo : '/assets/cast/dana.mp4');
@@ -479,7 +466,7 @@ function lobbyPanel() {
   } else {
     box.append(el('p', 'note', 'The organizer will start the game. Keep this phone close.'));
   }
-  box.append(el('p', 'fine', 'This link is your private phone. Add it to your home screen.'));
+  box.append(el('p', 'fine', 'This phone is yours alone. Don’t share your link.'));
   return box;
 }
 
@@ -629,6 +616,12 @@ function renderThreads(screen) {
   const ul = el('ul', 'list');
   ul.append(threadRow('line', 'caps'), threadRow('crew', 'caps crew'));
   screen.append(ul);
+  // The suspects come before the other players: with a big group they'd otherwise sit below the fold.
+  screen.append(el('div', 'section-label', 'CONTACTS'));
+  const people = [...state.threads].sort((a, b) => (lastOf(b.key)?.at || '').localeCompare(lastOf(a.key)?.at || ''));
+  const ul2 = el('ul', 'list');
+  people.forEach((t) => ul2.append(threadRow(t.key)));
+  screen.append(ul2);
   const gl = el('div', 'section-label row-label');
   gl.append(el('span', null, 'GROUPS'));
   const newG = el('button', 'newgroup', '+ NEW GROUP');
@@ -646,11 +639,6 @@ function renderThreads(screen) {
     state.peers.forEach((x) => up.append(threadRow(`dm:${x.pid}`)));
     screen.append(up);
   }
-  screen.append(el('div', 'section-label', 'CONTACTS'));
-  const people = [...state.threads].sort((a, b) => (lastOf(b.key)?.at || '').localeCompare(lastOf(a.key)?.at || ''));
-  const ul2 = el('ul', 'list');
-  people.forEach((t) => ul2.append(threadRow(t.key)));
-  screen.append(ul2);
 }
 
 function renderCalls(screen) {
@@ -879,6 +867,8 @@ function renderConvo(screen, thread) {
 }
 
 function renderEvidence(screen) {
+  // Only on opening the file: a redraw (a refresh, a new message) must not yank the page while someone reads.
+  const firstNew = lastKey !== 'evidence:' && state.messages.find((m) => (EVIDENCE_KINDS.has(m.kind) || (m.kind === 'photo' && m.from === 'character')) && isNew(m, 'evidence'));
   markSeen('evidence');
   screen.append(el('div', 'app-title', 'CASE FILE'));
   // The victim, first in the file: Dana, so she is a person and not just a name.
@@ -899,7 +889,17 @@ function renderEvidence(screen) {
   const items = state.messages.filter((m) => EVIDENCE_KINDS.has(m.kind) || (m.kind === 'photo' && m.from === 'character'));
   if (!items.length) { screen.append(el('div', 'empty', 'Nothing yet.\n\nClues, recordings and evidence you receive will be kept here.')); return; }
   const wrap = el('div', 'bubbles');
-  items.forEach((m) => { wrap.append(el('div', 'stamp', fmtTime(m.at))); wrap.append(messageNode(m)); });
+  items.forEach((m) => {
+    const stamp = el('div', 'stamp', fmtTime(m.at));
+    const node = messageNode(m);
+    wrap.append(stamp, node);
+    // New since the last look: it sits below the case file, so bring it into view (after render resets the scroll).
+    if (m === firstNew) {
+      node.classList.add('fresh');
+      const behavior = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+      setTimeout(() => stamp.scrollIntoView({ block: 'start', behavior }), 0);
+    }
+  });
   screen.append(wrap);
 }
 
@@ -1015,6 +1015,10 @@ function renderVote(screen) {
   const box = el('div', 'vote');
   if (state.revealed) {
     box.append(el('p', 'note', 'Voting is closed.'));
+    if (state.vote) box.append(el('p', null, `You named ${state.vote.killer}${state.vote.accomplice ? `, and ${state.vote.accomplice} as the accomplice` : ''}.`));
+    const end = el('button', 'wide', 'SEE HOW IT ENDED'); // the final call often lands while this screen is open
+    end.onclick = () => go('recap');
+    box.append(end);
     return screen.append(box);
   }
   const group = (label, options, field) => {
@@ -1069,11 +1073,15 @@ function renderRecap(screen) {
   const box = el('div', 'recap');
   const score = el('div', 'score');
   const win = r.role === 'accomplice' ? r.outcome !== 'detectives' : r.outcome !== 'accomplice';
-  const outText = {
+  const outText = (r.role === 'accomplice' ? {
+    detectives: 'They named Ruth, and they named you. The house loses.',
+    split: 'They caught Ruth, but nobody named you. You slipped away.',
+    accomplice: 'They named the wrong killer. The house wins.',
+  } : {
     detectives: 'Detectives win. Ruth and her accomplice were both named.',
     split: `You caught Ruth, but the accomplice (${r.accomplice}) walked.`,
     accomplice: 'The group named the wrong killer. The accomplice wins.',
-  }[r.outcome];
+  })[r.outcome];
   score.append(el('div', 'num', String(r.score)), el('div', 'rank', r.rank), el('div', `out ${win ? 'win' : 'lose'}`, outText));
   box.append(score);
   // What was under the cellar floor all along.

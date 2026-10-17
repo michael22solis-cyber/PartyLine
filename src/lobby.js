@@ -8,6 +8,7 @@ import { runBeat } from './beats.js';
 
 export const MAX_PLAYERS = 8;
 const MIN_PLAYERS = 3;
+const minPlayers = (g) => LENGTHS[g?.length]?.minPlayers ?? MIN_PLAYERS; // the test run can start with one phone
 
 export function createGame({ length = 'quick', mode = 'auto' } = {}) {
   if (!LENGTHS[length]) throw Object.assign(new Error(`Length must be one of: ${Object.keys(LENGTHS).join(', ')}`), { status: 400 });
@@ -19,7 +20,7 @@ export function lobbyView(p) {
   if (!g) return null;
   return {
     mode: g.mode, length: g.length, lengthLabel: (LENGTHS[g.length] || LENGTHS.quick).label, status: g.status,
-    joined: players().map((x) => x.name), organizer: Boolean(p?.organizer), minPlayers: MIN_PLAYERS,
+    joined: players().map((x) => x.name), organizer: Boolean(p?.organizer), minPlayers: minPlayers(g),
     invite: g.status === 'lobby' ? `/join/${g.code}` : null, startedAt: g.startedAt || null,
   };
 }
@@ -43,7 +44,8 @@ export async function startGame() {
   const g = getGame();
   if (!g) throw Object.assign(new Error('No game to start.'), { status: 400 });
   if (g.status !== 'lobby') throw Object.assign(new Error('Already started.'), { status: 409 });
-  if (players().length < MIN_PLAYERS) throw Object.assign(new Error(`Need at least ${MIN_PLAYERS} players.`), { status: 400 });
+  const min = minPlayers(g);
+  if (players().length < min) throw Object.assign(new Error(`Need at least ${min} players.`), { status: 400 });
   const now = Date.now();
   for (const [beat, min] of (LENGTHS[g.length] || LENGTHS.quick).beats) { // an old two-night game plays as one night
     if (beat === 'setup') await runBeat('setup');

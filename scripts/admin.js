@@ -3,7 +3,7 @@
 //   npm run admin -- status                    players, votes, schedule
 //   npm run admin -- beat intro                fire a beat right now
 //   npm run admin -- schedule memo 2026-10-30T21:40:00-05:00
-//   npm run admin -- night 2026-10-31T20:00-05:00 [quick|evening]   schedule the whole night (~75 min or ~2 hrs)
+//   npm run admin -- night 2026-10-31T20:00-05:00 [quick|evening|test]   schedule the whole night (~75 min, ~2 hrs, or a 15-min test)
 //   npm run admin -- usage                     AI cost so far (from the server's usage ledger)
 //   npm run admin -- reset                     wipe the game (careful)
 import 'dotenv/config';

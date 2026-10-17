@@ -50,8 +50,9 @@ export function recapFor(player) {
       + Math.min(35, found.length * 5 + onCall.length * 3); // secrets heard on a call count for more
   }
   score = Math.min(100, score);
+  // An accomplice's rank follows what the group did, not the points: one nobody named was never caught red-handed.
   const rank = isAccomplice
-    ? (score >= 70 ? 'Master of Misdirection' : score >= 30 ? 'Shaky Liar' : 'Caught Red-Handed')
+    ? (groupCaughtRuth ? (groupCaughtAccomplice ? 'Caught Red-Handed' : 'Slipped Away') : groupCaughtAccomplice ? 'Shaky Liar' : 'Master of Misdirection')
     : score >= 85 ? 'Lead Detective' : score >= 60 ? 'Sharp Eye' : score >= 35 ? 'Rookie Sleuth' : 'Lost in the Fog';
 
   return {

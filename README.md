@@ -44,6 +44,7 @@ Run `beat setup` **before** you send links, so each friend sees their role right
 - **Contacts unlock gradually.** You start with The Line. Your clue gives you Ruth plus anyone it names; anyone a suspect mentions (or you mention) gets added. About 6 minutes in, anyone still down to one contact gets texted first by a new suspect (the `nudge` beat), and the `cast` beat (about 12 minutes in) unlocks everyone as a backup. Vote and the suspect board only list suspects you have met. `UNLOCK_ALL=1` turns this off.
 - **Secrets become evidence.** When a suspect lets a locked secret slip, a NEW EVIDENCE card lands in that player's case file.
 - **Real audio evidence.** Run `npm run evidence` once (uses your OpenAI key) to make `public/audio/memo.mp3`, `call911.mp3`, `ruth-voicemail.mp3` and `caretaker-reveal.mp3`. The memo, 911 call and Ruth's voicemail then play in the app. Ruth's late-night warning is now a call; if you don't pick up, she leaves the voicemail. With `caretaker-reveal.mp3` present, the scripted final reveal call plays the recording instead of a live model (no cost per player). Lines are cached, so re-running only pays for lines you changed.
+- **Evidence pictures built in.** The clue photos, the 1996 poster, the cellar at the end and Dana's moving photo load from Higgsfield links until a copy is in the game. Run `npm run art` once on your computer, then commit `public/art` and `public/cast/dana.mp4`, so game night never depends on those links.
 
 ## Players talking to each other
 
@@ -56,6 +57,7 @@ Run `beat setup` **before** you send links, so each friend sees their role right
 
 On `/host`, pick a length and tap **New game**. Send the one invite link to your group: each friend types their name and lands on their own phone. The first to join is the organizer and gets a **Start** button; the story then runs on its own.
 Lengths live in `src/modes.js` (minutes after Start for each beat): *One night* ~75 min (default) and *Slow burn* ~2 hrs; both are the same one-night story. Tune the minutes after real playtests.
+*Test run* ~15 min squeezes the same night into a quarter hour and can start with just one player: use it to see every beat on your own phone before game night.
 
 ## Host it online + run it from your phone
 

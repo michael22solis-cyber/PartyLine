@@ -29,7 +29,7 @@ export function tutorialStep(index, state) {
       intro: 'Someone died at Blackwood Manor. Use this phone to find out who.',
       points: [],
       tip: 'HOME opens your apps. MENU has sound, alerts, and your role.',
-      extra: 'On iPhone: Share → Add to Home Screen, then turn on alerts.',
+      extra: 'MENU → Turn on alerts, so the house can ring you while your phone is locked.',
     },
     {
       icon: 'evidence', tag: '01', title: TUTORIAL_TITLES[1],

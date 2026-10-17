@@ -31,7 +31,7 @@ button:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 button:disabled { opacity: 0.4; cursor: default; }
 .primary { background: linear-gradient(160deg, #b6f0b6, #7fcf82); color: #06120a; font-weight: 600; box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 4px 14px rgba(159,224,160,0.25); }
 .danger { background: linear-gradient(160deg, #a52a1a, #6e1a10); color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 4px 12px rgba(208,65,46,0.25); }
-input, select { padding: 10px 12px; border-radius: 12px; background: rgba(5,7,6,0.8); border: 1px solid rgba(159,224,160,0.14); outline: none; }
+input, select { min-width: 0; padding: 10px 12px; border-radius: 12px; background: rgba(5,7,6,0.8); border: 1px solid rgba(159,224,160,0.14); outline: none; }
 input:focus, select:focus { border-color: rgba(159,224,160,0.45); }
 main { max-width: 720px; margin: 0 auto; padding: calc(env(safe-area-inset-top) + 14px) 16px 60px; }
 header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0 12px; }
@@ -128,6 +128,7 @@ h2 small button { padding: 6px 12px; font-size: 12px; }
         <select id="len" style="flex:1">
           <option value="quick">One night · about 75 minutes</option>
           <option value="evening">Slow burn · about 2 hours</option>
+          <option value="test">Test run · 15 min, works solo</option>
         </select>
         <button class="primary" id="newGame">New game</button>
       </div>
@@ -153,7 +154,7 @@ h2 small button { padding: 6px 12px; font-size: 12px; }
     <h2>SCHEDULE</h2>
     <div class="card">
       <p class="note">Pick when the night starts; the whole story (setup to the final call) runs on its own from there.</p>
-      <div class="row"><input id="startAt" type="datetime-local" style="flex:1" /><select id="schedLen"><option value="quick">~75 min</option><option value="evening">~2 hrs</option></select><button id="schedGame">Schedule</button></div>
+      <div class="row"><input id="startAt" type="datetime-local" style="flex:1" /><select id="schedLen"><option value="quick">~75 min</option><option value="evening">~2 hrs</option><option value="test">~15 min test</option></select><button id="schedGame">Schedule</button></div>
       <div class="sched" id="sched" style="margin-top:12px"></div>
       <button id="clearSched" style="margin-top:10px">Clear upcoming</button>
     </div>
@@ -216,6 +217,7 @@ async function api(method, path, body) {
 function lock() { key = ''; try { localStorage.removeItem('bw-admin'); } catch {} $('app').hidden = true; $('login').hidden = false; }
 const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
 const usd = (v = 0) => `$${v >= 1 || v === 0 ? v.toFixed(2) : v.toFixed(3)}`;
+const plural = (k, word) => `${k} ${word}${k === 1 ? '' : 's'}`; // 1 call, 2 calls
 const fmt = (iso) => new Date(iso).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
 
 async function refresh() {
@@ -347,13 +349,13 @@ async function refresh() {
       btns.append(share);
     }
     row.append(name, btns,
-      el('div', 'meta', `${p.contacts} contacts · ${p.found} secrets${p.foundOnCall ? ` (${p.foundOnCall} ☎)` : ''} · ${p.calls ?? 0} calls, ${p.callMinutes ?? 0} min · ${usd(p.usd)}${p.hinted ? ` · ${p.hinted} hint${p.hinted > 1 ? 's' : ''}` : ''}${p.agenda ? ` · agenda ${p.agenda.done}/3${p.agenda.leaked ? ' · secret leaked' : ''}` : ''}${p.callsOff ? ' · calls off' : ''}${p.phone ? ' · phone on file' : ''}`),
+      el('div', 'meta', `${plural(p.contacts, 'contact')} · ${plural(p.found, 'secret')}${p.foundOnCall ? ` (${p.foundOnCall} ☎)` : ''} · ${plural(p.calls ?? 0, 'call')}, ${p.callMinutes ?? 0} min · ${usd(p.usd)}${p.hinted ? ` · ${p.hinted} hint${p.hinted > 1 ? 's' : ''}` : ''}${p.agenda ? ` · agenda ${p.agenda.done}/3${p.agenda.leaked ? ' · secret leaked' : ''}` : ''}${p.callsOff ? ' · calls off' : ''}${p.phone ? ' · phone on file' : ''}`),
       el('div', 'link', p.link));
     box.append(row);
   });
   const sched = $('sched'); sched.replaceChildren();
   const list = [...status.schedule].sort((a, b) => a.at.localeCompare(b.at));
-  if (!list.length) sched.append(el('p', 'note', 'Nothing scheduled. Fire beats by hand, or schedule the night below.'));
+  if (!list.length) sched.append(el('p', 'note', 'Nothing scheduled. Fire beats by hand, or schedule the night above.'));
   list.forEach((s) => { const d = el('div', s.done ? 'done' : ''); d.append(el('span', null, s.beat), el('span', null, fmt(s.at))); sched.append(d); });
   const t = $('tally'); t.replaceChildren();
   const tl = status.tally;

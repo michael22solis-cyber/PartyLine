@@ -99,6 +99,16 @@ It generates the 911 call, Ruth's voicemail and the midnight reveal. Without the
 voicemail arrive as text only, and the reveal runs as a live call for every player. Restart the server afterwards. On
 Railway, commit the new files in `public/audio/` and push them to `main` **before** the game, not during it.
 
+### Recommended: build the evidence pictures into the game (1 min, free)
+
+```bash
+npm run art
+```
+
+It saves the clue photos, the 1996 poster, the cellar picture and Dana's moving photo into `public/art` and
+`public/cast`. Without them, phones load these from online links, which can be slow on party Wi-Fi or stop working.
+Commit and push them before the game.
+
 ## 2. Solo smoke test (10 min, before anyone joins)
 
 Test everything on your own phone first. Step 3 wipes this test player.
@@ -118,6 +128,12 @@ Test everything on your own phone first. Step 3 wipes this test player.
 
 If you can, repeat steps 1–3 on one iPhone and one Android phone. Delete the test icon from your home screen
 afterwards, because it opens the test player, not you. If a step fails, see step 6.
+
+**Want to see the whole night first?** On `/host`, under AUTO MODE, pick **Test run · 15 min, works solo** and tap
+**New game**. Join from the invite link on your phone and tap **START THE GAME**: one player is enough. Every beat
+from the 75-minute night happens in 15 minutes, from the Caretaker's first call to the reveal and The End. Keep calls
+short, because the beats come close together. Add a second or third phone to see the crew chat and leaks. Step 3
+wipes it.
 
 ## 3. Open the lobby (10 min)
 
