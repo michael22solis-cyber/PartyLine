@@ -1102,13 +1102,14 @@ function renderRecap(screen) {
   const box = el('div', 'recap');
   const score = el('div', 'score');
   const win = r.role === 'accomplice' ? r.outcome !== 'detectives' : r.outcome !== 'accomplice';
+  const killer = r.killerTruth.split(' ')[0]; // the episode's killer, by first name
   const outText = (r.role === 'accomplice' ? {
-    detectives: 'They named Ruth, and they named you. The house loses.',
-    split: 'They caught Ruth, but nobody named you. You slipped away.',
+    detectives: `They named ${killer}, and they named you. The house loses.`,
+    split: `They caught ${killer}, but nobody named you. You slipped away.`,
     accomplice: 'They named the wrong killer. The house wins.',
   } : {
-    detectives: 'Detectives win. Ruth and her accomplice were both named.',
-    split: `You caught Ruth, but the accomplice (${r.accomplice}) walked.`,
+    detectives: `Detectives win. ${killer} and the accomplice were both named.`,
+    split: `You caught ${killer}, but the accomplice (${r.accomplice}) walked.`,
     accomplice: 'The group named the wrong killer. The accomplice wins.',
   })[r.outcome];
   score.append(el('div', 'num', String(r.score)), el('div', 'rank', r.rank), el('div', `out ${win ? 'win' : 'lose'}`, outText));
@@ -1116,7 +1117,7 @@ function renderRecap(screen) {
   // What was under the cellar floor all along.
   const truth = el('div', 'truth');
   truth.append(artImg('truth-cellar', 'The cellar of Blackwood Manor'), el('div', 'section-label', 'WHAT REALLY HAPPENED'),
-    el('p', 'note', 'Halloween 1996: Ruth Calloway, the night nurse who sang Mrs. Blackwood to sleep, killed Elias and buried him under the cellar floor. For thirty years everyone said he ran off. Then Dana booked a crew to dig up that floor. On Thursday, bingo let out at 8:30, and Ruth went to the manor. Dana never reached the bottom of the cellar stairs alive.'));
+    el('p', 'note', r.truth));
   box.append(truth);
 
   if (r.role === 'accomplice') {

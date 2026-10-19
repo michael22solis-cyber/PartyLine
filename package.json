@@ -1,7 +1,7 @@
 {
-  "name": "blackwood-line",
+  "name": "partyline",
   "version": "0.1.0",
-  "description": "Party Line demo: AI characters from The Blackwood Line call and answer real phones",
+  "description": "PartyLine: story-driven AI party games on your friends' phones. Each case is an episode.",
   "type": "module",
   "main": "src/server.js",
   "scripts": {

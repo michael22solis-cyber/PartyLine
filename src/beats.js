@@ -11,21 +11,15 @@ import { ledger } from './ai/ledger.js';
 import { holdOff } from './voice/allowance.js';
 import { nudgeStuck } from './hints.js';
 import { dealAgendas, deliverAgendas, leakSecret } from './agenda.js';
+import { episode } from './episode.js';
 
 // BEAT_TIME_SCALE shrinks the waits inside beats (the full-game rehearsal test runs a night in seconds).
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms * Number(process.env.BEAT_TIME_SCALE ?? 1)));
 const everyone = () => players();
 
-const STARTING_CLUES = [
-  'POLICE NOTE: Dana died between 9:30 and 10 pm. An anonymous 911 call came in at 11:12 pm, from a woman.',
-  'RENOVATION CONTRACT: Dana booked a crew to dig up the cellar floor on November 2.',
-  'RUTH’S STATEMENT: "I was at St. Agnes bingo until 10. Ask anyone."',
-  'DINER RECEIPT: Rosie’s Diner, 9:31 pm, Marcus Vane’s card. Server: "L."',
-  'TEDDY’S LIVESTREAM: Teddy Fisk streamed his ghost show live from his apartment, 9–10 pm.',
-  'NEIGHBOR’S TEXT: "Saw the realtor’s car at the manor after dark Thursday."',
-];
-
-export const SUSPECTS = ['Ruth Calloway', 'Marcus Vane', 'Lily Blackwood', 'Teddy Fisk'];
+// The starting clues and the suspects come from the episode pack.
+const STARTING_CLUES = episode.clues;
+export const SUSPECTS = episode.suspects;
 
 // What a suspect says when they text a stuck player first (the nudge beat).
 const FIRST_CONTACT = {

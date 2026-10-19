@@ -1,3 +1,18 @@
+# PartyLine
+
+Story-driven AI party games played on your friends' phones. **PartyLine is the show; each case is an episode**: a
+self-contained mystery for one evening, where AI suspects text and call your group, and someone in the room is working
+for the other side. The plan is in **[docs/PLAN.md](docs/PLAN.md)**.
+
+Episodes live in `episodes/<id>/episode.js` and the engine reads the one named by `EPISODE` (default `blackwood`).
+`npm test` checks every pack (`src/episode.js` → `checkEpisode`). Blackwood's story is partway through the move: its
+suspects, truth, clues, secrets and timeline come from the pack; the cast's prompts, the beats' lines, agendas, hints,
+art and audio are still in the code.
+
+Everything below describes Episode 1, **The Blackwood Line**, which still runs exactly as it does in `blackwood-line`.
+
+---
+
 # The Blackwood Line
 
 A one-night Halloween mystery (about 75 minutes) played on phones. AI characters **call** players for real, and players **text** them in a burner-phone web app (no carrier approval needed). Every character shares one memory, so Ruth knows what you told the Caretaker.
