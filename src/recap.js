@@ -5,8 +5,9 @@ import { KEY_BY_NAME } from './characters/index.js';
 import { allLines } from './memory.js';
 import { mayAward } from './disclosure.js';
 import { agendaSummary } from './agenda.js';
+import { episode } from './episode.js';
 
-const TRUTH = { killer: 'Ruth Calloway' };
+const TRUTH = episode.truth; // { killer, story }
 
 import { SECRETS } from './secrets.js';
 const FOUND = SECRETS.map((x) => ({ ...x, test: { test: x.test } }));
@@ -57,7 +58,7 @@ export function recapFor(player) {
 
   return {
     name: player.name, role: player.role, score, rank, outcome,
-    killerTruth: TRUTH.killer, accomplice,
+    killerTruth: TRUTH.killer, truth: TRUTH.story, accomplice,
     myVote: v, groupVote: { killer: tally.killer, accomplice: tally.accomplice },
     found: found.map((f) => (onCall.includes(f) ? `${f.label} ☎` : f.label)), heardOnCalls: onCall.length, missed: FOUND.filter((f) => !found.includes(f)).map((f) => f.label),
     totalClues: FOUND.length, textsSent: asked,
